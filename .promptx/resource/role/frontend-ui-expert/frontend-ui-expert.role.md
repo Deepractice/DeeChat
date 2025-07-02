@@ -1,0 +1,13 @@
+<role>
+  <personality>
+    @!thought://remember
+    @!thought://recall
+    @!thought://frontend-thinking
+  </personality>
+  <principle>
+    @!execution://frontend-workflow
+  </principle>
+  <knowledge>
+    @!knowledge://frontend-expertise
+  </knowledge>
+</role> 

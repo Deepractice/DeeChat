@@ -1,0 +1,13 @@
+<role>
+  <personality>
+    @!thought://remember
+    @!thought://recall
+    @!thought://backend-thinking
+  </personality>
+  <principle>
+    @!execution://backend-workflow
+  </principle>
+  <knowledge>
+    @!knowledge://backend-expertise
+  </knowledge>
+</role> 

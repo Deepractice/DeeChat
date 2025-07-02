@@ -1,0 +1,145 @@
+{
+  "version": "2.0.0",
+  "source": "project",
+  "metadata": {
+    "version": "2.0.0",
+    "description": "project 级资源注册表",
+    "createdAt": "2025-07-02T11:13:51.687Z",
+    "updatedAt": "2025-07-02T11:13:51.697Z",
+    "resourceCount": 8
+  },
+  "resources": [
+    {
+      "id": "backend-service-expert",
+      "source": "project",
+      "protocol": "role",
+      "name": "Backend Service Expert 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/backend-service-expert/backend-service-expert.role.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.692Z",
+        "updatedAt": "2025-07-02T11:13:51.692Z",
+        "scannedAt": "2025-07-02T11:13:51.692Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\backend-service-expert\\backend-service-expert.role.md",
+        "fileType": "role"
+      }
+    },
+    {
+      "id": "frontend-ui-expert",
+      "source": "project",
+      "protocol": "role",
+      "name": "Frontend Ui Expert 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/frontend-ui-expert/frontend-ui-expert.role.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.692Z",
+        "updatedAt": "2025-07-02T11:13:51.692Z",
+        "scannedAt": "2025-07-02T11:13:51.692Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\frontend-ui-expert\\frontend-ui-expert.role.md",
+        "fileType": "role"
+      }
+    },
+    {
+      "id": "backend-thinking",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Backend Thinking 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/backend-service-expert/thought/backend-thinking.thought.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.693Z",
+        "updatedAt": "2025-07-02T11:13:51.693Z",
+        "scannedAt": "2025-07-02T11:13:51.693Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\backend-service-expert\\thought\\backend-thinking.thought.md",
+        "fileType": "thought"
+      }
+    },
+    {
+      "id": "frontend-thinking",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Frontend Thinking 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/frontend-ui-expert/thought/frontend-thinking.thought.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.694Z",
+        "updatedAt": "2025-07-02T11:13:51.694Z",
+        "scannedAt": "2025-07-02T11:13:51.694Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\frontend-ui-expert\\thought\\frontend-thinking.thought.md",
+        "fileType": "thought"
+      }
+    },
+    {
+      "id": "backend-workflow",
+      "source": "project",
+      "protocol": "execution",
+      "name": "Backend Workflow 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/backend-service-expert/execution/backend-workflow.execution.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.695Z",
+        "updatedAt": "2025-07-02T11:13:51.695Z",
+        "scannedAt": "2025-07-02T11:13:51.695Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\backend-service-expert\\execution\\backend-workflow.execution.md",
+        "fileType": "execution"
+      }
+    },
+    {
+      "id": "frontend-workflow",
+      "source": "project",
+      "protocol": "execution",
+      "name": "Frontend Workflow 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/frontend-ui-expert/execution/frontend-workflow.execution.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.695Z",
+        "updatedAt": "2025-07-02T11:13:51.695Z",
+        "scannedAt": "2025-07-02T11:13:51.695Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\frontend-ui-expert\\execution\\frontend-workflow.execution.md",
+        "fileType": "execution"
+      }
+    },
+    {
+      "id": "backend-expertise",
+      "source": "project",
+      "protocol": "knowledge",
+      "name": "Backend Expertise 知识库",
+      "description": "知识库，提供专业知识和信息",
+      "reference": "@project://.promptx/resource/role/backend-service-expert/knowledge/backend-expertise.knowledge.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.696Z",
+        "updatedAt": "2025-07-02T11:13:51.696Z",
+        "scannedAt": "2025-07-02T11:13:51.696Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\backend-service-expert\\knowledge\\backend-expertise.knowledge.md",
+        "fileType": "knowledge"
+      }
+    },
+    {
+      "id": "frontend-expertise",
+      "source": "project",
+      "protocol": "knowledge",
+      "name": "Frontend Expertise 知识库",
+      "description": "知识库，提供专业知识和信息",
+      "reference": "@project://.promptx/resource/role/frontend-ui-expert/knowledge/frontend-expertise.knowledge.md",
+      "metadata": {
+        "createdAt": "2025-07-02T11:13:51.696Z",
+        "updatedAt": "2025-07-02T11:13:51.696Z",
+        "scannedAt": "2025-07-02T11:13:51.696Z",
+        "filePath": "D:\\Works\\Project\\ProjectS\\.promptx\\resource\\role\\frontend-ui-expert\\knowledge\\frontend-expertise.knowledge.md",
+        "fileType": "knowledge"
+      }
+    }
+  ],
+  "stats": {
+    "totalResources": 8,
+    "byProtocol": {
+      "role": 2,
+      "thought": 2,
+      "execution": 2,
+      "knowledge": 2
+    },
+    "bySource": {
+      "project": 8
+    }
+  }
+}
