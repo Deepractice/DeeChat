@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__promptx-local__promptx_welcome",
+      "mcp__promptx-local__promptx_init",
+      "mcp__promptx-local__promptx_action",
+      "mcp__promptx-local__promptx_remember",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run:*)",
+      "Bash(mkdir:*)",
+      "mcp__promptx-local__promptx_recall",
+      "Bash(rm:*)",
+      "Bash(lsof:*)",
+      "Bash(npm start)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(sed:*)"
+    ],
+    "deny": []
+  }
+}

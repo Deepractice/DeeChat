@@ -1,0 +1,80 @@
+/* App 组件样式 */
+.app-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 侧边栏样式 */
+.ant-layout-sider {
+  background: #fff !important;
+}
+
+/* 内容区域样式 */
+.ant-layout-content {
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 自定义滚动条样式 */
+.ant-layout-sider::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ant-layout-sider::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.ant-layout-sider::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.ant-layout-sider::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 提供商选择器样式优化 */
+.ant-select-dropdown .ant-select-item-group {
+  padding: 0;
+}
+
+.ant-select-dropdown .ant-select-item-group-list {
+  margin: 0;
+}
+
+.ant-select-dropdown .ant-select-item-option {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 2px 8px;
+  transition: all 0.2s ease;
+}
+
+.ant-select-dropdown .ant-select-item-option:hover {
+  background-color: #f0f9ff;
+  border: 1px solid #e1f5fe;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected {
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  font-weight: 500;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected:hover {
+  background-color: #e6f7ff;
+}
+
+/* 分组标签样式 */
+.ant-select-item-group .ant-select-item-group-label {
+  padding: 8px 12px 4px 12px;
+  font-weight: 600;
+  color: #1890ff;
+  background-color: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
