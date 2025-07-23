@@ -60,6 +60,7 @@
     "@langchain/openai": "^0.5.18",
     "@reduxjs/toolkit": "^2.0.1",
     "antd": "^5.12.8",
+    "crypto-js": "^4.2.0",
     "https-proxy-agent": "^7.0.6",
     "langchain": "^0.3.29",
     "openai": "^4.20.1",

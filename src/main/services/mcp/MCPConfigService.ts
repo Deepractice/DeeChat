@@ -353,16 +353,16 @@ export class MCPConfigService implements IMCPConfigService {
       command: 'npx',
       args: [
         '-y',
-        // 移除 '-f' 参数，允许使用缓存
+        '-f', // 强制重新下载，避免缓存问题
         '--registry',
-        'https://registry.npmjs.org',
+        'https://registry.npmmirror.com', // 使用国内镜像源
         'dpml-prompt@beta',
         'mcp-server'
       ],
       workingDirectory: promptxWorkspace, // 🔥 设置AppData工作目录
       env: {},
-      timeout: 30000,
-      retryCount: 3,
+      timeout: 60000, // 增加到60秒，网络环境不好需要更长时间
+      retryCount: 5, // 增加重试次数
       createdAt: now,
       updatedAt: now
     });

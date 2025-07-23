@@ -374,19 +374,28 @@ export class StdioMCPAdapter extends MCPTransportAdapter {
     // 处理标准输出
     let buffer = '';
     this.process.stdout?.on('data', (data: Buffer) => {
-      buffer += data.toString();
+      const rawData = data.toString();
+      console.log(`[Stdio Adapter] 🔍 收到stdout数据: ${this.server.name}`);
+      console.log(`  原始数据长度: ${rawData.length} 字节`);
+      console.log(`  原始数据内容: ${JSON.stringify(rawData)}`);
+      
+      buffer += rawData;
       
       // 处理完整的JSON消息
       const lines = buffer.split('\n');
       buffer = lines.pop() || ''; // 保留不完整的行
       
+      console.log(`[Stdio Adapter] 🔍 分割后行数: ${lines.length}`);
+      
       for (const line of lines) {
         if (line.trim()) {
+          console.log(`[Stdio Adapter] 🔍 处理行: ${JSON.stringify(line.trim())}`);
           try {
             const message = JSON.parse(line);
+            console.log(`[Stdio Adapter] ✅ 成功解析消息:`, message);
             this.handleMessage(message);
           } catch (error) {
-            console.warn(`[Stdio Adapter] 解析消息失败:`, line, error);
+            console.warn(`[Stdio Adapter] ❌ 解析消息失败:`, line, error);
           }
         }
       }
