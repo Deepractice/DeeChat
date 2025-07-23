@@ -7,14 +7,17 @@ import {
   Modal,
   Tooltip,
   Divider,
-  message
+  message,
+  Switch
 } from 'antd'
 import {
   PlusOutlined,
   MessageOutlined,
   DeleteOutlined,
   DatabaseOutlined,
-  ToolOutlined
+  ToolOutlined,
+  BulbOutlined,
+  BulbFilled
 } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
@@ -25,6 +28,7 @@ import {
   loadChatHistory,
   switchToSessionWithConfig  // 🔥 新增：使用数据驱动的会话切换
 } from '../store/slices/chatSlice'
+import { updateUIConfig, saveConfig } from '../store/slices/configSlice'
 import ModelManagement from '../pages/ModelManagement'
 import MCPManagement from '../pages/MCPManagement'
 
@@ -33,6 +37,7 @@ const { Text } = Typography
 const Sidebar: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { sessions, currentSession } = useSelector((state: RootState) => state.chat)
+  const { config } = useSelector((state: RootState) => state.config)
   const [modelManagementVisible, setModelManagementVisible] = useState(false)
   const [mcpManagementVisible, setMcpManagementVisible] = useState(false)
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false)
@@ -83,6 +88,21 @@ const Sidebar: React.FC = () => {
     }
   }
 
+  // 处理主题切换
+  const handleThemeChange = async (checked: boolean) => {
+    const newTheme = checked ? 'dark' : 'light'
+    dispatch(updateUIConfig({ theme: newTheme }))
+    // 保存配置到本地
+    const updatedConfig = {
+      ...config,
+      ui: {
+        ...config.ui,
+        theme: newTheme
+      }
+    }
+    await dispatch(saveConfig(updatedConfig))
+  }
+
   return (
     <div style={{ padding: '16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 头部操作区 */}
@@ -111,6 +131,26 @@ const Sidebar: React.FC = () => {
         >
           插件市场
         </Button>
+        
+        {/* 主题切换 */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          backgroundColor: config.ui.theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+          borderRadius: '6px'
+        }}>
+          <Space>
+            {config.ui.theme === 'dark' ? <BulbFilled style={{ color: '#faad14' }} /> : <BulbOutlined />}
+            <Text style={{ fontSize: '14px' }}>深色模式</Text>
+          </Space>
+          <Switch 
+            checked={config.ui.theme === 'dark'}
+            onChange={handleThemeChange}
+            size="small"
+          />
+        </div>
       </Space>
 
       <Divider style={{ margin: '0 0 16px 0' }} />

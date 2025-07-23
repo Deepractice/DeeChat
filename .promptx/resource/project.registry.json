@@ -4,63 +4,105 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-07-22T03:44:35.022Z",
-    "updatedAt": "2025-07-22T03:44:35.024Z",
-    "resourceCount": 3
+    "createdAt": "2025-07-23T09:21:43.775Z",
+    "updatedAt": "2025-07-23T09:21:43.781Z",
+    "resourceCount": 6
   },
   "resources": [
     {
-      "id": "desktop-app-development",
-      "source": "project",
-      "protocol": "execution",
-      "name": "Desktop App Development 执行模式",
-      "description": "执行模式，定义具体的行为模式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/execution/desktop-app-development.execution.md",
-      "metadata": {
-        "createdAt": "2025-07-22T03:44:35.023Z",
-        "updatedAt": "2025-07-22T03:44:35.023Z",
-        "scannedAt": "2025-07-22T03:44:35.023Z",
-        "path": "role/promptx-client-dev/execution/desktop-app-development.execution.md"
-      }
-    },
-    {
-      "id": "promptx-client-dev",
+      "id": "electron-architect",
       "source": "project",
       "protocol": "role",
-      "name": "Promptx Client Dev 角色",
+      "name": "Electron Architect 角色",
       "description": "专业角色，提供特定领域的专业能力",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/promptx-client-dev.role.md",
+      "reference": "@project://.promptx/resource/role/electron-architect/electron-architect.role.md",
       "metadata": {
-        "createdAt": "2025-07-22T03:44:35.023Z",
-        "updatedAt": "2025-07-22T03:44:35.023Z",
-        "scannedAt": "2025-07-22T03:44:35.023Z",
-        "path": "role/promptx-client-dev/promptx-client-dev.role.md"
+        "createdAt": "2025-07-23T09:21:43.777Z",
+        "updatedAt": "2025-07-23T09:21:43.777Z",
+        "scannedAt": "2025-07-23T09:21:43.777Z",
+        "path": "role/electron-architect/electron-architect.role.md"
       }
     },
     {
-      "id": "layered-architecture",
+      "id": "langchain-engineer",
+      "source": "project",
+      "protocol": "role",
+      "name": "Langchain Engineer 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/langchain-engineer/langchain-engineer.role.md",
+      "metadata": {
+        "createdAt": "2025-07-23T09:21:43.778Z",
+        "updatedAt": "2025-07-23T09:21:43.778Z",
+        "scannedAt": "2025-07-23T09:21:43.778Z",
+        "path": "role/langchain-engineer/langchain-engineer.role.md"
+      }
+    },
+    {
+      "id": "mcp-specialist",
+      "source": "project",
+      "protocol": "role",
+      "name": "Mcp Specialist 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/mcp-specialist/mcp-specialist.role.md",
+      "metadata": {
+        "createdAt": "2025-07-23T09:21:43.779Z",
+        "updatedAt": "2025-07-23T09:21:43.779Z",
+        "scannedAt": "2025-07-23T09:21:43.779Z",
+        "path": "role/mcp-specialist/mcp-specialist.role.md"
+      }
+    },
+    {
+      "id": "promptx-system-butler",
+      "source": "project",
+      "protocol": "role",
+      "name": "Promptx System Butler 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/promptx-system-butler/promptx-system-butler.role.md",
+      "metadata": {
+        "createdAt": "2025-07-23T09:21:43.780Z",
+        "updatedAt": "2025-07-23T09:21:43.780Z",
+        "scannedAt": "2025-07-23T09:21:43.780Z",
+        "path": "role/promptx-system-butler/promptx-system-butler.role.md"
+      }
+    },
+    {
+      "id": "memory-management-thinking",
       "source": "project",
       "protocol": "thought",
-      "name": "Layered Architecture 思维模式",
+      "name": "Memory Management Thinking 思维模式",
       "description": "思维模式，指导AI的思考方式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/layered-architecture.thought.md",
+      "reference": "@project://.promptx/resource/role/promptx-system-butler/thought/memory-management-thinking.thought.md",
       "metadata": {
-        "createdAt": "2025-07-22T03:44:35.024Z",
-        "updatedAt": "2025-07-22T03:44:35.024Z",
-        "scannedAt": "2025-07-22T03:44:35.024Z",
-        "path": "role/promptx-client-dev/thought/layered-architecture.thought.md"
+        "createdAt": "2025-07-23T09:21:43.780Z",
+        "updatedAt": "2025-07-23T09:21:43.780Z",
+        "scannedAt": "2025-07-23T09:21:43.780Z",
+        "path": "role/promptx-system-butler/thought/memory-management-thinking.thought.md"
+      }
+    },
+    {
+      "id": "decision-support",
+      "source": "project",
+      "protocol": "execution",
+      "name": "Decision Support 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/shared/decision-support.execution.md",
+      "metadata": {
+        "createdAt": "2025-07-23T09:21:43.781Z",
+        "updatedAt": "2025-07-23T09:21:43.781Z",
+        "scannedAt": "2025-07-23T09:21:43.781Z",
+        "path": "role/shared/decision-support.execution.md"
       }
     }
   ],
   "stats": {
-    "totalResources": 3,
+    "totalResources": 6,
     "byProtocol": {
-      "execution": 1,
-      "role": 1,
-      "thought": 1
+      "role": 4,
+      "thought": 1,
+      "execution": 1
     },
     "bySource": {
-      "project": 3
+      "project": 6
     }
   }
 }
