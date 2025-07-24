@@ -6,9 +6,7 @@ import { loadConfig } from './store/slices/configSlice'
 import { loadChatHistory } from './store/slices/chatSlice'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
-
-
-
+import SystemRoleDebugPanel from './components/SystemRoleDebugPanel'
 
 import './App.css'
 
@@ -67,6 +65,9 @@ function App() {
             <ChatArea />
           </Content>
         </Layout>
+        
+        {/* 🤖 系统角色调试面板（仅开发环境） */}
+        <SystemRoleDebugPanel />
       </div>
     </ConfigProvider>
   )

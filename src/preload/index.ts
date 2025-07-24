@@ -100,6 +100,12 @@ const electronAPI = {
     // 配置管理
     exportConfigs: () => ipcRenderer.invoke('mcp:exportConfigs'),
     importConfigs: (configData: string) => ipcRenderer.invoke('mcp:importConfigs', configData)
+  },
+
+  // 🤖 调试API（仅开发环境）
+  debug: {
+    getSystemRoleStatus: () => ipcRenderer.invoke('debug:getSystemRoleStatus'),
+    resetSystemRole: () => ipcRenderer.invoke('debug:resetSystemRole')
   }
 }
 

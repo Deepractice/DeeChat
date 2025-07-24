@@ -7,7 +7,8 @@
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && NODE_ENV=development electron dist/main/main/index.js",
-    "build": "npm run build:renderer && npm run build:main",
+    "prebuild:promptx": "node scripts/prebuild-promptx.js",
+    "build": "npm run prebuild:promptx && npm run build:renderer && npm run build:main",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "build:all": "npm run build && electron-builder",
@@ -78,6 +79,13 @@
     "files": [
       "dist/**/*",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": ["**/*"]
+      }
     ],
     "icon": "build/icon.png",
     "mac": {

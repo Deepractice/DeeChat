@@ -44,7 +44,11 @@
       "Bash(timeout:*)",
       "Bash(ping:*)",
       "Bash(npm config get:*)",
-      "Bash(npm config set:*)"
+      "Bash(npm config set:*)",
+      "Bash(find:*)",
+      "Bash(/dev/null)",
+      "Bash(DISABLE_MCP=true npm run dev)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

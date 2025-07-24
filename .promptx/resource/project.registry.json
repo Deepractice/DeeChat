@@ -4,8 +4,8 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-07-23T09:21:43.775Z",
-    "updatedAt": "2025-07-23T09:21:43.781Z",
+    "createdAt": "2025-07-23T15:16:52.359Z",
+    "updatedAt": "2025-07-23T15:16:52.362Z",
     "resourceCount": 6
   },
   "resources": [
@@ -17,9 +17,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/electron-architect/electron-architect.role.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.777Z",
-        "updatedAt": "2025-07-23T09:21:43.777Z",
-        "scannedAt": "2025-07-23T09:21:43.777Z",
+        "createdAt": "2025-07-23T15:16:52.360Z",
+        "updatedAt": "2025-07-23T15:16:52.360Z",
+        "scannedAt": "2025-07-23T15:16:52.360Z",
         "path": "role/electron-architect/electron-architect.role.md"
       }
     },
@@ -31,9 +31,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/langchain-engineer/langchain-engineer.role.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.778Z",
-        "updatedAt": "2025-07-23T09:21:43.778Z",
-        "scannedAt": "2025-07-23T09:21:43.778Z",
+        "createdAt": "2025-07-23T15:16:52.360Z",
+        "updatedAt": "2025-07-23T15:16:52.360Z",
+        "scannedAt": "2025-07-23T15:16:52.360Z",
         "path": "role/langchain-engineer/langchain-engineer.role.md"
       }
     },
@@ -45,9 +45,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/mcp-specialist/mcp-specialist.role.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.779Z",
-        "updatedAt": "2025-07-23T09:21:43.779Z",
-        "scannedAt": "2025-07-23T09:21:43.779Z",
+        "createdAt": "2025-07-23T15:16:52.361Z",
+        "updatedAt": "2025-07-23T15:16:52.361Z",
+        "scannedAt": "2025-07-23T15:16:52.361Z",
         "path": "role/mcp-specialist/mcp-specialist.role.md"
       }
     },
@@ -59,9 +59,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/promptx-system-butler/promptx-system-butler.role.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.780Z",
-        "updatedAt": "2025-07-23T09:21:43.780Z",
-        "scannedAt": "2025-07-23T09:21:43.780Z",
+        "createdAt": "2025-07-23T15:16:52.361Z",
+        "updatedAt": "2025-07-23T15:16:52.361Z",
+        "scannedAt": "2025-07-23T15:16:52.361Z",
         "path": "role/promptx-system-butler/promptx-system-butler.role.md"
       }
     },
@@ -73,9 +73,9 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/promptx-system-butler/thought/memory-management-thinking.thought.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.780Z",
-        "updatedAt": "2025-07-23T09:21:43.780Z",
-        "scannedAt": "2025-07-23T09:21:43.780Z",
+        "createdAt": "2025-07-23T15:16:52.361Z",
+        "updatedAt": "2025-07-23T15:16:52.361Z",
+        "scannedAt": "2025-07-23T15:16:52.361Z",
         "path": "role/promptx-system-butler/thought/memory-management-thinking.thought.md"
       }
     },
@@ -87,9 +87,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/shared/decision-support.execution.md",
       "metadata": {
-        "createdAt": "2025-07-23T09:21:43.781Z",
-        "updatedAt": "2025-07-23T09:21:43.781Z",
-        "scannedAt": "2025-07-23T09:21:43.781Z",
+        "createdAt": "2025-07-23T15:16:52.362Z",
+        "updatedAt": "2025-07-23T15:16:52.362Z",
+        "scannedAt": "2025-07-23T15:16:52.362Z",
         "path": "role/shared/decision-support.execution.md"
       }
     }

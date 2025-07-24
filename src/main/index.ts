@@ -6,7 +6,7 @@ import { registerLangChainHandlers, unregisterLangChainHandlers } from './ipc/la
 console.log('✅ [主进程] LangChain处理器导入成功')
 
 console.log('🔧 [主进程] 开始导入MCP处理器...')
-import { registerMCPHandlers, unregisterMCPHandlers } from './ipc/mcpHandlers'
+import { registerMCPHandlers, unregisterMCPHandlers, preRegisterMCPHandlersOnly } from './ipc/mcpHandlers'
 console.log('✅ [主进程] MCP处理器导入成功')
 
 console.log('🔧 [主进程] 所有IPC处理器模块导入完成')
@@ -120,6 +120,56 @@ function createWindow(): void {
   })
 }
 
+/**
+ * 异步初始化后台服务（MCP和系统角色）
+ * 不阻塞界面显示，提升启动速度
+ */
+async function initializeBackgroundServices() {
+  console.log('🔧 [后台服务] 开始异步初始化后台服务...')
+
+  // 向渲染进程发送状态更新
+  const sendStatus = (service: string, status: 'initializing' | 'ready' | 'error', message: string) => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('background-service-status', { service, status, message })
+    }
+  }
+
+  // 1. 初始化MCP服务
+  try {
+    sendStatus('mcp', 'initializing', 'PromptX工具加载中...')
+    
+    await registerMCPHandlers()
+    
+    console.log(`✅ [后台服务] MCP服务初始化完成`)
+    sendStatus('mcp', 'ready', 'PromptX工具已就绪')
+  } catch (error) {
+    console.error('❌ [后台服务] MCP服务初始化失败:', error)
+    if (error instanceof Error) {
+      console.error('❌ [后台服务] 错误名称:', error.name)
+      console.error('❌ [后台服务] 错误消息:', error.message)
+      console.error('❌ [后台服务] 错误堆栈:', error.stack)
+    }
+    sendStatus('mcp', 'error', 'PromptX工具加载失败，部分功能可能受限')
+  }
+
+  // 2. 初始化系统角色
+  try {
+    sendStatus('system-role', 'initializing', '系统角色激活中...')
+    console.log('🤖 [后台服务] 开始静默激活系统角色...')
+    
+    await silentSystemRoleManager.initializeOnStartup()
+    
+    console.log('✅ [后台服务] 系统角色静默激活完成')
+    sendStatus('system-role', 'ready', '系统角色已激活')
+  } catch (error) {
+    console.error('❌ [后台服务] 系统角色激活失败:', error)
+    sendStatus('system-role', 'error', '系统角色激活失败')
+    // 不阻塞应用启动，稍后重试
+  }
+
+  console.log('✅ [后台服务] 所有后台服务初始化完成')
+}
+
 // 应用准备就绪
 app.whenReady().then(async () => {
   // 🔥 添加环境检测
@@ -161,26 +211,22 @@ app.whenReady().then(async () => {
   // 注册LangChain IPC处理器
   registerLangChainHandlers()
 
-  // 注册MCP IPC处理器
-  console.log('🔧 [主进程] 准备调用registerMCPHandlers...')
-  console.log('🔧 [主进程] registerMCPHandlers函数存在:', typeof registerMCPHandlers)
+  // 🔥 预注册MCP handlers，避免界面加载后出现"No handler registered"错误
+  console.log('🔧 [主进程] 预注册MCP IPC处理器...')
   try {
-    console.log('🔧 [主进程] 开始调用registerMCPHandlers()...')
-    const startTime = Date.now()
-    await registerMCPHandlers()
-    const endTime = Date.now()
-    console.log(`✅ [主进程] registerMCPHandlers()调用完成，耗时: ${endTime - startTime}ms`)
+    // 只预注册handlers，不初始化服务
+    preRegisterMCPHandlersOnly()
+    console.log('✅ [主进程] MCP IPC处理器预注册完成')
   } catch (error) {
-    console.error('❌ [主进程] 注册MCP IPC处理器失败:', error)
-    if (error instanceof Error) {
-      console.error('❌ [主进程] 错误名称:', error.name)
-      console.error('❌ [主进程] 错误消息:', error.message)
-      console.error('❌ [主进程] 错误堆栈:', error.stack)
-    }
-    // 🔥 即使失败也继续执行，不阻塞应用启动
+    console.error('❌ [主进程] MCP IPC处理器预注册失败:', error)
+    // 不阻塞应用启动
   }
 
+  // 先创建窗口，让用户立即看到界面
   createWindow()
+
+  // 异步初始化MCP服务和系统角色，不阻塞界面显示
+  initializeBackgroundServices()
 
   // 注意：不再自动初始化默认模型配置，让用户手动添加
   // 这样首次安装时界面会是空白状态
@@ -206,6 +252,7 @@ import { ConfigService } from './services/core/ConfigService.js'
 import { ChatService } from './services/core/ChatService.js'
 import { LLMService } from './services/llm/LLMService.js'
 import { ModelService } from './services/model/ModelService.js'
+import { silentSystemRoleManager } from './services/core/SilentSystemRoleManager.js'
 
 // 初始化服务
 const configService = new ConfigService()
@@ -399,6 +446,46 @@ ipcMain.handle('preference:get', async () => {
     return { success: true, data: preferences }
   } catch (error) {
     console.error('获取用户偏好失败:', error)
+    return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+  }
+})
+
+// 🤖 系统角色调试API（总是注册，但在生产环境中限制功能）
+ipcMain.handle('debug:getSystemRoleStatus', async () => {
+  try {
+    if (!isDev) {
+      // 生产环境返回基础状态信息
+      return { 
+        success: true, 
+        data: { 
+          status: 'production_mode',
+          message: '生产环境不提供详细调试信息'
+        } 
+      }
+    }
+    
+    const status = silentSystemRoleManager.getSystemRoleStatus()
+    return { success: true, data: status }
+  } catch (error) {
+    console.error('获取系统角色状态失败:', error)
+    return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+  }
+})
+
+ipcMain.handle('debug:resetSystemRole', async () => {
+  try {
+    if (!isDev) {
+      // 生产环境不允许重置
+      return { 
+        success: false, 
+        error: '生产环境不支持系统角色重置' 
+      }
+    }
+    
+    silentSystemRoleManager.resetSystemRoleState()
+    return { success: true }
+  } catch (error) {
+    console.error('重置系统角色失败:', error)
     return { success: false, error: error instanceof Error ? error.message : '未知错误' }
   }
 })

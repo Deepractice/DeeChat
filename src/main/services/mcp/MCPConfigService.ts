@@ -6,13 +6,36 @@
 import { MCPServerEntity, MCPServerConfig } from '../../../shared/entities/MCPServerEntity';
 import { IMCPConfigService } from '../../../shared/interfaces/IMCPProvider';
 import { LocalStorageService } from '../core/LocalStorageService';
+import { PromptXLocalStorage } from './PromptXLocalStorage';
+import { PromptXBuildStorage } from './PromptXBuildStorage';
 
 export class MCPConfigService implements IMCPConfigService {
   private storageService: LocalStorageService;
   private readonly STORAGE_KEY = 'mcp_servers';
+  private promptxLocalStorage: PromptXLocalStorage;
+  private promptxBuildStorage: PromptXBuildStorage;
 
   constructor() {
     this.storageService = new LocalStorageService();
+    this.promptxLocalStorage = new PromptXLocalStorage();
+    this.promptxBuildStorage = new PromptXBuildStorage();
+    // 异步初始化本地存储
+    this.initializeLocalStorage();
+  }
+
+  /**
+   * 初始化本地存储和静默更新
+   */
+  private async initializeLocalStorage(): Promise<void> {
+    try {
+      await this.promptxLocalStorage.initialize();
+      console.log('✅ [MCP Config] PromptX本地存储初始化完成');
+      
+      // 启动静默更新检查
+      this.promptxLocalStorage.checkAndUpdateSilently();
+    } catch (error) {
+      console.warn('⚠️ [MCP Config] PromptX本地存储初始化失败，将使用npx方式:', error);
+    }
   }
 
   /**
@@ -70,18 +93,26 @@ export class MCPConfigService implements IMCPConfigService {
         return MCPServerEntity.fromData(configWithDates);
       });
 
-      // 检查是否已有PromptX插件，如果没有则添加，如果有则更新确保包含workingDirectory
+      // 检查是否已有PromptX插件，如果没有则添加，如果有则更新为本地化配置
       const promptxIndex = servers.findIndex(s => s.id === 'promptx-builtin');
       const promptxServer = this.createDefaultPromptXServer();
 
+      // 🔥 异步初始化PromptX本地配置
+      try {
+        await this.initializePromptXServerConfig(promptxServer);
+      } catch (error) {
+        console.error('[MCP Config] PromptX初始化失败，但继续加载其他服务:', error);
+        // 不阻塞其他服务的加载
+      }
+
       if (promptxIndex >= 0) {
-        // 更新现有PromptX配置，确保包含最新的workingDirectory
-        console.log(`[MCP Config] 🔄 更新PromptX插件配置，确保包含workingDirectory`);
+        // 更新现有PromptX配置为本地化版本
+        console.log(`[MCP Config] 🔄 更新PromptX插件为本地化配置`);
         servers[promptxIndex] = promptxServer;
         await this.saveAllConfigs(servers); // 保存更新后的配置
       } else {
-        // 添加新的PromptX配置
-        console.log(`[MCP Config] ➕ 添加PromptX插件配置`);
+        // 添加新的PromptX本地化配置
+        console.log(`[MCP Config] ➕ 添加PromptX本地化插件配置`);
         servers.unshift(promptxServer); // 添加到开头
         await this.saveAllConfigs(servers); // 保存更新后的配置
       }
@@ -302,9 +333,18 @@ export class MCPConfigService implements IMCPConfigService {
    * 初始化默认服务器配置
    */
   private async initializeDefaultServers(): Promise<MCPServerEntity[]> {
-    console.log('[MCP Config] 初始化默认PromptX插件配置');
+    console.log('[MCP Config] 初始化默认PromptX本地化插件配置');
 
     const promptxServer = this.createDefaultPromptXServer();
+    
+    // 🔥 初始化PromptX本地配置
+    try {
+      await this.initializePromptXServerConfig(promptxServer);
+    } catch (error) {
+      console.error('[MCP Config] 默认PromptX初始化失败:', error);
+      throw error; // 首次初始化失败应该抛出错误
+    }
+
     const defaultServers = [promptxServer];
 
     // 保存默认配置
@@ -314,7 +354,7 @@ export class MCPConfigService implements IMCPConfigService {
   }
 
   /**
-   * 创建默认的PromptX服务器配置
+   * 创建默认的PromptX服务器配置（彻底本地化版本）
    */
   private createDefaultPromptXServer(): MCPServerEntity {
     const { app } = require('electron');
@@ -344,30 +384,75 @@ export class MCPConfigService implements IMCPConfigService {
     }
 
     const now = new Date();
+    
+    // 🚀 创建彻底本地化的服务器配置
     const server = new MCPServerEntity({
       id: 'promptx-builtin',
       name: 'PromptX (内置)',
       description: 'PromptX AI专业能力增强框架 - 提供角色激活、记忆管理和专业工具',
       type: 'stdio',
       isEnabled: true,
-      command: 'npx',
-      args: [
-        '-y',
-        '-f', // 强制重新下载，避免缓存问题
-        '--registry',
-        'https://registry.npmmirror.com', // 使用国内镜像源
-        'dpml-prompt@beta',
-        'mcp-server'
-      ],
-      workingDirectory: promptxWorkspace, // 🔥 设置AppData工作目录
+      command: 'node', // 🔥 固定使用node，不再用npx
+      args: ['placeholder'], // 🔥 占位符，将在初始化时更新
+      workingDirectory: promptxWorkspace,
       env: {},
-      timeout: 60000, // 增加到60秒，网络环境不好需要更长时间
-      retryCount: 5, // 增加重试次数
+      timeout: 10000, // 🔥 本地启动，超时时间更短
+      retryCount: 3, // 🔥 本地启动更稳定，减少重试次数
       createdAt: now,
       updatedAt: now
     });
 
-    console.log(`[MCP Config] ✅ 创建PromptX服务器实体，workingDirectory: ${server.workingDirectory}`);
+    console.log(`[MCP Config] ✅ 创建PromptX服务器实体（彻底本地化），workingDirectory: ${server.workingDirectory}`);
     return server;
+  }
+
+  /**
+   * 初始化PromptX服务器配置（优先使用构建时打包版本）
+   */
+  private async initializePromptXServerConfig(server: MCPServerEntity): Promise<void> {
+    try {
+      // 🚀 优先检查构建时打包版本
+      const hasBuildVersion = await this.promptxBuildStorage.hasBuildVersion();
+      
+      if (hasBuildVersion) {
+        console.log('⚡ [PromptX] 使用构建时打包版本（零延迟启动）');
+        
+        // 获取构建版本启动配置
+        const buildConfig = await this.promptxBuildStorage.startFromBuild();
+        
+        // 更新服务器配置使用构建版本
+        server.command = buildConfig.command;
+        server.args = buildConfig.args;
+        server.workingDirectory = buildConfig.workingDirectory;
+        
+        // 即使使用构建版本，也在后台检查更新（用于下次构建）
+        this.promptxLocalStorage.checkAndUpdateSilently().catch(() => {
+          // 静默处理更新失败
+        });
+        
+      } else {
+        console.log('🔄 [PromptX] 回退到运行时下载版本');
+        
+        // 回退到运行时下载版本
+        await this.promptxLocalStorage.ensureLocalVersionAvailable();
+        
+        // 获取本地启动配置
+        const localConfig = await this.promptxLocalStorage.startFromLocal();
+        
+        // 更新服务器配置使用本地版本
+        server.command = localConfig.command;
+        server.args = localConfig.args;
+        server.workingDirectory = localConfig.workingDirectory;
+        
+        // 启动静默更新检查
+        this.promptxLocalStorage.checkAndUpdateSilently().catch(() => {
+          // 静默处理更新失败
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ [MCP Config] PromptX初始化失败:', error);
+      throw new Error(`PromptX初始化失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

@@ -5,6 +5,7 @@ import { LLMRequest, LLMResponse } from '../../../shared/interfaces/IModelProvid
 import { ModelService } from '../model/ModelService'
 import { MCPIntegrationService } from '../mcp/MCPIntegrationService.js'
 import { MCPToolService } from '../mcp/MCPToolService.js'
+import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
 
 /**
  * LLM服务
@@ -30,6 +31,9 @@ export class LLMService {
    */
   async sendMessageWithConfig(request: LLMRequest, config: ModelConfigEntity | ProviderConfigEntity): Promise<LLMResponse> {
     try {
+      // 🤖 静默确保系统角色激活
+      await this.ensureSystemRoleActive()
+
       let modelConfig: ModelConfigEntity;
 
       if (config instanceof ProviderConfigEntity) {
@@ -83,6 +87,9 @@ export class LLMService {
    * @param modelId 模型ID（可以是纯配置ID或组合ID：configId-modelName）
    */
   async sendMessage(request: LLMRequest, modelId: string): Promise<LLMResponse> {
+    // 🤖 静默确保系统角色激活
+    await this.ensureSystemRoleActive()
+
     // 解析模型ID，支持组合ID格式：configId-modelName
     let configId: string
     let specificModel: string | undefined
@@ -817,6 +824,22 @@ ${request.systemPrompt || ''}`
       this.mcpToolService.clearCache()
     } catch (error) {
       console.error('清理MCP资源失败:', error)
+    }
+  }
+
+  /**
+   * 🤖 静默确保系统角色激活
+   * 每次AI对话前调用，保证系统角色始终可用
+   */
+  private async ensureSystemRoleActive(): Promise<void> {
+    try {
+      const isActive = await silentSystemRoleManager.ensureSystemRoleActive()
+      if (!isActive) {
+        console.warn('⚠️ [LLM服务] 系统角色激活失败，继续正常对话流程')
+      }
+    } catch (error) {
+      console.error('❌ [LLM服务] 确保系统角色激活时出错:', error)
+      // 不抛出错误，避免影响正常对话
     }
   }
 }

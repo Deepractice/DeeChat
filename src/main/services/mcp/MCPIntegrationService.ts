@@ -62,18 +62,15 @@ export class MCPIntegrationService implements IMCPProvider {
 
     // 🔥 自动初始化已启用的服务器（添加异常处理）
     try {
-      console.log('🔧 [MCP] 开始调用initializeEnabledServers()...');
       await this.initializeEnabledServers();
-      console.log('✅ [MCP] initializeEnabledServers()完成');
     } catch (error) {
       console.error('❌ [MCP] initializeEnabledServers()失败:', error);
       // 不抛出异常，允许服务继续初始化
     }
 
     // 启动工具发现预热（异步执行，不阻塞初始化）
-    console.log('🔧 [MCP] 开始启动工具发现预热...');
     this.startToolDiscoveryPrewarm();
-    console.log('✅ [MCP] MCP集成服务初始化完成');
+    console.log('✅ [MCP] 集成服务初始化完成');
   }
 
   /**
@@ -113,19 +110,12 @@ export class MCPIntegrationService implements IMCPProvider {
    */
   private async initializeEnabledServers(): Promise<void> {
     try {
-      console.log('🚀 [MCP] 开始初始化已启用的服务器...');
-
-      console.log('🔧 [MCP] 调用configService.getAllServerConfigs()...');
       const servers = await this.configService.getAllServerConfigs();
-      console.log(`📊 [MCP] 获取到 ${servers.length} 个服务器配置`);
-
-      // 🔥 详细显示每个服务器的状态
-      servers.forEach((server, index) => {
-        console.log(`  ${index + 1}. ${server.name} (${server.id}) - 启用: ${server.isEnabled}`);
-      });
-
       const enabledServers = servers.filter(server => server.isEnabled);
-      console.log(`📋 [MCP] 发现 ${enabledServers.length} 个已启用的服务器`);
+      
+      if (enabledServers.length > 0) {
+        console.log(`📋 [MCP] 初始化 ${enabledServers.length} 个已启用服务器`);
+      }
 
       if (enabledServers.length === 0) {
         console.warn('⚠️ [MCP] 没有找到已启用的服务器！');
