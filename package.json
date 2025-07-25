@@ -1,7 +1,7 @@
 {
-  "name": "promptx-desktop-client",
+  "name": "deechat",
   "version": "1.0.0",
-  "description": "PromptX Desktop Client - AI对话桌面应用",
+  "description": "DeeChat - Chat is All You Need | Powered by PromptX",
   "main": "dist/main/main/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
@@ -71,8 +71,8 @@
     "zod": "^3.25.76"
   },
   "build": {
-    "appId": "com.promptx.desktop-client",
-    "productName": "PromptX Desktop Client",
+    "appId": "com.deepractice.deechat",
+    "productName": "DeeChat",
     "directories": {
       "output": "release"
     },

@@ -616,7 +616,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                     rules={[{ required: true, message: '请输入插件名称' }]}
                   >
                     <Input
-                      placeholder="例如：PromptX工具包"
+                      placeholder="例如：DeeChat工具包"
                       size="large"
                     />
                   </Form.Item>

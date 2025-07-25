@@ -248,7 +248,7 @@ const ChatArea: React.FC = () => {
           description={
             <div style={{ textAlign: 'center' }}>
               <Title level={4} type="secondary">
-                欢迎使用 PromptX Desktop Client
+                欢迎使用 DeeChat
               </Title>
               <Text type="secondary">
                 选择一个AI模型开始对话

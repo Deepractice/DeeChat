@@ -74,6 +74,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    title: 'DeeChat',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

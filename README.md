@@ -1,9 +1,9 @@
 <div align="center">
   <img src="Creative PromptX Duck Logo 4.svg" alt="PromptX Desktop Client" width="120" height="120">
   
-  # PromptX Desktop Client
+  # DeeChat
   
-  ### 🚀 让 AI 触手可及 - 企业级 AI 桌面客户端
+  ### 🚀 Chat is All You Need - 基于 PromptX 的革命性 AI 对话平台
   
   [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/promptx/desktop-client/releases)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -17,7 +17,7 @@
 
 ## 🎯 产品介绍
 
-**PromptX Desktop Client** 是 [PromptX](https://github.com/deepractice/PromptX) 生态的旗舰桌面应用，为用户提供企业级的 AI 对话体验。通过整合多个主流 AI 提供商和强大的 MCP 插件生态，让 AI 能力真正触手可及。
+**DeeChat** 是基于革命性 AI 上下文工程平台 [PromptX](https://github.com/deepractice/PromptX) 构建的旗舰桌面应用。秉承 "Chat is All You Need" 的核心理念，通过对话式交互让任何 AI 瞬间变身行业专家，真正实现 AI 能力的普及化。
 
 ### ✨ 核心特性
 
@@ -56,16 +56,16 @@
 
 | 平台 | 下载链接 | 系统要求 |
 |---------|----------|------------|
-| macOS | [PromptX-Desktop-1.0.0.dmg](https://github.com/promptx/desktop-client/releases) | macOS 10.15+ |
-| Windows | [PromptX-Desktop-1.0.0.exe](https://github.com/promptx/desktop-client/releases) | Windows 10+ |
-| Linux | [PromptX-Desktop-1.0.0.AppImage](https://github.com/promptx/desktop-client/releases) | Ubuntu 20.04+ |
+| macOS | [DeeChat-1.0.0.dmg](https://github.com/deepractice/deechat/releases) | macOS 10.15+ |
+| Windows | [DeeChat-1.0.0.exe](https://github.com/deepractice/deechat/releases) | Windows 10+ |
+| Linux | [DeeChat-1.0.0.AppImage](https://github.com/deepractice/deechat/releases) | Ubuntu 20.04+ |
 
 #### 方式二：从源码构建
 
 ```bash
 # 克隆项目
-git clone https://github.com/promptx/desktop-client.git
-cd desktop-client
+git clone https://github.com/deepractice/deechat.git
+cd deechat
 
 # 安装依赖
 npm install
@@ -238,9 +238,9 @@ npm run type-check
 
 应用配置存储在用户数据目录的 `config.json` 文件中：
 
-- **Windows**: `%APPDATA%/promptx-desktop-client/config.json`
-- **macOS**: `~/Library/Application Support/promptx-desktop-client/config.json`
-- **Linux**: `~/.config/promptx-desktop-client/config.json`
+- **Windows**: `%APPDATA%/deechat/config.json`
+- **macOS**: `~/Library/Application Support/deechat/config.json`
+- **Linux**: `~/.config/deechat/config.json`
 
 ## 开发注意事项
 
