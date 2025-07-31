@@ -3,6 +3,7 @@
  * 基于MCP协议规范实现
  */
 
+import log from 'electron-log'
 import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity';
 import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity';
 import {
@@ -12,6 +13,7 @@ import {
   MCPToolCallResponse
 } from '../../../shared/interfaces/IMCPProvider';
 import { StdioMCPAdapter, SSEMCPAdapter, MCPTransportAdapter } from '../../adapters/MCPTransportAdapter';
+// import { MCPSandboxManager } from '../runtime/MCPSandboxManager';
 
 /**
  * 真实的MCP客户端实现
@@ -50,42 +52,54 @@ export class RealMCPClient implements IMCPClient {
   }
 
   async connect(server: MCPServerEntity): Promise<void> {
-    console.log(`[Real MCP Client] 🔗 开始连接服务器: ${server.name}`);
-    console.log(`[Real MCP Client] 🔧 服务器配置:`, {
+    log.info(`[Real MCP Client] 🔗 开始连接服务器: ${server.name}`);
+    log.info(`[Real MCP Client] 🔧 服务器完整配置:`, {
+      id: server.id,
       name: server.name,
       type: server.type,
       command: server.command,
-      args: server.args?.slice(0, 3), // 只显示前3个参数
-      workingDirectory: server.workingDirectory
+      args: server.args,
+      workingDirectory: server.workingDirectory,
+      env: server.env,
+      timeout: server.timeout,
+      isEnabled: server.isEnabled
     });
 
     this.status = MCPConnectionStatus.CONNECTING;
-    console.log(`[Real MCP Client] 📊 状态更新: CONNECTING`);
+    log.info(`[Real MCP Client] 📊 状态更新: CONNECTING`);
 
     try {
-      console.log(`[Real MCP Client] 🔌 调用适配器连接...`);
+      log.info(`[Real MCP Client] 🔌 第一步：调用适配器连接...`);
+      log.info(`[Real MCP Client] 🔍 适配器类型: ${this.adapter.constructor.name}`);
+      log.info(`[Real MCP Client] 🔍 适配器连接状态: ${this.adapter.isConnected()}`);
+      
       await this.adapter.connect();
-      console.log(`[Real MCP Client] ✅ 适配器连接成功`);
+      log.info(`[Real MCP Client] ✅ 适配器连接成功`);
+      log.info(`[Real MCP Client] 🔍 连接后适配器状态: ${this.adapter.isConnected()}`);
 
-      console.log(`[Real MCP Client] 🤝 开始初始化MCP会话...`);
+      log.info(`[Real MCP Client] 🤝 第二步：开始初始化MCP会话...`);
       await this.initializeSession();
-      console.log(`[Real MCP Client] ✅ MCP会话初始化成功`);
+      log.info(`[Real MCP Client] ✅ MCP会话初始化成功`);
+
+      log.info(`[Real MCP Client] 🛠️ 第三步：加载服务器工具列表...`);
+      await this.loadTools();
+      log.info(`[Real MCP Client] ✅ 工具列表加载完成，共${this.tools.length}个工具`);
 
       this.status = MCPConnectionStatus.CONNECTED;
-      console.log(`[Real MCP Client] 📊 状态更新: CONNECTED`);
-      console.log(`[Real MCP Client] 🎉 连接完全成功: ${server.name}`);
+      log.info(`[Real MCP Client] 📊 状态更新: CONNECTED`);
+      log.info(`[Real MCP Client] 🎉 连接完全成功: ${server.name}`);
 
     } catch (error) {
       this.status = MCPConnectionStatus.ERROR;
-      console.error(`[Real MCP Client] ❌ 连接过程失败: ${server.name}`);
-      console.error(`[Real MCP Client] 💥 错误详情:`, error);
-      console.error(`[Real MCP Client] 📊 状态更新: ERROR`);
+      log.error(`[Real MCP Client] ❌ 连接过程失败: ${server.name}`);
+      log.error(`[Real MCP Client] 💥 错误详情:`, error);
+      log.error(`[Real MCP Client] 📊 状态更新: ERROR`);
       throw error;
     }
   }
 
   async disconnect(): Promise<void> {
-    console.log(`[Real MCP Client] 断开连接: ${this.server.name}`);
+    log.info(`[Real MCP Client] 断开连接: ${this.server.name}`);
     
     try {
       await this.adapter.disconnect();
@@ -93,9 +107,9 @@ export class RealMCPClient implements IMCPClient {
       this.tools = [];
       this.serverInfo = undefined;
       
-      console.log(`[Real MCP Client] 断开连接完成: ${this.server.name}`);
+      log.info(`[Real MCP Client] 断开连接完成: ${this.server.name}`);
     } catch (error) {
-      console.error(`[Real MCP Client] 断开连接失败: ${this.server.name}`, error);
+      log.error(`[Real MCP Client] 断开连接失败: ${this.server.name}`, error);
       throw error;
     }
   }
@@ -105,41 +119,41 @@ export class RealMCPClient implements IMCPClient {
   }
 
   async discoverTools(): Promise<MCPToolEntity[]> {
-    console.log(`[Real MCP Client] 开始发现工具: ${this.server.name}, 当前状态: ${this.status}`);
+    log.info(`[Real MCP Client] 开始发现工具: ${this.server.name}, 当前状态: ${this.status}`);
 
     if (this.status !== MCPConnectionStatus.CONNECTED) {
-      console.error(`[Real MCP Client] 客户端未连接，状态: ${this.status}`);
+      log.error(`[Real MCP Client] 客户端未连接，状态: ${this.status}`);
       throw new Error(`客户端未连接，当前状态: ${this.status}`);
     }
 
     // 🔥 检查适配器状态
     if (!this.adapter) {
-      console.error(`[Real MCP Client] 适配器不存在: ${this.server.name}`);
+      log.error(`[Real MCP Client] 适配器不存在: ${this.server.name}`);
       throw new Error('适配器不存在');
     }
 
-    console.log(`[Real MCP Client] 发现工具: ${this.server.name}`);
+    log.info(`[Real MCP Client] 发现工具: ${this.server.name}`);
 
     try {
       // 🔥 检查适配器连接状态
       const adapterStatus = (this.adapter as any).connected;
-      console.log(`[Real MCP Client] 适配器连接状态: ${adapterStatus}`);
+      log.info(`[Real MCP Client] 适配器连接状态: ${adapterStatus}`);
 
       if (!adapterStatus) {
-        console.error(`[Real MCP Client] 适配器已断开连接: ${this.server.name}`);
+        log.error(`[Real MCP Client] 适配器已断开连接: ${this.server.name}`);
         this.status = MCPConnectionStatus.DISCONNECTED;
         throw new Error('适配器已断开连接');
       }
 
       // 发送tools/list请求
-      console.log(`[Real MCP Client] 发送tools/list请求: ${this.server.name}`);
+      log.info(`[Real MCP Client] 发送tools/list请求: ${this.server.name}`);
       const response = await this.adapter.sendRequest({
         method: 'tools/list',
         params: {}
       });
 
       if (!response || !Array.isArray(response.tools)) {
-        console.warn(`[Real MCP Client] 无效的工具列表响应: ${this.server.name}`);
+        log.warn(`[Real MCP Client] 无效的工具列表响应: ${this.server.name}`);
         return [];
       }
 
@@ -156,21 +170,23 @@ export class RealMCPClient implements IMCPClient {
         });
       });
 
-      console.log(`[Real MCP Client] 发现 ${this.tools.length} 个工具: ${this.server.name}`);
+      log.info(`[Real MCP Client] 发现 ${this.tools.length} 个工具: ${this.server.name}`);
       return this.tools;
 
     } catch (error) {
-      console.error(`[Real MCP Client] 工具发现失败: ${this.server.name}`, error);
+      log.error(`[Real MCP Client] 工具发现失败: ${this.server.name}`, error);
       throw error;
     }
   }
 
   async callTool(request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
-    if (this.status !== MCPConnectionStatus.CONNECTED) {
-      throw new Error('客户端未连接');
+    // 简化连接检查 - 主要检查适配器是否可用
+    if (!this.adapter.isConnected()) {
+      log.error(`[Real MCP Client] ❌ 适配器未连接`);
+      throw new Error('适配器未连接，需要重新连接');
     }
 
-    console.log(`[Real MCP Client] 调用工具: ${request.toolName}`, request.arguments);
+    log.info(`[Real MCP Client] 🔧 调用工具: ${request.toolName}`, request.arguments);
 
     try {
       // 验证工具是否存在
@@ -218,7 +234,7 @@ export class RealMCPClient implements IMCPClient {
       // 更新工具使用统计
       tool.recordUsage();
 
-      console.log(`[Real MCP Client] 工具调用成功: ${request.toolName} (${duration}ms)`);
+      log.info(`[Real MCP Client] 工具调用成功: ${request.toolName} (${duration}ms)`);
       return {
         success: true,
         result: response.content || response.result,
@@ -228,7 +244,7 @@ export class RealMCPClient implements IMCPClient {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '工具调用失败';
-      console.error(`[Real MCP Client] 工具调用失败: ${request.toolName}`, errorMessage);
+      log.error(`[Real MCP Client] 工具调用失败: ${request.toolName}`, errorMessage);
       
       return {
         success: false,
@@ -252,23 +268,25 @@ export class RealMCPClient implements IMCPClient {
 
       return response !== null;
     } catch (error) {
-      console.error(`[Real MCP Client] 连接测试失败: ${this.server.name}`, error);
+      log.error(`[Real MCP Client] 连接测试失败: ${this.server.name}`, error);
       return false;
     }
   }
 
   async getServerInfo(): Promise<{ name: string; version: string }> {
     if (this.serverInfo) {
+      log.info(`[Real MCP Client] 📋 使用缓存的服务器信息:`, this.serverInfo);
       return this.serverInfo;
     }
 
-    if (this.status !== MCPConnectionStatus.CONNECTED) {
-      throw new Error('客户端未连接');
+    if (!this.adapter.isConnected()) {
+      log.error(`[Real MCP Client] ❌ 无法获取服务器信息，适配器未连接`);
+      throw new Error('适配器未连接');
     }
 
     try {
-      // 发送initialize请求获取服务器信息
-      const response = await this.adapter.sendRequest({
+      log.info(`[Real MCP Client] 📡 发送initialize请求获取服务器信息...`);
+      const initRequest = {
         method: 'initialize',
         params: {
           protocolVersion: '2024-11-05',
@@ -276,24 +294,34 @@ export class RealMCPClient implements IMCPClient {
             tools: {}
           },
           clientInfo: {
-            name: 'ProjectS',
+            name: 'DeeChat',
             version: '1.0.0'
           }
         }
-      });
+      };
+      log.info(`[Real MCP Client] 📝 initialize请求内容:`, initRequest);
+
+      const response = await this.adapter.sendRequest(initRequest);
+      log.info(`[Real MCP Client] 📥 initialize响应:`, response);
 
       this.serverInfo = {
         name: response.serverInfo?.name || this.server.name,
         version: response.serverInfo?.version || '1.0.0'
       };
 
+      log.info(`[Real MCP Client] ✅ 服务器信息设置完成:`, this.serverInfo);
       return this.serverInfo;
     } catch (error) {
-      console.error(`[Real MCP Client] 获取服务器信息失败: ${this.server.name}`, error);
-      return {
+      log.error(`[Real MCP Client] ❌ 获取服务器信息失败: ${this.server.name}`, error);
+      log.error(`[Real MCP Client] 🔄 使用默认服务器信息作为fallback`);
+      
+      const fallbackInfo = {
         name: this.server.name,
         version: '1.0.0'
       };
+      
+      this.serverInfo = fallbackInfo;
+      return fallbackInfo;
     }
   }
 
@@ -302,21 +330,76 @@ export class RealMCPClient implements IMCPClient {
    */
   private async initializeSession(): Promise<void> {
     try {
-      console.log(`[Real MCP Client] 初始化MCP会话: ${this.server.name}`);
+      log.info(`[Real MCP Client] 🤝 初始化MCP会话开始: ${this.server.name}`);
       
-      // 获取服务器信息
+      log.info(`[Real MCP Client] 📝 步骤1: 获取服务器信息...`);
       await this.getServerInfo();
+      log.info(`[Real MCP Client] ✅ 服务器信息获取成功:`, this.serverInfo);
       
-      // 发送initialized通知
-      await this.adapter.sendRequest({
+      log.info(`[Real MCP Client] 📝 步骤2: 发送initialized通知...`);
+      const initResponse = await this.adapter.sendRequest({
         method: 'notifications/initialized',
         params: {}
       });
+      log.info(`[Real MCP Client] ✅ initialized通知发送成功:`, initResponse);
 
-      console.log(`[Real MCP Client] MCP会话初始化完成: ${this.server.name}`);
+      log.info(`[Real MCP Client] 🎉 MCP会话初始化完成: ${this.server.name}`);
     } catch (error) {
-      console.warn(`[Real MCP Client] MCP会话初始化失败: ${this.server.name}`, error);
+      log.error(`[Real MCP Client] ❌ MCP会话初始化失败: ${this.server.name}`, error);
       // 不抛出错误，允许继续使用基本功能
+    }
+  }
+
+  /**
+   * 加载服务器工具列表
+   */
+  private async loadTools(): Promise<void> {
+    try {
+      log.info(`[Real MCP Client] 🛠️ 开始加载工具列表: ${this.server.name}`);
+      
+      log.info(`[Real MCP Client] 📝 发送tools/list请求...`);
+      const response = await this.adapter.sendRequest({
+        method: 'tools/list',
+        params: {}
+      });
+      
+      log.info(`[Real MCP Client] 📥 工具列表响应:`, response);
+
+      if (!response) {
+        log.warn(`[Real MCP Client] ⚠️ 工具列表响应为空: ${this.server.name}`);
+        this.tools = [];
+        return;
+      }
+
+      if (!response.tools || !Array.isArray(response.tools)) {
+        log.warn(`[Real MCP Client] ⚠️ 无效的工具列表格式: ${this.server.name}`, response);
+        this.tools = [];
+        return;
+      }
+
+      // 转换为MCPToolEntity
+      this.tools = response.tools.map((tool: any, index: number) => {
+        log.info(`[Real MCP Client] 🔧 处理工具${index + 1}:`, tool.name);
+        return MCPToolEntity.create({
+          name: tool.name,
+          description: tool.description,
+          serverId: this.server.id,
+          serverName: this.server.name,
+          inputSchema: tool.inputSchema,
+          category: this.extractCategory(tool),
+          tags: this.extractTags(tool)
+        });
+      });
+
+      log.info(`[Real MCP Client] ✅ 工具列表加载完成: ${this.server.name}, 共${this.tools.length}个工具`);
+      this.tools.forEach((tool, index) => {
+        log.info(`[Real MCP Client] 📋 工具${index + 1}: ${tool.name} - ${tool.description}`);
+      });
+
+    } catch (error) {
+      log.error(`[Real MCP Client] ❌ 工具列表加载失败: ${this.server.name}`, error);
+      this.tools = [];
+      // 不抛出错误，允许服务器连接但不提供工具
     }
   }
 

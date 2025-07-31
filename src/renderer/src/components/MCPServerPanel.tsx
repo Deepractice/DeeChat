@@ -148,6 +148,9 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
 
   const getServerIcon = (name: string) => {
     const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea'];
+    if (!name || typeof name !== 'string' || name.length === 0) {
+      return colors[0]; // 返回默认颜色
+    }
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
   };
@@ -273,7 +276,7 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
                         fontWeight: 'bold'
                       }}
                     >
-                      {server.name.charAt(0).toUpperCase()}
+                      {server.name ? server.name.charAt(0).toUpperCase() : '?'}
                     </Avatar>
                     
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -296,7 +299,9 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
                           />
                         </div>
                         <Tooltip title={
-                          server.toggleLoading
+                          isBuiltinPlugin(server.id)
+                            ? '内置插件不可禁用'
+                            : server.toggleLoading
                             ? '正在切换状态...'
                             : (server.isEnabled ? '点击禁用插件' : '点击启用插件')
                         }>
@@ -305,7 +310,8 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
                             checked={server.isEnabled}
                             loading={server.toggleLoading}
                             onChange={(checked) => handleToggleServer(server.id, checked)}
-                            disabled={!onToggleServer || server.toggleLoading}
+                            disabled={!onToggleServer || server.toggleLoading || isBuiltinPlugin(server.id)}
+                            style={isBuiltinPlugin(server.id) ? { opacity: 0.6 } : {}}
                           />
                         </Tooltip>
                       </div>

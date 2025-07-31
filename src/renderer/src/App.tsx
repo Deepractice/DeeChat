@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Layout, message, ConfigProvider, theme } from 'antd'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from './store'
@@ -6,17 +6,20 @@ import { loadConfig } from './store/slices/configSlice'
 import { loadChatHistory } from './store/slices/chatSlice'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
-import SystemRoleDebugPanel from './components/SystemRoleDebugPanel'
+import ChatSessionPanel from './components/ChatSessionPanel'
+import SettingsPage from './pages/SettingsPage'
 
 import './App.css'
 
 const { Sider, Content } = Layout
 
+type AppView = 'chat' | 'settings'
+
 function App() {
   const dispatch = useDispatch<AppDispatch>()
-  const { error: configError, config } = useSelector((state: RootState) => state.config)
+  const { error: configError } = useSelector((state: RootState) => state.config)
   const { error: chatError } = useSelector((state: RootState) => state.chat)
-  const appTheme = config.ui.theme
+  const [currentView, setCurrentView] = useState<AppView>('chat')
 
   useEffect(() => {
     // 应用启动时加载配置和聊天历史
@@ -34,40 +37,64 @@ function App() {
     }
   }, [configError, chatError])
 
-  // 根据主题设置背景色
+  // 设置固定背景色
   useEffect(() => {
-    if (appTheme === 'dark') {
-      document.body.style.backgroundColor = '#141414'
-    } else {
-      document.body.style.backgroundColor = '#fff'
-    }
-  }, [appTheme])
+    document.body.style.backgroundColor = '#fff'
+  }, [])
 
   return (
     <ConfigProvider
       theme={{
-        algorithm: appTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        algorithm: theme.defaultAlgorithm,
       }}
     >
       <div className="app-container">
         <Layout style={{ height: '100vh' }}>
+          {/* 主导航侧边栏 */}
           <Sider
-            width={280}
-            theme={appTheme === 'dark' ? 'dark' : 'light'}
+            width={80}
+            theme="dark"
             style={{
-              borderRight: appTheme === 'dark' ? '1px solid #303030' : '1px solid #f0f0f0',
-              overflow: 'auto'
+              borderRight: '1px solid #333333',
+              overflow: 'auto',
+              backgroundColor: '#1a1a1a'
             }}
           >
-            <Sidebar />
+            <Sidebar 
+              activeView={currentView}
+              onViewChange={setCurrentView}
+            />
           </Sider>
-          <Content>
-            <ChatArea />
-          </Content>
+          
+          {/* 动态内容区域 */}
+          <Layout>
+            {currentView === 'chat' && (
+              <>
+                {/* 聊天会话侧边栏 */}
+                <Sider
+                  width={280}
+                  theme="light"
+                  style={{
+                    borderRight: '1px solid #f0f0f0',
+                    overflow: 'auto',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  <ChatSessionPanel />
+                </Sider>
+                <Content>
+                  <ChatArea onGoToSettings={() => setCurrentView('settings')} />
+                </Content>
+              </>
+            )}
+            
+            {currentView === 'settings' && (
+              <Content>
+                <SettingsPage />
+              </Content>
+            )}
+          </Layout>
         </Layout>
-        
-        {/* 🤖 系统角色调试面板（仅开发环境） */}
-        <SystemRoleDebugPanel />
       </div>
     </ConfigProvider>
   )

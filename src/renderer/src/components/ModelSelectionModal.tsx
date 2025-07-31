@@ -231,9 +231,6 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
                   title={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Space direction="vertical" size={2} style={{ flex: 1 }}>
-                        <Text style={{ fontSize: '14px', fontWeight: 500, color: '#666' }}>
-                          {modelOption.configName}
-                        </Text>
                         <Text style={{ fontSize: '16px', fontWeight: 600 }}>
                           {modelOption.modelName}
                         </Text>

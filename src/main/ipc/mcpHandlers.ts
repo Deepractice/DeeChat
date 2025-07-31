@@ -23,10 +23,35 @@ async function initializeMCPServices() {
     
     if (!mcpIntegrationService) {
       mcpIntegrationService = MCPIntegrationService.getInstance();
-      await mcpIntegrationService.initialize();
+      
+      // 🔥 添加重试机制和超时处理
+      const maxRetries = 3;
+      const retryDelay = 2000; // 2秒
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`🔄 [MCP] 初始化尝试 ${attempt}/${maxRetries}...`);
+          await mcpIntegrationService.initialize();
+          console.log(`✅ [MCP] 初始化成功（尝试 ${attempt}/${maxRetries}）`);
+          break; // 成功后跳出循环
+        } catch (error) {
+          console.error(`❌ [MCP] 初始化失败（尝试 ${attempt}/${maxRetries}）:`, error);
+          
+          if (attempt === maxRetries) {
+            // 最后一次尝试失败
+            throw new Error(`MCP服务初始化失败，已重试${maxRetries}次: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          
+          // 等待后重试
+          console.log(`⏳ [MCP] ${retryDelay/1000}秒后重试...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
     }
   } catch (error) {
-    console.error('❌ [MCP] 服务初始化失败:', error);
+    console.error('❌ [MCP] 服务初始化最终失败:', error);
+    // 重置服务实例，允许下次重新初始化
+    mcpIntegrationService = null;
     throw error;
   }
 }
@@ -48,10 +73,54 @@ function preRegisterMCPHandlers(): void {
   console.log('🔧 [MCP] 预注册MCP IPC处理器...');
 
   // 🔥 先注册基础的IPC处理器（避免"No handler registered"错误）
-  const createErrorResponse = (message: string) => ({
-    success: false,
-    error: `MCP服务未就绪: ${message}`
-  });
+  const createErrorResponse = (message: string, userFriendlyMessage?: string) => {
+    // 🔥 提供用户友好的错误提示
+    const friendlyMessage = userFriendlyMessage || getFriendlyErrorMessage(message);
+    
+    return {
+      success: false,
+      error: `MCP服务未就绪: ${message}`,
+      userMessage: friendlyMessage, // 给用户看的友好提示
+      suggestion: getErrorSuggestion(message) // 解决建议
+    };
+  };
+
+  // 🔥 获取用户友好的错误提示
+  const getFriendlyErrorMessage = (error: string): string => {
+    if (error.includes('集成服务未初始化')) {
+      return 'PromptX插件正在启动中，请稍候再试';
+    }
+    if (error.includes('初始化失败')) {
+      return 'PromptX插件启动失败，请检查应用权限';
+    }
+    if (error.includes('初始化超时')) {
+      return 'PromptX插件启动超时，可能需要重启应用';
+    }
+    if (error.includes('工具调用失败')) {
+      return '工具执行遇到问题，请重试';
+    }
+    if (error.includes('连接失败')) {
+      return '与PromptX服务连接中断，正在尝试重连';
+    }
+    return '服务暂时不可用，请稍后再试';
+  };
+
+  // 🔥 获取错误解决建议
+  const getErrorSuggestion = (error: string): string => {
+    if (error.includes('集成服务未初始化')) {
+      return '请稍等几秒钟让服务完成启动，或重启应用';
+    }
+    if (error.includes('初始化失败')) {
+      return '请检查应用是否有足够的系统权限，或尝试重启应用';
+    }
+    if (error.includes('初始化超时')) {
+      return '请重启应用，如果问题持续请检查系统资源';
+    }
+    if (error.includes('工具调用失败')) {
+      return '请检查工具参数是否正确，或稍后重试';
+    }
+    return '如果问题持续，请尝试重启应用';
+  };
 
   // 注册所有处理器，避免前端调用时出现"No handler registered"错误
   ipcMain.handle('mcp:getAllServers', async () => {
@@ -61,24 +130,26 @@ function preRegisterMCPHandlers(): void {
     try {
       const servers = await mcpConfigService.getAllServerConfigs();
       const serverData = servers.map(server => server.toData());
+      console.log('🔍 [MCP Debug] 发送到前端的服务器数据:', JSON.stringify(serverData, null, 2));
       return { success: true, data: serverData };
     } catch (error) {
       return createErrorResponse(error instanceof Error ? error.message : '获取服务器列表失败');
     }
   });
 
-  ipcMain.handle('mcp:getAllTools', async () => {
-    if (!mcpIntegrationService) {
-      return createErrorResponse('集成服务未初始化');
-    }
-    try {
-      const tools = await mcpIntegrationService.getAllTools();
-      const toolData = tools.map(tool => tool.toData());
-      return { success: true, data: toolData };
-    } catch (error) {
-      return createErrorResponse(error instanceof Error ? error.message : '获取工具列表失败');
-    }
-  });
+  // 🔥 注释掉重复的getAllTools处理器，已在main/index.ts中实现
+  // ipcMain.handle('mcp:getAllTools', async () => {
+  //   if (!mcpIntegrationService) {
+  //     return createErrorResponse('集成服务未初始化');
+  //   }
+  //   try {
+  //     const tools = await mcpIntegrationService.getAllTools();
+  //     const toolData = tools.map(tool => tool.toData());
+  //     return { success: true, data: toolData };
+  //   } catch (error) {
+  //     return createErrorResponse(error instanceof Error ? error.message : '获取工具列表失败');
+  //   }
+  // });
 
   // 服务器管理处理器
   ipcMain.handle('mcp:addServer', async (_, serverConfig) => {
@@ -287,7 +358,7 @@ export function unregisterMCPHandlers(): void {
   
   // 注销工具管理处理器
   ipcMain.removeAllListeners('mcp:discoverServerTools');
-  ipcMain.removeAllListeners('mcp:getAllTools');
+  // ipcMain.removeAllListeners('mcp:getAllTools'); // 🔥 由main/index.ts管理
   ipcMain.removeAllListeners('mcp:callTool');
   ipcMain.removeAllListeners('mcp:searchTools');
   ipcMain.removeAllListeners('mcp:getToolUsageStats');

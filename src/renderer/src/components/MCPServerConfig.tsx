@@ -494,6 +494,14 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
       open={visible}
       onCancel={onCancel}
       width={editingServer ? 800 : 700}
+      style={{ top: 20 }}
+      styles={{ 
+        body: {
+          maxHeight: '75vh', 
+          overflowY: 'auto',
+          padding: '16px 24px'
+        }
+      }}
       footer={[
         <Button key="cancel" onClick={onCancel}>
           取消
@@ -559,11 +567,13 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
           </div>
 
           {/* 右侧：配置表单 */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Form
               form={form}
               layout="vertical"
               onFinish={handleSave}
+              style={{ width: '100%' }}
+              scrollToFirstError={true}
             >
               {/* 动态渲染配置字段 */}
               {renderConfigFields()}
@@ -586,6 +596,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
+          style={{ width: '100%' }}
           items={[
           {
             key: 'quick',
@@ -596,7 +607,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
               </Space>
             ),
             children: (
-              <div style={{ padding: '16px 0' }}>
+              <div style={{ width: '100%' }}>
                 <Alert
                   message="快速配置插件"
                   description="输入插件名称和命令行，系统会自动生成配置"
@@ -609,6 +620,8 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                   form={quickForm}
                   layout="vertical"
                   onFinish={handleQuickSave}
+                  style={{ width: '100%' }}
+                  scrollToFirstError={true}
                 >
                   <Form.Item
                     name="name"
@@ -618,6 +631,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                     <Input
                       placeholder="例如：DeeChat工具包"
                       size="large"
+                      style={{ width: '100%' }}
                     />
                   </Form.Item>
 
@@ -630,6 +644,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                     <Input
                       placeholder="npx -y dpml-prompt@beta mcp-server"
                       size="large"
+                      style={{ width: '100%' }}
                     />
                   </Form.Item>
 
@@ -638,6 +653,8 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                       rows={2}
                       placeholder="简单描述这个插件的功能..."
                       size="large"
+                      style={{ width: '100%' }}
+                      autoSize={{ minRows: 2, maxRows: 4 }}
                     />
                   </Form.Item>
                 </Form>
@@ -653,7 +670,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
               </Space>
             ),
             children: (
-              <div style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ width: '100%' }}>
                 <Alert
                   message="📋 JSON配置格式说明"
                   description={
@@ -675,7 +692,9 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                           fontSize: '11px',
                           margin: 0,
                           color: '#24292e',
-                          lineHeight: '1.4'
+                          lineHeight: '1.4',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word'
                         }}>
 {`{
   "mcpServers": {
@@ -716,7 +735,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
 
 💡 提示：可以点击"生成模板"按钮获取常用配置示例`}
                   style={{
-                    flex: 1,
+                    width: '100%',
                     fontFamily: 'Monaco, Consolas, "Courier New", monospace',
                     fontSize: 13,
                     lineHeight: '1.5',
@@ -724,7 +743,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
                     border: '1px solid #e1e4e8',
                     borderRadius: '6px'
                   }}
-                  autoSize={{ minRows: 10, maxRows: 18 }}
+                  autoSize={{ minRows: 8, maxRows: 15 }}
                 />
               </div>
             )

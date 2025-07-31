@@ -22,7 +22,7 @@ export class ModelService {
     }
 
     try {
-      const configsData = await this.storageService.get<ModelConfigData[]>('model_configs', [])
+      const configsData = await this.storageService.get<ModelConfigData[]>('model-configs', [])
       // console.log('加载配置数据:', JSON.stringify(configsData, null, 2))
       this.configsCache = configsData.map((data: ModelConfigData) => new ModelConfigEntity(data))
       return this.configsCache || []
@@ -156,6 +156,6 @@ export class ModelService {
   private async saveAllConfigs(configs: ModelConfigEntity[]): Promise<void> {
     const configsData = configs.map(config => config.toData())
     // console.log('保存配置数据:', JSON.stringify(configsData, null, 2))
-    await this.storageService.set('model_configs', configsData)
+    await this.storageService.set('model-configs', configsData)
   }
 }

@@ -3,6 +3,7 @@
  * 负责管理多个MCP客户端的连接和生命周期
  */
 
+import log from 'electron-log'
 import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
 import {
   IMCPClient,
@@ -22,20 +23,20 @@ export class MCPClientManager {
    * 创建客户端
    */
   async createClient(server: MCPServerEntity): Promise<IMCPClient> {
-    console.log(`[MCP Manager] 🔧 开始创建真实MCP客户端: ${server.name}`);
+    log.info(`[MCP Manager] 🔧 开始创建真实MCP客户端: ${server.name}`);
 
     try {
       const client = new RealMCPClient(server);
-      console.log(`[MCP Manager] ✅ 客户端实例创建成功: ${server.name}`);
+      log.info(`[MCP Manager] ✅ 客户端实例创建成功: ${server.name}`);
 
-      console.log(`[MCP Manager] 🔗 开始连接客户端: ${server.name}`);
+      log.info(`[MCP Manager] 🔗 开始连接客户端: ${server.name}`);
       await client.connect(server);
-      console.log(`[MCP Manager] ✅ 客户端连接成功: ${server.name}`);
+      log.info(`[MCP Manager] ✅ 客户端连接成功: ${server.name}`);
 
       return client;
     } catch (error) {
-      console.error(`[MCP Manager] ❌ 创建客户端失败: ${server.name}`);
-      console.error(`[MCP Manager] 💥 详细错误:`, error);
+      log.error(`[MCP Manager] ❌ 创建客户端失败: ${server.name}`);
+      log.error(`[MCP Manager] 💥 详细错误:`, error);
       throw error; // 重新抛出错误
     }
   }
@@ -44,21 +45,21 @@ export class MCPClientManager {
    * 连接客户端
    */
   async connectClient(server: MCPServerEntity): Promise<void> {
-    console.log(`[MCP Manager] 🚀 开始连接客户端: ${server.name}`);
+    log.info(`[MCP Manager] 🚀 开始连接客户端: ${server.name}`);
 
     // 如果已存在客户端，先断开
     if (this.clients.has(server.id)) {
-      console.log(`[MCP Manager] 🔄 发现已存在客户端，先断开: ${server.name}`);
+      log.info(`[MCP Manager] 🔄 发现已存在客户端，先断开: ${server.name}`);
       await this.disconnectClient(server.id);
     }
 
     try {
-      console.log(`[MCP Manager] 🔧 调用createClient: ${server.name}`);
+      log.info(`[MCP Manager] 🔧 调用createClient: ${server.name}`);
       const client = await this.createClient(server);
-      console.log(`[MCP Manager] ✅ createClient成功，保存客户端: ${server.name}`);
+      log.info(`[MCP Manager] ✅ createClient成功，保存客户端: ${server.name}`);
 
       this.clients.set(server.id, client);
-      console.log(`[MCP Manager] 📦 客户端已保存到管理器: ${server.name}`);
+      log.info(`[MCP Manager] 📦 客户端已保存到管理器: ${server.name}`);
 
       this.emitEvent({
         type: MCPEventType.SERVER_CONNECTED,
@@ -66,11 +67,11 @@ export class MCPClientManager {
         timestamp: new Date(),
         data: { serverName: server.name }
       });
-      console.log(`[MCP Manager] 📡 已发送连接成功事件: ${server.name}`);
+      log.info(`[MCP Manager] 📡 已发送连接成功事件: ${server.name}`);
 
     } catch (error) {
-      console.error(`[MCP Manager] ❌ 连接客户端失败: ${server.name}`);
-      console.error(`[MCP Manager] 💥 错误详情:`, error);
+      log.error(`[MCP Manager] ❌ 连接客户端失败: ${server.name}`);
+      log.error(`[MCP Manager] 💥 错误详情:`, error);
 
       this.emitEvent({
         type: MCPEventType.SERVER_ERROR,
@@ -78,7 +79,7 @@ export class MCPClientManager {
         timestamp: new Date(),
         error: error instanceof Error ? error.message : '连接失败'
       });
-      console.log(`[MCP Manager] 📡 已发送连接失败事件: ${server.name}`);
+      log.info(`[MCP Manager] 📡 已发送连接失败事件: ${server.name}`);
 
       throw error; // 重新抛出错误，让上层知道连接失败
     }
@@ -88,7 +89,7 @@ export class MCPClientManager {
    * 断开客户端连接
    */
   async disconnectClient(serverId: string): Promise<void> {
-    console.log(`[MCP Manager] 断开客户端: ${serverId}`);
+    log.info(`[MCP Manager] 断开客户端: ${serverId}`);
 
     const client = this.clients.get(serverId);
     if (client) {
@@ -128,7 +129,7 @@ export class MCPClientManager {
    * 清理所有客户端
    */
   async cleanup(): Promise<void> {
-    console.log('[MCP Manager] 清理所有客户端');
+    log.info('[MCP Manager] 清理所有客户端');
 
     const disconnectPromises = Array.from(this.clients.keys()).map(serverId =>
       this.disconnectClient(serverId)
@@ -146,7 +147,7 @@ export class MCPClientManager {
       try {
         listener(event);
       } catch (error) {
-        console.error('[MCP Manager] 事件监听器错误:', error);
+        log.error('[MCP Manager] 事件监听器错误:', error);
       }
     }
   }

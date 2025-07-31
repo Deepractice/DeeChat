@@ -39,8 +39,8 @@ const { Option, OptGroup } = Select;
 
 // 组件Props接口
 interface ModelManagementProps {
-  visible: boolean;
-  onClose: () => void;
+  visible?: boolean;
+  onClose?: () => void;
 }
 
 // 提供商配置（不再是具体模型配置）
@@ -688,18 +688,8 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
     return apiKey.substring(0, 4) + '*'.repeat(apiKey.length - 8) + apiKey.substring(apiKey.length - 4);
   };
 
-  return (
-    <>
-    <Modal
-      title="模型管理"
-      open={visible}
-      onCancel={onClose}
-      footer={null}
-      width={1200}
-      style={{ top: 20 }}
-      destroyOnHidden
-    >
-      <Layout style={{ height: '80vh', background: '#f5f5f5' }}>
+  const layoutContent = (
+    <Layout style={{ height: visible ? '80vh' : '100%', background: '#f5f5f5' }}>
       {/* 左侧提供商列表 */}
       <Sider width={300} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #f0f0f0' }}>
@@ -1019,14 +1009,30 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
         onCancel={() => setIsModalVisible(false)}
         onOk={() => form.submit()}
         width={700}
+        style={{ top: 20 }}
+        styles={{ 
+          body: {
+            maxHeight: '70vh', 
+            overflowY: 'auto',
+            padding: '16px 24px'
+          }
+        }}
       >
-        <div style={{ marginBottom: '16px' }}>
-          <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
+        <div style={{ marginBottom: '16px', width: '100%' }}>
+          <Card 
+            size="small" 
+            style={{ 
+              backgroundColor: '#f6ffed', 
+              border: '1px solid #b7eb8f',
+              width: '100%'
+            }}
+            styles={{ body: { padding: '12px 16px' } }}
+          >
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
               <div style={{ fontWeight: 'bold', color: '#52c41a' }}>
                 💡 配置提示
               </div>
-              <div style={{ fontSize: '12px', color: '#666' }}>
+              <div style={{ fontSize: '12px', color: '#666', lineHeight: '1.4' }}>
                 • 选择提供商后会自动填入默认API地址<br/>
                 • API Key通常从提供商官网的控制台获取<br/>
                 • 配置完成后建议先测试连接再保存<br/>
@@ -1041,6 +1047,8 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
           layout="vertical"
           onFinish={handleSaveConfig}
           key={selectedConfig?.id || 'new'}
+          style={{ width: '100%' }}
+          scrollToFirstError={true}
         >
           <Form.Item
             name="name"
@@ -1066,8 +1074,13 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
               optionFilterProp="label"
               size="large"
               style={{ width: '100%' }}
-              dropdownStyle={{ maxHeight: 400, overflow: 'auto' }}
+              dropdownStyle={{ 
+                maxHeight: 400, 
+                overflow: 'auto',
+                zIndex: 9999 
+              }}
               optionLabelProp="label"
+              getPopupContainer={(triggerNode) => triggerNode.parentElement}
               onChange={(value) => {
                 const provider = PROVIDERS.find(p => p.value === value);
                 if (provider?.defaultURL) {
@@ -1201,7 +1214,10 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
             label="优先级"
             initialValue={5}
           >
-            <Select>
+            <Select
+              style={{ width: '100%' }}
+              getPopupContainer={(triggerNode) => triggerNode.parentElement}
+            >
               {[1,2,3,4,5,6,7,8,9,10].map(num => (
                 <Option key={num} value={num}>{num}</Option>
               ))}
@@ -1219,7 +1235,27 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
         </Form>
       </Modal>
     </Layout>
-    </Modal>
+  );
+
+  return (
+    <>
+      {visible === true ? (
+        <Modal
+          title="模型管理"
+          open={visible}
+          onCancel={onClose}
+          footer={null}
+          width={1200}
+          style={{ top: 20 }}
+          destroyOnHidden
+        >
+          {layoutContent}
+        </Modal>
+      ) : visible === false ? (
+        null
+      ) : (
+        layoutContent
+      )}
 
     {/* 模型列表管理模态框 */}
     <ModelListModal

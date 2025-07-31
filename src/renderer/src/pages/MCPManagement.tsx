@@ -116,6 +116,7 @@ const MCPManagement: React.FC = () => {
     try {
       const response = await window.electronAPI.mcp.getAllServers();
       if (response.success) {
+        console.log('🔍 [前端Debug] 接收到的服务器数据:', JSON.stringify(response.data, null, 2));
         setServers(response.data);
       } else {
         message.error(`获取服务器列表失败: ${response.error}`);

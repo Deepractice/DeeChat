@@ -12,7 +12,11 @@ import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 const { Content } = Layout
 const { Title, Text } = Typography
 
-const ChatArea: React.FC = () => {
+interface ChatAreaProps {
+  onGoToSettings?: () => void
+}
+
+const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
   const { currentSession, isLoading, sessions } = useSelector((state: RootState) => state.chat)
   const dispatch = useDispatch<AppDispatch>()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -224,13 +228,19 @@ const ChatArea: React.FC = () => {
 
   // 处理跳转到模型管理
   const handleGoToModelManagement = () => {
-    setModelManagementVisible(true)
+    if (onGoToSettings) {
+      onGoToSettings()
+    } else {
+      // 兜底方案：显示弹窗
+      setModelManagementVisible(true)
+    }
   }
 
 
 
   const activeSession = currentSession
 
+  // 没有会话时显示完整欢迎页面
   if (!activeSession) {
     return (
       <div
@@ -272,6 +282,9 @@ const ChatArea: React.FC = () => {
     )
   }
 
+  // 判断是否显示消息区域的欢迎内容
+  const shouldShowMessageWelcome = activeSession.messages.length === 0
+
   return (
     <Layout style={{ height: '100%' }}>
       <Content
@@ -290,19 +303,10 @@ const ChatArea: React.FC = () => {
             backgroundColor: '#fafafa'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <Title level={5} style={{ margin: 0 }}>
-                {activeSession.title}
-              </Title>
-            </div>
-            <ModelSelector
-              value={selectedModel?.id}
-              selectedConfig={selectedModel?.config}  // 🔥 直接传递完整配置
-              onChange={handleModelChange}
-              disabled={isLoading}
-              onGoToModelManagement={handleGoToModelManagement}
-            />
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <Title level={5} style={{ margin: 0 }}>
+              {activeSession.title}
+            </Title>
           </div>
         </div>
 
@@ -313,11 +317,42 @@ const ChatArea: React.FC = () => {
           style={{
             flex: 1,
             overflow: 'auto',
-            padding: '16px 24px'
+            padding: shouldShowMessageWelcome ? '0' : '16px 24px',
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
-          <MessageList messages={activeSession.messages} isLoading={isLoading} />
-          <div ref={messagesEndRef} />
+          {shouldShowMessageWelcome ? (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                padding: '40px'
+              }}
+            >
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div style={{ textAlign: 'center' }}>
+                    <Title level={4} type="secondary">
+                      准备开始新对话
+                    </Title>
+                    <Text type="secondary">
+                      选择模型后即可开始聊天
+                    </Text>
+                  </div>
+                }
+              />
+            </div>
+          ) : (
+            <>
+              <MessageList messages={activeSession.messages} isLoading={isLoading} />
+              <div ref={messagesEndRef} />
+            </>
+          )}
         </div>
 
         {/* 输入区域 */}
@@ -331,6 +366,8 @@ const ChatArea: React.FC = () => {
           <MessageInput
             disabled={isLoading}
             selectedModel={selectedModel}
+            onModelSelect={handleModelChange}
+            onGoToModelManagement={handleGoToModelManagement}
           />
         </div>
       </Content>

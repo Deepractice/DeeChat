@@ -3,6 +3,7 @@
  * 提供MCP服务器和工具的统一管理接口
  */
 
+import log from 'electron-log'
 import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
 import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
 import {
@@ -17,6 +18,7 @@ import {
 import { MCPClientManager } from './MCPClientManager'
 import { MCPConfigService } from './MCPConfigService'
 import { MCPCacheService } from './MCPCacheService'
+// import { MCPSandboxManager } from '../runtime/MCPSandboxManager'
 
 export class MCPIntegrationService implements IMCPProvider {
   private static instance: MCPIntegrationService | null = null;
@@ -26,6 +28,7 @@ export class MCPIntegrationService implements IMCPProvider {
   private eventListeners: ((event: MCPEvent) => void)[] = [];
   private serverStatusCache: Map<string, MCPServerStatus> = new Map();
   private isInitialized: boolean = false;
+  private isInitializing: boolean = false; // 🔥 新增：初始化中状态
 
   private constructor() {
     this.clientManager = new MCPClientManager();
@@ -49,29 +52,106 @@ export class MCPIntegrationService implements IMCPProvider {
   }
 
   /**
-   * 初始化服务（只执行一次）
+   * 初始化服务（只执行一次，添加进程锁定）
    */
   public async initialize(): Promise<void> {
+    // 🔥 防止重复初始化
     if (this.isInitialized) {
-      console.log('🔄 [MCP] 服务已初始化，跳过重复初始化');
+      log.info('🔄 [MCP] 服务已初始化，跳过重复初始化');
+      return;
+    }
+    
+    if (this.isInitializing) {
+      log.info('⏳ [MCP] 服务正在初始化中，等待完成...');
+      // 🔥 简化等待逻辑，避免复杂的死锁场景
+      // 直接返回，让调用方处理重试逻辑
       return;
     }
 
-    console.log('🚀 [MCP] 开始初始化MCP集成服务...');
-    this.isInitialized = true;
+    // 🔥 设置初始化中状态
+    this.isInitializing = true;
 
-    // 🔥 自动初始化已启用的服务器（添加异常处理）
+    // 🔥 防止多进程同时初始化的锁定机制
+    const lockKey = 'mcp_initialization_lock';
+    const { app } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+    
+    const lockFile = path.join(app.getPath('userData'), `${lockKey}.lock`);
+    
     try {
-      await this.initializeEnabledServers();
+      // 检查锁文件是否存在
+      if (fs.existsSync(lockFile)) {
+        const lockTime = fs.statSync(lockFile).mtime.getTime();
+        const now = Date.now();
+        
+        // 如果锁文件超过30秒，认为是僵尸锁，清除它
+        if (now - lockTime > 30000) {
+          log.warn('🧹 [MCP] 清除过期的初始化锁');
+          fs.unlinkSync(lockFile);
+        } else {
+          log.info('⏳ [MCP] 其他进程正在初始化，等待完成...');
+          this.isInitializing = false; // 重置初始化状态
+          return;
+        }
+      }
+      
+      // 创建锁文件
+      fs.writeFileSync(lockFile, process.pid.toString());
+      log.info('🔒 [MCP] 获得初始化锁');
+      
     } catch (error) {
-      console.error('❌ [MCP] initializeEnabledServers()失败:', error);
-      // 不抛出异常，允许服务继续初始化
+      log.warn('⚠️ [MCP] 无法创建初始化锁文件，继续初始化');
     }
 
-    // 启动工具发现预热（异步执行，不阻塞初始化）
-    this.startToolDiscoveryPrewarm();
-    console.log('✅ [MCP] 集成服务初始化完成');
+    try {
+      log.info('🚀 [MCP] 开始初始化MCP集成服务...');
+
+      // 🔥 自动初始化已启用的服务器（添加异常处理）
+      try {
+        log.info('🚀 [MCP] 开始执行initializeEnabledServers...');
+        await this.initializeEnabledServers();
+        log.info('✅ [MCP] initializeEnabledServers执行完成');
+      } catch (error) {
+        log.error('❌ [MCP] initializeEnabledServers()失败:', error);
+        if (error instanceof Error) {
+          log.error('🔍 [MCP] 错误详情:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
+        }
+        // 🔥 初始化失败时抛出异常，不设置isInitialized为true
+        throw error;
+      }
+
+      // 启动工具发现预热（异步执行，不阻塞初始化）
+      this.startToolDiscoveryPrewarm();
+      
+      // 🔥 只有所有关键步骤成功后才标记为已初始化
+      this.isInitialized = true;
+      log.info('✅ [MCP] 集成服务初始化完成');
+      
+    } catch (error) {
+      log.error('❌ [MCP] 集成服务初始化失败:', error);
+      // 🔥 初始化失败时重置状态
+      this.isInitialized = false;
+      throw error; // 重新抛出异常
+    } finally {
+      // 🔥 无论成功失败都要重置初始化中状态和清理锁文件
+      this.isInitializing = false;
+      
+      try {
+        if (fs.existsSync(lockFile)) {
+          fs.unlinkSync(lockFile);
+          log.info('🔓 [MCP] 释放初始化锁');
+        }
+      } catch (error) {
+        log.warn('⚠️ [MCP] 无法清理初始化锁文件:', error);
+      }
+    }
   }
+
 
   /**
    * 启动工具发现预热
@@ -80,7 +160,7 @@ export class MCPIntegrationService implements IMCPProvider {
     // 延迟5秒后开始预热，确保服务器连接稳定
     setTimeout(async () => {
       try {
-        console.log('🔥 [MCP] 开始工具发现预热...');
+        log.info('🔥 [MCP] 开始工具发现预热...');
         const servers = await this.configService.getAllServerConfigs();
         const enabledServers = servers.filter(server => server.isEnabled);
 
@@ -89,18 +169,18 @@ export class MCPIntegrationService implements IMCPProvider {
             // 检查是否已有缓存
             const cachedTools = this.cacheService.getCachedServerTools(server.id);
             if (!cachedTools || cachedTools.length === 0) {
-              console.log(`🔥 [MCP] 预热发现工具: ${server.name}`);
+              log.info(`🔥 [MCP] 预热发现工具: ${server.name}`);
               await this.discoverServerTools(server.id);
             } else {
-              console.log(`✅ [MCP] 工具已缓存，跳过预热: ${server.name} (${cachedTools.length}个工具)`);
+              log.info(`✅ [MCP] 工具已缓存，跳过预热: ${server.name} (${cachedTools.length}个工具)`);
             }
           } catch (error) {
-            console.warn(`⚠️ [MCP] 预热失败: ${server.name}`, error);
+            log.warn(`⚠️ [MCP] 预热失败: ${server.name}`, error);
           }
         }
-        console.log('✅ [MCP] 工具发现预热完成');
+        log.info('✅ [MCP] 工具发现预热完成');
       } catch (error) {
-        console.warn('⚠️ [MCP] 工具发现预热过程出错:', error);
+        log.warn('⚠️ [MCP] 工具发现预热过程出错:', error);
       }
     }, 5000);
   }
@@ -110,43 +190,79 @@ export class MCPIntegrationService implements IMCPProvider {
    */
   private async initializeEnabledServers(): Promise<void> {
     try {
+      log.info('🔧 [MCP] 开始获取所有服务器配置...');
       const servers = await this.configService.getAllServerConfigs();
+      log.info(`📋 [MCP] 获取到 ${servers.length} 个服务器配置`);
+      
       const enabledServers = servers.filter(server => server.isEnabled);
+      log.info(`🔍 [MCP] 其中 ${enabledServers.length} 个服务器已启用`);
       
       if (enabledServers.length > 0) {
-        console.log(`📋 [MCP] 初始化 ${enabledServers.length} 个已启用服务器`);
+        log.info(`📋 [MCP] 即将初始化 ${enabledServers.length} 个已启用服务器:`);
+        enabledServers.forEach((server, index) => {
+          log.info(`  ${index + 1}. ${server.name} (${server.id}) - ${server.type}`);
+        });
       }
 
       if (enabledServers.length === 0) {
-        console.warn('⚠️ [MCP] 没有找到已启用的服务器！');
+        log.warn('⚠️ [MCP] 没有找到已启用的服务器！');
+        log.info('🔍 [MCP] 所有服务器状态:');
+        servers.forEach((server, index) => {
+          log.info(`  ${index + 1}. ${server.name} - 启用状态: ${server.isEnabled}`);
+        });
         return;
       }
 
-      for (const server of enabledServers) {
+      // 🔥 使用Promise.allSettled避免一个服务器失败影响其他服务器
+      log.info('🚀 [MCP] 开始并行连接所有启用的服务器...');
+      const initPromises = enabledServers.map(async (server, index) => {
         try {
-          console.log(`🔌 [MCP] 初始化服务器: ${server.name}`);
-          console.log(`🔧 [MCP] 服务器详情:`, {
+          log.info(`🔌 [MCP] [${index + 1}/${enabledServers.length}] 开始初始化服务器: ${server.name}`);
+          log.info(`🔧 [MCP] 服务器详情:`, {
             id: server.id,
             name: server.name,
             type: server.type,
             command: server.command,
+            args: server.args,
+            workingDirectory: server.workingDirectory,
             isEnabled: server.isEnabled
           });
 
+          log.info(`🔗 [MCP] 调用connectServer: ${server.id}`);
           await this.connectServer(server.id);
-          console.log(`✅ [MCP] 服务器初始化成功: ${server.name}`);
+          log.info(`✅ [MCP] [${index + 1}/${enabledServers.length}] 服务器连接成功: ${server.name}`);
+          log.info(`✅ [MCP] 服务器初始化成功: ${server.name}`);
+          return { success: true, serverId: server.id, serverName: server.name };
         } catch (error) {
-          console.error(`❌ [MCP] 服务器初始化失败: ${server.name}`);
-          console.error(`💥 [MCP] 错误详情:`, error);
+          log.error(`❌ [MCP] 服务器初始化失败: ${server.name}`);
+          log.error(`💥 [MCP] 错误详情:`, error);
+          return { success: false, serverId: server.id, serverName: server.name, error };
         }
-      }
+      });
 
-      console.log('🎉 [MCP] 服务器初始化完成');
+      const results = await Promise.allSettled(initPromises);
+      let successCount = 0;
+      let failureCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value.success) {
+            successCount++;
+          } else {
+            failureCount++;
+          }
+        } else {
+          failureCount++;
+          log.error(`❌ [MCP] 服务器初始化Promise失败: ${enabledServers[index].name}`, result.reason);
+        }
+      });
+
+      log.info(`🎉 [MCP] 服务器初始化完成: 成功 ${successCount}/${enabledServers.length}, 失败 ${failureCount}`);
     } catch (error) {
-      console.error('❌ [MCP] 服务器初始化过程出错:', error);
-      console.error('💥 [MCP] 错误详情:', error);
+      log.error('❌ [MCP] 服务器初始化过程出错:', error);
+      log.error('💥 [MCP] 错误详情:', error);
       if (error instanceof Error) {
-        console.error('📍 [MCP] 错误堆栈:', error.stack);
+        log.error('📍 [MCP] 错误堆栈:', error.stack);
       }
       throw error; // 重新抛出，让上层的try-catch处理
     }
@@ -156,7 +272,7 @@ export class MCPIntegrationService implements IMCPProvider {
    * 添加MCP服务器
    */
   async addServer(server: MCPServerEntity): Promise<void> {
-    console.log(`🔧 [MCP] 添加服务器: ${server.name} (ID: ${server.id})`);
+    log.info(`🔧 [MCP] 添加服务器: ${server.name} (ID: ${server.id})`);
 
     // 验证服务器配置
     const validation = server.validate();
@@ -165,21 +281,21 @@ export class MCPIntegrationService implements IMCPProvider {
     }
 
     // 保存配置
-    console.log(`💾 [MCP] 保存服务器配置: ${server.name}`);
+    log.info(`💾 [MCP] 保存服务器配置: ${server.name}`);
     await this.configService.saveServerConfig(server);
 
     // 如果服务器启用，尝试连接
     if (server.isEnabled) {
       try {
-        console.log(`🔌 [MCP] 尝试连接服务器: ${server.name}`);
+        log.info(`🔌 [MCP] 尝试连接服务器: ${server.name}`);
         await this.connectServer(server.id);
-        console.log(`✅ [MCP] 服务器连接成功: ${server.name}`);
+        log.info(`✅ [MCP] 服务器连接成功: ${server.name}`);
       } catch (error) {
-        console.warn(`⚠️ [MCP] 服务器连接失败: ${server.name}`, error);
+        log.warn(`⚠️ [MCP] 服务器连接失败: ${server.name}`, error);
         // 不抛出错误，允许保存配置但标记为连接失败
       }
     } else {
-      console.log(`⏸️ [MCP] 服务器已禁用，跳过连接: ${server.name}`);
+      log.info(`⏸️ [MCP] 服务器已禁用，跳过连接: ${server.name}`);
     }
 
     this.emitEvent({
@@ -189,14 +305,14 @@ export class MCPIntegrationService implements IMCPProvider {
       data: { serverName: server.name }
     });
 
-    console.log(`🎉 [MCP] 服务器添加完成: ${server.name}`);
+    log.info(`🎉 [MCP] 服务器添加完成: ${server.name}`);
   }
 
   /**
    * 移除MCP服务器
    */
   async removeServer(serverId: string): Promise<void> {
-    console.log(`[MCP] 移除服务器: ${serverId}`);
+    log.info(`[MCP] 移除服务器: ${serverId}`);
 
     // 断开连接
     await this.clientManager.disconnectClient(serverId);
@@ -226,7 +342,7 @@ export class MCPIntegrationService implements IMCPProvider {
    * 更新服务器配置
    */
   async updateServer(serverId: string, updates: any): Promise<void> {
-    console.log(`🔧 [MCP] 更新服务器: ${serverId}`, updates);
+    log.info(`🔧 [MCP] 更新服务器: ${serverId}`, updates);
 
     // 获取当前配置
     const currentServer = await this.configService.getServerConfig(serverId);
@@ -234,26 +350,26 @@ export class MCPIntegrationService implements IMCPProvider {
       throw new Error(`服务器不存在: ${serverId}`);
     }
 
-    console.log(`📋 [MCP] 更新前状态: isEnabled=${currentServer.isEnabled}`);
+    log.info(`📋 [MCP] 更新前状态: isEnabled=${currentServer.isEnabled}`);
 
     // 更新配置
     currentServer.update(updates);
 
-    console.log(`📋 [MCP] 更新后状态: isEnabled=${currentServer.isEnabled}`);
+    log.info(`📋 [MCP] 更新后状态: isEnabled=${currentServer.isEnabled}`);
 
     // 保存配置
     await this.configService.saveServerConfig(currentServer);
-    console.log(`💾 [MCP] 配置已保存到存储`);
+    log.info(`💾 [MCP] 配置已保存到存储`);
 
     // 如果启用状态发生变化，处理连接
     if (updates.hasOwnProperty('isEnabled')) {
       if (updates.isEnabled) {
-        console.log(`🔌 [MCP] 启用服务器: ${serverId}`);
+        log.info(`🔌 [MCP] 启用服务器: ${serverId}`);
         try {
           await this.connectServer(serverId);
-          console.log(`✅ [MCP] 服务器启用成功: ${serverId}`);
+          log.info(`✅ [MCP] 服务器启用成功: ${serverId}`);
         } catch (error) {
-          console.error(`❌ [MCP] 服务器启用失败: ${serverId}`, error);
+          log.error(`❌ [MCP] 服务器启用失败: ${serverId}`, error);
           // 启用失败时，将状态回滚为禁用
           currentServer.isEnabled = false;
           await this.configService.saveServerConfig(currentServer);
@@ -261,21 +377,21 @@ export class MCPIntegrationService implements IMCPProvider {
         }
       } else {
         // 禁用服务器：断开连接并清理缓存
-        console.log(`⏸️ [MCP] 禁用服务器: ${serverId}`);
+        log.info(`⏸️ [MCP] 禁用服务器: ${serverId}`);
         await this.clientManager.disconnectClient(serverId);
 
         // 清理工具缓存
         const hadCache = this.cacheService.getCachedServerTools(serverId) !== null;
         this.cacheService.invalidateServerTools(serverId);
-        console.log(`🗑️ [MCP] 已清理服务器工具缓存: ${serverId}, 之前有缓存: ${hadCache}`);
+        log.info(`🗑️ [MCP] 已清理服务器工具缓存: ${serverId}, 之前有缓存: ${hadCache}`);
 
         // 清理服务器状态缓存
         this.serverStatusCache.delete(serverId);
-        console.log(`🗑️ [MCP] 已清理服务器状态缓存: ${serverId}`);
+        log.info(`🗑️ [MCP] 已清理服务器状态缓存: ${serverId}`);
       }
     }
 
-    console.log(`✅ [MCP] 服务器更新完成`);
+    log.info(`✅ [MCP] 服务器更新完成`);
   }
 
   /**
@@ -310,7 +426,7 @@ export class MCPIntegrationService implements IMCPProvider {
         status.version = serverInfo.version;
         status.lastConnected = new Date();
       } catch (error) {
-        console.warn(`[MCP] 获取服务器信息失败: ${serverId}`, error);
+        log.warn(`[MCP] 获取服务器信息失败: ${serverId}`, error);
       }
     }
 
@@ -323,7 +439,7 @@ export class MCPIntegrationService implements IMCPProvider {
    * 测试服务器连接
    */
   async testServerConnection(serverId: string): Promise<boolean> {
-    console.log(`[MCP] 测试服务器连接: ${serverId}`);
+    log.info(`[MCP] 测试服务器连接: ${serverId}`);
 
     try {
       const server = await this.configService.getServerConfig(serverId);
@@ -340,7 +456,7 @@ export class MCPIntegrationService implements IMCPProvider {
       
       return result;
     } catch (error) {
-      console.error(`[MCP] 连接测试失败: ${serverId}`, error);
+      log.error(`[MCP] 连接测试失败: ${serverId}`, error);
       return false;
     }
   }
@@ -349,29 +465,29 @@ export class MCPIntegrationService implements IMCPProvider {
    * 发现服务器工具
    */
   async discoverServerTools(serverId: string): Promise<MCPToolEntity[]> {
-    console.log(`🔍 [MCP] 发现服务器工具: ${serverId}`);
+    log.info(`🔍 [MCP] 发现服务器工具: ${serverId}`);
 
     // 检查缓存
     const cachedTools = this.cacheService.getCachedServerTools(serverId);
     if (cachedTools) {
-      console.log(`📦 [MCP] 使用缓存的工具列表: ${serverId} (${cachedTools.length}个工具)`);
+      log.info(`📦 [MCP] 使用缓存的工具列表: ${serverId} (${cachedTools.length}个工具)`);
       return cachedTools;
     }
 
     const client = this.clientManager.getClient(serverId);
     if (!client) {
-      console.error(`❌ [MCP] 服务器未连接: ${serverId}`);
+      log.error(`❌ [MCP] 服务器未连接: ${serverId}`);
       throw new Error(`服务器未连接: ${serverId}`);
     }
 
     try {
-      console.log(`🔎 [MCP] 开始发现工具: ${serverId}`);
+      log.info(`🔎 [MCP] 开始发现工具: ${serverId}`);
       const tools = await client.discoverTools();
-      console.log(`✅ [MCP] 发现 ${tools.length} 个工具: ${serverId}`);
+      log.info(`✅ [MCP] 发现 ${tools.length} 个工具: ${serverId}`);
 
       // 缓存工具列表
       this.cacheService.cacheServerTools(serverId, tools);
-      console.log(`💾 [MCP] 工具已缓存: ${serverId}`);
+      log.info(`💾 [MCP] 工具已缓存: ${serverId}`);
 
       this.emitEvent({
         type: MCPEventType.TOOL_DISCOVERED,
@@ -382,7 +498,7 @@ export class MCPIntegrationService implements IMCPProvider {
 
       return tools;
     } catch (error) {
-      console.error(`❌ [MCP] 工具发现失败: ${serverId}`, error);
+      log.error(`❌ [MCP] 工具发现失败: ${serverId}`, error);
       throw error;
     }
   }
@@ -394,17 +510,17 @@ export class MCPIntegrationService implements IMCPProvider {
     const allTools = this.cacheService.getAllCachedTools();
     const serverIds = this.cacheService.getAllCachedServerIds();
 
-    console.log(`📋 [MCP] 获取所有工具，当前缓存服务器数: ${serverIds.length}`);
+    log.info(`📋 [MCP] 获取所有工具，当前缓存服务器数: ${serverIds.length}`);
 
     // 按服务器分组显示日志
     for (const serverId of serverIds) {
       const serverTools = this.cacheService.getCachedServerTools(serverId);
       if (serverTools) {
-        console.log(`📦 [MCP] 服务器 ${serverId} 有 ${serverTools.length} 个工具`);
+        log.info(`📦 [MCP] 服务器 ${serverId} 有 ${serverTools.length} 个工具`);
       }
     }
 
-    console.log(`✅ [MCP] 总共获取到 ${allTools.length} 个工具`);
+    log.info(`✅ [MCP] 总共获取到 ${allTools.length} 个工具`);
     return allTools;
   }
 
@@ -412,7 +528,7 @@ export class MCPIntegrationService implements IMCPProvider {
    * 调用工具
    */
   async callTool(request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
-    console.log(`[MCP] 调用工具: ${request.serverId}:${request.toolName}`);
+    log.info(`[MCP] 调用工具: ${request.serverId}:${request.toolName}`);
 
     // 检查缓存
     const cachedResponse = this.cacheService.getCachedToolCall(
@@ -421,13 +537,13 @@ export class MCPIntegrationService implements IMCPProvider {
       request.arguments
     );
     if (cachedResponse) {
-      console.log(`[MCP] 使用缓存的工具调用结果: ${request.toolName}`);
+      log.info(`[MCP] 使用缓存的工具调用结果: ${request.toolName}`);
       return cachedResponse;
     }
 
     const client = this.clientManager.getClient(request.serverId);
     if (!client) {
-      throw new Error(`服务器未连接: ${request.serverId}`);
+      throw new Error(`客户端未连接: ${request.serverId}`);
     }
 
     const startTime = Date.now();
@@ -519,7 +635,7 @@ export class MCPIntegrationService implements IMCPProvider {
    * 清理资源
    */
   async cleanup(): Promise<void> {
-    console.log('[MCP] 清理资源');
+    log.info('[MCP] 清理资源');
 
     await this.clientManager.cleanup();
     this.cacheService.destroy();
@@ -531,37 +647,37 @@ export class MCPIntegrationService implements IMCPProvider {
    * 连接服务器
    */
   private async connectServer(serverId: string): Promise<void> {
-    console.log(`🔗 [MCP] 开始连接服务器: ${serverId}`);
+    log.info(`🔗 [MCP] 开始连接服务器: ${serverId}`);
     const server = await this.configService.getServerConfig(serverId);
     if (!server) {
       throw new Error(`服务器配置不存在: ${serverId}`);
     }
 
-    console.log(`🔗 [MCP] 调用clientManager.connectClient: ${serverId}`);
+    log.info(`🔗 [MCP] 调用clientManager.connectClient: ${serverId}`);
     await this.clientManager.connectClient(server);
-    console.log(`✅ [MCP] 客户端连接完成: ${serverId}`);
+    log.info(`✅ [MCP] 客户端连接完成: ${serverId}`);
 
     // 🔥 PromptX插件需要先初始化再发现工具
     if (serverId === 'promptx-builtin') {
       try {
-        console.log(`🎯 [MCP] 开始PromptX自动初始化: ${serverId}`);
+        log.info(`🎯 [MCP] 开始PromptX自动初始化: ${serverId}`);
         await this.initializePromptXPlugin(serverId);
-        console.log(`✅ [MCP] PromptX初始化完成: ${serverId}`);
+        log.info(`✅ [MCP] PromptX初始化完成: ${serverId}`);
       } catch (error) {
-        console.warn(`⚠️ [MCP] PromptX初始化失败: ${serverId}`, error);
+        log.warn(`⚠️ [MCP] PromptX初始化失败: ${serverId}`, error);
         // 初始化失败时，仍然尝试发现工具（可能有基础工具可用）
       }
     }
 
     // 连接成功后发现工具（PromptX初始化后或其他服务器直接发现）
     try {
-      console.log(`🔍 [MCP] 开始发现工具: ${serverId}`);
+      log.info(`🔍 [MCP] 开始发现工具: ${serverId}`);
       // 优化重试机制：减少重试次数，提高响应速度
       const maxRetries = serverId === 'promptx-builtin' ? 3 : 2;
       await this.discoverServerToolsWithRetry(serverId, maxRetries);
-      console.log(`✅ [MCP] 工具发现完成: ${serverId}`);
+      log.info(`✅ [MCP] 工具发现完成: ${serverId}`);
     } catch (error) {
-      console.error(`❌ [MCP] 工具发现失败: ${serverId}`, error);
+      log.error(`❌ [MCP] 工具发现失败: ${serverId}`, error);
       throw error; // 重新抛出错误，让上层知道启用失败
     }
   }
@@ -576,7 +692,7 @@ export class MCPIntegrationService implements IMCPProvider {
     // 获取AppData中的PromptX工作空间路径
     const workingDirectory = path.join(app.getPath('userData'), 'promptx-workspace');
 
-    console.log(`🎯 [MCP] PromptX工作目录: ${workingDirectory}`);
+    log.info(`🎯 [MCP] PromptX工作目录: ${workingDirectory}`);
 
     try {
       // 调用promptx_init工具进行初始化
@@ -589,9 +705,9 @@ export class MCPIntegrationService implements IMCPProvider {
         }
       });
 
-      console.log(`✅ [MCP] PromptX初始化响应:`, response.result);
+      log.info(`✅ [MCP] PromptX初始化响应:`, response.result);
     } catch (error) {
-      console.error(`❌ [MCP] PromptX初始化调用失败:`, error);
+      log.error(`❌ [MCP] PromptX初始化调用失败:`, error);
       throw error;
     }
   }
@@ -619,40 +735,41 @@ export class MCPIntegrationService implements IMCPProvider {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔍 [MCP] 工具发现尝试 ${attempt}/${maxRetries}: ${serverId}`);
+        log.info(`🔍 [MCP] 工具发现尝试 ${attempt}/${maxRetries}: ${serverId}`);
         await this.discoverServerTools(serverId);
 
         // 检查是否成功发现了工具
         const tools = this.cacheService.getCachedServerTools(serverId);
         if (tools && tools.length > 0) {
-          console.log(`✅ [MCP] 成功发现 ${tools.length} 个工具: ${serverId}`);
+          log.info(`✅ [MCP] 成功发现 ${tools.length} 个工具: ${serverId}`);
           return; // 成功，退出重试循环
         } else {
-          console.warn(`⚠️ [MCP] 尝试 ${attempt} 未发现工具: ${serverId}`);
+          log.warn(`⚠️ [MCP] 尝试 ${attempt} 未发现工具: ${serverId}`);
         }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        console.warn(`⚠️ [MCP] 工具发现尝试 ${attempt} 失败: ${serverId}`, error);
+        log.warn(`⚠️ [MCP] 工具发现尝试 ${attempt} 失败: ${serverId}`, error);
       }
 
       // 如果不是最后一次尝试，等待后重试（优化延迟时间）
       if (attempt < maxRetries) {
         const delay = attempt * 1000; // 1秒、2秒（大幅减少延迟）
-        console.log(`⏳ [MCP] 等待 ${delay}ms 后重试: ${serverId}`);
+        log.info(`⏳ [MCP] 等待 ${delay}ms 后重试: ${serverId}`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
     // 所有重试都失败了
     if (lastError) {
-      console.error(`❌ [MCP] 工具发现最终失败 (${maxRetries} 次尝试): ${serverId}`, lastError);
+      log.error(`❌ [MCP] 工具发现最终失败 (${maxRetries} 次尝试): ${serverId}`, lastError);
       throw lastError;
     } else {
       const error = new Error(`工具发现失败，未发现任何工具 (${maxRetries} 次尝试)`);
-      console.error(`❌ [MCP] ${error.message}: ${serverId}`);
+      log.error(`❌ [MCP] ${error.message}: ${serverId}`);
       throw error;
     }
   }
+
 
   /**
    * 发送事件
@@ -662,7 +779,7 @@ export class MCPIntegrationService implements IMCPProvider {
       try {
         listener(event);
       } catch (error) {
-        console.error('[MCP] 事件监听器错误:', error);
+        log.error('[MCP] 事件监听器错误:', error);
       }
     }
   }

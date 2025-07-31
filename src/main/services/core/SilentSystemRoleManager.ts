@@ -132,4 +132,34 @@ export class SilentSystemRoleManager {
 }
 
 // 创建单例实例
-export const silentSystemRoleManager = new SilentSystemRoleManager()
+// 延迟初始化，避免在单实例检测前输出日志
+let _silentSystemRoleManager: SilentSystemRoleManager | null = null
+
+export const silentSystemRoleManager = {
+  getInstance(): SilentSystemRoleManager {
+    if (!_silentSystemRoleManager) {
+      _silentSystemRoleManager = new SilentSystemRoleManager()
+    }
+    return _silentSystemRoleManager
+  },
+  
+  async initializeOnStartup(): Promise<void> {
+    const instance = this.getInstance()
+    return instance.initializeOnStartup()
+  },
+  
+  getSystemRoleStatus(): any {
+    const instance = this.getInstance()
+    return instance.getSystemRoleStatus()
+  },
+  
+  resetSystemRoleState(): void {
+    const instance = this.getInstance()
+    instance.resetSystemRoleState()
+  },
+  
+  async ensureSystemRoleActive(): Promise<boolean> {
+    const instance = this.getInstance()
+    return instance.ensureSystemRoleActive()
+  }
+}

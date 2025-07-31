@@ -323,12 +323,14 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         <Button
           onClick={handleOpenModal}
           disabled={disabled}
+          size="small"
           style={{
-            minWidth: 200,
-            height: 40,
+            minWidth: 160,
+            height: 32,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            fontSize: 12,
             ...style
           }}
         >
@@ -359,19 +361,21 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         onClick={handleOpenModal}
         disabled={disabled}
         loading={loading}
+        size="small"
         style={{
-          minWidth: 200,
-          height: 40,
-          padding: '8px 16px',
+          minWidth: 160,
+          height: 32,
+          padding: '6px 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          fontSize: 12,
           ...style
         }}
       >
-        <Space size={8}>
+        <Space size={6}>
           <Avatar
-            size={24}
+            size={20}
             style={{
               backgroundColor: providerInfo.bgColor,
               color: providerInfo.color,
@@ -380,10 +384,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
             icon={providerInfo.icon}
           />
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '14px', fontWeight: 500, lineHeight: 1.2 }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1.2 }}>
               {currentConfig.name}
             </div>
-            <div style={{ fontSize: '12px', color: '#999', lineHeight: 1.2 }}>
+            <div style={{ fontSize: '10px', color: '#999', lineHeight: 1.2 }}>
               {providerInfo.name} · {currentModelName || currentConfig.model}
             </div>
           </div>
@@ -398,6 +402,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         onClose={() => setModalVisible(false)}
         selectedModelId={value}
         onSelectModel={handleModelSelect}
+        onGoToModelManagement={onGoToModelManagement}
       />
     </>
   )
