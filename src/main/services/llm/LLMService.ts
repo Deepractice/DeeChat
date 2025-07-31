@@ -626,6 +626,8 @@ export class LLMService {
         name: tool.name,
         description: tool.description || '',
         schema: tool.inputSchema,
+        serverId: tool.serverId, // 保留serverId用于后续调用
+        serverName: tool.serverName, // 保留serverName用于调试
         func: async (args: any) => {
           const response = await this.mcpService.callTool({
             serverId: tool.serverId,
@@ -767,8 +769,11 @@ ${request.systemPrompt || ''}`
       const toolExecutions: Array<{
         id: string
         toolName: string
+        serverId?: string
+        serverName?: string
         params: any
         result?: any
+        success?: boolean
         error?: string
         duration?: number
         timestamp: number
@@ -812,8 +817,12 @@ ${request.systemPrompt || ''}`
                 toolExecutions.push({
                   id: executionId,
                   toolName,
+                  serverId: mcpTool.serverId,
+                  serverName: mcpTool.serverName,
                   params,
                   result: toolResponse.result || toolResponse,
+                  success: toolResponse.success !== false,
+                  error: toolResponse.error,
                   duration,
                   timestamp: startTime
                 })
@@ -827,10 +836,15 @@ ${request.systemPrompt || ''}`
             console.error(`[LangChain Integration] 工具调用失败:`, error)
 
             // 记录工具执行错误
+            const failedToolName = toolCallMatch[0]?.match(/工具名称:\s*([^\n]+)/)?.[1]?.trim() || 'unknown'
             toolExecutions.push({
               id: executionId,
-              toolName: toolCallMatch[0]?.match(/工具名称:\s*([^\n]+)/)?.[1]?.trim() || 'unknown',
+              toolName: failedToolName,
+              serverId: 'unknown',
+              serverName: 'unknown',
               params: {},
+              result: null,
+              success: false,
               error: error instanceof Error ? error.message : '未知错误',
               duration,
               timestamp: startTime

@@ -2,8 +2,11 @@
 export interface ToolExecution {
   id: string
   toolName: string
+  serverId?: string
+  serverName?: string
   params: any
   result?: any
+  success?: boolean
   error?: string
   duration?: number
   timestamp: number

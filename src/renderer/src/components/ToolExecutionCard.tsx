@@ -192,6 +192,11 @@ const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({ toolExecutions })
                         <Text strong style={{ fontSize: '13px' }}>
                           {execution.toolName}
                         </Text>
+                        {execution.serverName && (
+                          <Tag size="small" color="geekblue" style={{ fontSize: '10px' }}>
+                            {execution.serverName}
+                          </Tag>
+                        )}
                       </Space>
 
                       <Space size="small">
