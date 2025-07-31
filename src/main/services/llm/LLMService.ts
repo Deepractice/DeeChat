@@ -798,17 +798,22 @@ ${request.systemPrompt || ''}`
               // 查找对应的MCP工具
               const mcpTool = mcpTools.find(tool => tool.name.includes(toolName))
               if (mcpTool) {
-                // 调用MCP工具
-                const toolResult = await mcpTool._call(JSON.stringify(params))
+                // 使用MCP服务调用工具
+                const toolCallRequest = {
+                  serverId: mcpTool.serverId,
+                  toolName: mcpTool.name,
+                  arguments: params
+                }
+                const toolResponse = await this.mcpService.callTool(toolCallRequest)
                 const duration = Date.now() - startTime
-                console.log(`[LangChain Integration] 工具执行结果:`, toolResult)
+                console.log(`[LangChain Integration] 工具执行结果:`, toolResponse)
 
                 // 记录工具执行信息
                 toolExecutions.push({
                   id: executionId,
                   toolName,
                   params,
-                  result: toolResult,
+                  result: toolResponse.result || toolResponse,
                   duration,
                   timestamp: startTime
                 })
