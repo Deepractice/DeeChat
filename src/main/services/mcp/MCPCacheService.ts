@@ -205,19 +205,38 @@ export class MCPCacheService {
    * 获取所有缓存的工具（用于替代MCPIntegrationService的本地缓存）
    */
   getAllCachedTools(): MCPToolEntity[] {
+    console.log(`[MCP Cache] 🔍 开始获取所有缓存工具...`);
+    console.log(`[MCP Cache] 🗂️ 缓存中有 ${this.toolsCache.size} 个服务器条目`);
+    
     const allTools: MCPToolEntity[] = [];
+    const now = Date.now();
 
     for (const [serverId, entry] of this.toolsCache.entries()) {
+      const age = now - entry.timestamp;
+      const isExpired = age > entry.ttl;
+      
+      console.log(`[MCP Cache] 📋 检查服务器: ${serverId}`);
+      console.log(`[MCP Cache]   - 工具数量: ${entry.data.length}`);
+      console.log(`[MCP Cache]   - 缓存年龄: ${age}ms / ${entry.ttl}ms`);
+      console.log(`[MCP Cache]   - 是否过期: ${isExpired}`);
+      
       // 检查是否过期
-      if (Date.now() - entry.timestamp <= entry.ttl) {
+      if (!isExpired) {
+        console.log(`[MCP Cache] ✅ 添加 ${entry.data.length} 个工具从服务器: ${serverId}`);
         allTools.push(...entry.data);
+        
+        // 详细列出每个工具
+        entry.data.forEach((tool, index) => {
+          console.log(`[MCP Cache]   ${index + 1}. ${tool.name} - ${tool.description || '无描述'}`);
+        });
       } else {
         // 清理过期缓存
         this.toolsCache.delete(serverId);
-        console.log(`[MCP Cache] 清理过期工具缓存: ${serverId}`);
+        console.log(`[MCP Cache] 🗑️ 清理过期工具缓存: ${serverId}`);
       }
     }
 
+    console.log(`[MCP Cache] 🎯 最终返回 ${allTools.length} 个工具`);
     return allTools;
   }
 

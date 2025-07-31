@@ -161,83 +161,93 @@ if (!gotTheLock) {
    * 懒加载MCP服务（支持智能预加载）
    */
   async function ensureMCPServices(): Promise<void> {
-    if (serviceManager) {
-      console.log('🔄 [主进程] MCP服务已初始化，跳过重复加载')
-      return // 已经初始化过了
-    }
-
     // 🔒 防止并发初始化导致多进程
     if (ensureMCPServices._initializing) {
       console.log('⏳ [主进程] MCP服务正在初始化中，等待完成...')
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
           if (!ensureMCPServices._initializing) {
             clearInterval(checkInterval)
-            resolve()
+            if (serviceManager) {
+              resolve()
+            } else {
+              reject(new Error('MCP服务初始化失败'))
+            }
           }
         }, 100)
+        
+        // 30秒超时保护
+        setTimeout(() => {
+          clearInterval(checkInterval)
+          reject(new Error('MCP服务初始化超时'))
+        }, 30000)
       })
+    }
+
+    if (serviceManager) {
+      // 检查服务管理器是否真正初始化完成
+      const mcpStatus = serviceManager.getServiceStatus('mcp')
+      if (mcpStatus && mcpStatus.status === 'ready') {
+        console.log('✅ [主进程] MCP服务已就绪，跳过重复加载')
+        return
+      } else {
+        console.log('🔄 [主进程] MCP服务未完全就绪，继续初始化...')
+      }
     }
     
     ensureMCPServices._initializing = true
 
-    console.log('🔧 [主进程] 懒加载MCP服务...')
+    console.log('🔧 [主进程] 开始懒加载MCP服务...')
 
     try {
-      // 获取服务管理器实例
-      serviceManager = ServiceManager.getInstance()
-
-      // 监听服务状态变化
-      serviceManager.on('service-status-change', (status) => {
-        console.log(`📊 [主进程] 服务状态变化: ${status.name} - ${status.status}`)
+      // 获取或创建服务管理器实例
+      if (!serviceManager) {
+        serviceManager = ServiceManager.getInstance()
         
-        // 向渲染进程发送状态更新
-        if (mainWindow && mainWindow.webContents) {
-          mainWindow.webContents.send('service-status-update', status)
-        }
-      })
-
-      // 监听进程事件
-      serviceManager.on('process-event', (event) => {
-        console.log(`🔧 [主进程] 进程事件: ${event.type} - ${event.processId}`)
-      })
-
-      // 监听MCP事件
-      serviceManager.on('mcp-event', (event) => {
-        console.log(`🔌 [主进程] MCP事件: ${event.type} - ${event.serverId}`)
-        
-        // 🔥 当PromptX连接成功时，通知前端可以使用PromptX功能
-        if (event.type === 'server-connected' && event.serverId?.includes('promptx')) {
+        // 监听服务状态变化
+        serviceManager.on('service-status-change', (status) => {
+          console.log(`📊 [主进程] 服务状态变化: ${status.name} - ${status.status}`)
+          
+          // 向渲染进程发送状态更新
           if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('promptx-ready', { 
-              status: 'ready',
-              message: 'PromptX服务已就绪，可以立即使用专业角色功能' 
-            })
+            mainWindow.webContents.send('service-status-update', status)
           }
-        }
-      })
+        })
+
+        // 监听进程事件
+        serviceManager.on('process-event', (event) => {
+          console.log(`🔧 [主进程] 进程事件: ${event.type} - ${event.processId}`)
+        })
+
+        // 监听MCP事件
+        serviceManager.on('mcp-event', (event) => {
+          console.log(`🔌 [主进程] MCP事件: ${event.type} - ${event.serverId}`)
+          
+          // 🔥 当PromptX连接成功时，通知前端可以使用PromptX功能
+          if (event.type === 'connected' && event.serverId?.includes('promptx')) {
+            if (mainWindow && mainWindow.webContents) {
+              mainWindow.webContents.send('promptx-ready', { 
+                status: 'ready',
+                message: 'PromptX服务已就绪，可以立即使用专业角色功能' 
+              })
+            }
+          }
+        })
+      }
 
       // 🔥 关键：初始化MCP服务
+      console.log('🚀 [主进程] 开始初始化ServiceManager...')
       await serviceManager.initialize()
 
       console.log('✅ [主进程] MCP服务懒加载完成')
       ensureMCPServices._initializing = false
 
-      // 🎯 智能预加载：异步在后台更新PromptX（不影响用户体验）
-      setTimeout(async () => {
-        try {
-          console.log('🔄 [主进程] 开始PromptX后台更新检查...')
-          // 这里可以添加从GitHub更新PromptX包的逻辑
-          // 即使更新失败也不影响应用使用
-          console.log('✅ [主进程] PromptX后台更新检查完成')
-        } catch (updateError) {
-          console.log('⚠️ [主进程] PromptX后台更新失败，不影响使用:', updateError)
-        }
-      }, 5000) // 延迟5秒进行后台更新检查
-
     } catch (error) {
       console.error('❌ [主进程] MCP服务初始化失败:', error)
       ensureMCPServices._initializing = false
+      
+      // 🔥 重置serviceManager状态，允许重试
+      serviceManager = null
       
       // 向渲染进程发送错误状态
       if (mainWindow && mainWindow.webContents) {
@@ -247,8 +257,6 @@ if (!gotTheLock) {
         })
       }
       
-      // 不要抛出错误，让应用继续运行
-      // 用户在需要使用MCP功能时会再次触发初始化
       throw error
     }
   }
@@ -317,7 +325,7 @@ function registerIPCHandlers(): void {
 
     try {
       const mcpCoordinator = serviceManager.getMCPCoordinator()
-      const tools = mcpCoordinator.getAllAvailableTools()
+      const tools = await mcpCoordinator.getAllAvailableTools()
       return { success: true, data: tools }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -367,26 +375,46 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // 🔥 采用Cherry Studio的简单方式 - 按需获取工具，无需复杂初始化
   ipcMain.handle('mcp:getAllTools', async () => {
     try {
-      await ensureMCPServices() // 🔥 懒加载MCP服务
-      if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
-        return { success: false, error: 'MCP服务未就绪: 集成服务未初始化' }
-      }
-    } catch (error) {
-      return { success: false, error: `MCP服务启动失败: ${error instanceof Error ? error.message : '未知错误'}` }
-    }
-
-    try {
-      // 使用MCPIntegrationService获取工具，与旧架构保持一致
+      console.log('📡 [主进程] 收到前端getAllTools请求，开始处理...')
+      
+      // 直接获取MCPIntegrationService实例（按需初始化）
       const { MCPIntegrationService } = await import('./services/mcp/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
+      
+      // 确保服务初始化（仅在需要时）
+      console.log('🔧 [主进程] 确保MCP服务已初始化...')
+      await mcpService.initialize()
+      
+      // 获取所有工具
+      console.log('🔍 [主进程] 获取所有缓存工具...')
       const tools = await mcpService.getAllTools()
+      console.log(`📦 [主进程] 从MCPIntegrationService获取到 ${tools.length} 个工具`)
+      
+      // 转换为前端数据格式
       const toolData = tools.map(tool => tool.toData())
-      console.log('🔍 [新架构Debug] 发送到前端的工具数据:', JSON.stringify(toolData.slice(0, 3), null, 2)); // 只显示前3个工具
+      console.log('📡 [主进程] 工具列表响应:', { success: true, count: toolData.length })
+      
+      // 详细输出工具信息用于调试
+      if (toolData.length > 0) {
+        console.log('🔧 [主进程] 工具详情（前3个）:')
+        toolData.slice(0, 3).forEach((tool, index) => {
+          console.log(`  ${index + 1}. ${tool.name} - ${tool.description || '无描述'}`)
+        })
+      } else {
+        console.log('⚠️ [主进程] 没有找到任何工具')
+      }
+      
       return { success: true, data: toolData }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+      console.error('❌ [主进程] getAllTools处理失败:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : '未知错误',
+        details: error instanceof Error ? error.stack : undefined
+      }
     }
   })
 

@@ -123,6 +123,9 @@ config/
 # PromptX specific
 .promptx/
 
+# External repositories (for reference only)
+cherry-studio/
+
 # macOS specific
 .AppleDouble
 .LSOverride

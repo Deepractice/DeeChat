@@ -14,7 +14,7 @@ export class MCPConfigService implements IMCPConfigService {
   private readonly STORAGE_KEY = 'mcp_servers';
   private promptxLocalStorage: PromptXLocalStorage;
   private promptxBuildStorage: PromptXBuildStorage;
-  private isUpdatingPromptXConfig: boolean = false; // 🔥 防止递归更新标志
+  // private isUpdatingPromptXConfig: boolean = false; // 🔥 防止递归更新标志 - 暂时未使用
 
   constructor() {
     this.storageService = new LocalStorageService();
@@ -80,62 +80,64 @@ export class MCPConfigService implements IMCPConfigService {
 
       if (!data || !Array.isArray(data)) {
         // 首次使用，初始化默认的PromptX插件
+        console.log('[MCP Config] 首次使用，初始化默认配置...');
         const defaultServers = await this.initializeDefaultServers();
         return defaultServers;
       }
 
       const servers = data.map((config: MCPServerConfig) => {
-        // 确保日期字段正确转换
-        const configWithDates = {
-          ...config,
-          createdAt: new Date(config.createdAt),
-          updatedAt: new Date(config.updatedAt)
-        };
-        return MCPServerEntity.fromData(configWithDates);
+        try {
+          // 🔥 安全的日期转换，处理字符串和Date对象
+          const safeCreateDate = (dateValue: any): Date => {
+            if (dateValue instanceof Date) return dateValue;
+            if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+              const parsed = new Date(dateValue);
+              return isNaN(parsed.getTime()) ? new Date() : parsed;
+            }
+            return new Date(); // 回退到当前时间
+          };
+
+          const configWithDates = {
+            ...config,
+            createdAt: safeCreateDate(config.createdAt),
+            updatedAt: safeCreateDate(config.updatedAt)
+          };
+          return MCPServerEntity.fromData(configWithDates);
+        } catch (error) {
+          console.error('[MCP Config] 服务器配置转换失败:', error, config);
+          // 创建一个基本的fallback配置
+          return MCPServerEntity.fromData({
+            ...config,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
       });
 
-      // 🔥 防止递归更新：只在未更新状态时检查和更新PromptX配置
-      if (!this.isUpdatingPromptXConfig) {
-        // 检查是否已有PromptX插件，如果没有则添加，如果有则更新为本地化配置
-        const promptxIndex = servers.findIndex(s => s.id === 'promptx-builtin');
-        const promptxServer = this.createDefaultPromptXServer();
-
-        // 🔥 异步初始化PromptX本地配置
-        try {
-          this.isUpdatingPromptXConfig = true; // 设置更新标志
-          await this.initializePromptXServerConfig(promptxServer);
-        } catch (error) {
-          console.error('[MCP Config] PromptX初始化失败，但继续加载其他服务:', error);
-          // 不阻塞其他服务的加载
-        } finally {
-          this.isUpdatingPromptXConfig = false; // 清除更新标志
-        }
-
-        let needsSave = false;
-        if (promptxIndex >= 0) {
-          // 更新现有PromptX配置为本地化版本
-          console.log(`[MCP Config] 🔄 更新PromptX插件为本地化配置`);
-          servers[promptxIndex] = promptxServer;
-          needsSave = true;
-        } else {
-          // 添加新的PromptX本地化配置
-          console.log(`[MCP Config] ➕ 添加PromptX本地化插件配置`);
-          servers.unshift(promptxServer); // 添加到开头
-          needsSave = true;
-        }
-
-        // 🔥 批量保存，避免递归调用
-        if (needsSave) {
+      // 🔥 只在真正首次运行时初始化PromptX配置
+      if (!MCPConfigService._promptxInitialized) {
+        const promptxExists = servers.some(s => s.id === 'promptx-builtin');
+        
+        if (!promptxExists) {
+          console.log(`[MCP Config] ➕ 首次运行，添加PromptX默认配置`);
+          
           try {
-            this.isUpdatingPromptXConfig = true; // 防止saveAllConfigs触发重新读取
+            const promptxServer = this.createDefaultPromptXServer();
+            await this.initializePromptXServerConfig(promptxServer);
+            
+            servers.unshift(promptxServer); // 添加到开头
             await this.saveAllConfigs(servers);
-            console.log('✅ [MCP Config] PromptX配置更新并保存成功');
+            
+            console.log('✅ [MCP Config] PromptX配置添加成功');
           } catch (error) {
-            console.error('❌ [MCP Config] PromptX配置保存失败:', error);
-          } finally {
-            this.isUpdatingPromptXConfig = false;
+            console.error('[MCP Config] PromptX配置添加失败:', error);
           }
+        } else {
+          console.log('[MCP Config] PromptX配置已存在，跳过初始化');
         }
+        
+        // 🔥 标记为已初始化，防止后续重复检查
+        MCPConfigService._promptxInitialized = true;
       }
 
       return servers;
@@ -144,6 +146,9 @@ export class MCPConfigService implements IMCPConfigService {
       return [];
     }
   }
+
+  // 🔒 静态标志防止重复初始化PromptX
+  private static _promptxInitialized = false
 
   /**
    * 获取服务器配置
@@ -360,24 +365,16 @@ export class MCPConfigService implements IMCPConfigService {
     
     // 🔥 初始化PromptX本地配置
     try {
-      this.isUpdatingPromptXConfig = true; // 防止递归
       await this.initializePromptXServerConfig(promptxServer);
     } catch (error) {
       console.error('[MCP Config] 默认PromptX初始化失败:', error);
       throw error; // 首次初始化失败应该抛出错误
-    } finally {
-      this.isUpdatingPromptXConfig = false;
     }
 
     const defaultServers = [promptxServer];
 
     // 保存默认配置
-    try {
-      this.isUpdatingPromptXConfig = true; // 防止保存时触发重新读取
-      await this.saveAllConfigs(defaultServers);
-    } finally {
-      this.isUpdatingPromptXConfig = false;
-    }
+    await this.saveAllConfigs(defaultServers);
 
     return defaultServers;
   }
@@ -388,6 +385,34 @@ export class MCPConfigService implements IMCPConfigService {
   private createDefaultPromptXServer(): MCPServerEntity {
     const now = new Date();
     
+    // 🔥 动态获取PromptX工作目录和脚本路径 - 跨平台支持
+    const { app } = require('electron');
+    const path = require('path');
+    const fs = require('fs');
+    
+    // 获取用户数据目录（跨平台）
+    const userDataPath = app.getPath('userData');
+    const promptxWorkspace = path.join(userDataPath, 'promptx-workspace');
+    
+    // 确保工作目录存在
+    if (!fs.existsSync(promptxWorkspace)) {
+      fs.mkdirSync(promptxWorkspace, { recursive: true });
+      console.log(`[MCP Config] 📁 创建PromptX工作目录: ${promptxWorkspace}`);
+    }
+    
+    // 🔥 动态获取PromptX脚本路径
+    const isDev = process.env.NODE_ENV === 'development';
+    let promptxScriptPath: string;
+    
+    if (isDev) {
+      // 开发环境：从编译后的dist目录回到项目根目录
+      // __dirname 是 dist/main/main/services/mcp，需要回到项目根目录
+      promptxScriptPath = path.resolve(__dirname, '../../../../../resources/promptx/package/src/bin/promptx.js');
+    } else {
+      // 生产环境：使用打包后的资源
+      promptxScriptPath = path.join(process.resourcesPath, 'resources/promptx/package/src/bin/promptx.js');
+    }
+    
     // 🚀 使用标准MCP配置，底层自动检测并使用沙箱
     const server = new MCPServerEntity({
       id: 'promptx-builtin',
@@ -396,8 +421,8 @@ export class MCPConfigService implements IMCPConfigService {
       type: 'stdio',
       isEnabled: true,
       command: 'node', // 用户看到的是标准node命令
-      args: ['mcp-server'], // 标准的PromptX启动参数
-      workingDirectory: '', // 将由沙箱管理器处理
+      args: [promptxScriptPath, 'mcp-server'], // 🔥 动态的PromptX启动参数
+      workingDirectory: promptxWorkspace, // 🔥 动态设置工作目录
       env: {},
       timeout: 15000, // 沙箱启动可能需要更多时间
       retryCount: 2,
@@ -405,7 +430,9 @@ export class MCPConfigService implements IMCPConfigService {
       updatedAt: now
     });
 
-    console.log(`[MCP Config] ✅ 创建PromptX沙箱服务器配置: ${server.command}`);
+    console.log(`[MCP Config] ✅ 创建PromptX沙箱服务器配置:`);
+    console.log(`[MCP Config]   - 脚本路径: ${promptxScriptPath}`);
+    console.log(`[MCP Config]   - 工作目录: ${promptxWorkspace}`);
     return server;
   }
 
@@ -443,21 +470,30 @@ export class MCPConfigService implements IMCPConfigService {
       // 更新服务器配置使用构建版本
       server.command = buildConfig.command;
       server.args = buildConfig.args;
-      server.workingDirectory = buildConfig.workingDirectory;
+      // 🔥 保留动态设置的用户数据目录，不使用buildConfig的工作目录
       
     } else {
       console.log('🔄 [PromptX] 回退：使用运行时下载版本');
       
-      // 回退到运行时下载版本
-      await this.promptxLocalStorage.ensureLocalVersionAvailable();
-      
-      // 获取本地启动配置
-      const localConfig = await this.promptxLocalStorage.startFromLocal();
-      
-      // 更新服务器配置使用本地版本
-      server.command = localConfig.command;
-      server.args = localConfig.args;
-      server.workingDirectory = localConfig.workingDirectory;
+      try {
+        // 回退到运行时下载版本
+        await this.promptxLocalStorage.ensureLocalVersionAvailable();
+        
+        // 获取本地启动配置
+        const localConfig = await this.promptxLocalStorage.startFromLocal();
+        
+        // 更新服务器配置使用本地版本
+        server.command = localConfig.command;
+        server.args = localConfig.args;
+        // 🔥 保留动态设置的用户数据目录，不使用localConfig的工作目录
+        
+      } catch (error) {
+        console.warn('⚠️ [PromptX] 本地版本不可用，使用当前JSON配置');
+        
+        // 🔥 直接使用当前JSON配置中的参数（已经是完整路径）
+        // 不做任何修改，保持现有的JSON配置
+        console.log(`[PromptX] 使用现有配置: ${server.command} ${server.args?.join(' ')}`);
+      }
     }
   }
 }

@@ -30,8 +30,8 @@ export class MCPServiceCoordinator extends EventEmitter {
   private connections: Map<string, MCPServerConnection> = new Map()
   private isInitialized = false
 
-  // 内置服务器配置
-  private builtinServers: MCPServerEntity[] = []
+  // 内置服务器配置 - 未使用
+  // private builtinServers: MCPServerEntity[] = []
 
   constructor(processPool: ProcessPoolManager) {
     super()
@@ -60,165 +60,38 @@ export class MCPServiceCoordinator extends EventEmitter {
 
   /**
    * 初始化内置服务器（PromptX）
-   * 🔥 重要：确保MCPIntegrationService被正确初始化
+   * 🔥 简化：直接委托给MCPIntegrationService，避免重复逻辑
    */
   private async initializeBuiltinServers(): Promise<void> {
-    log.info('🔧 [MCPCoordinator] 检查内置PromptX服务器配置...')
+    log.info('🔧 [MCPCoordinator] 委托MCPIntegrationService初始化服务器...')
 
-    // 🔥 直接触发MCPIntegrationService初始化，确保所有配置的服务器都被连接
     try {
-      log.info('🚀 [MCPCoordinator] 触发MCPIntegrationService初始化...')
+      // 🔥 直接委托给MCPIntegrationService，它负责所有服务器的初始化
       const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
-      // 强制初始化MCPIntegrationService，这会自动连接所有已启用的服务器
+      // 让MCPIntegrationService处理所有服务器的初始化
       await mcpService.initialize()
-      log.info('✅ [MCPCoordinator] MCPIntegrationService初始化完成')
       
-      // 检查MCPConfigService中是否已有PromptX配置
-      const { MCPConfigService } = await import('../services/mcp/MCPConfigService')
-      const configService = new MCPConfigService()
-      
-      const existingPromptX = await configService.getServerConfig('promptx-builtin')
-      if (existingPromptX) {
-        log.info('✅ [MCPCoordinator] PromptX已由MCPConfigService管理，跳过内置服务器创建')
-        return
-      }
+      log.info('✅ [MCPCoordinator] MCPIntegrationService接管服务器管理')
     } catch (error) {
-      log.error('❌ [MCPCoordinator] MCPIntegrationService初始化失败:', error)
-      log.info('🔍 [MCPCoordinator] MCPConfigService中无PromptX配置，继续创建内置服务器')
+      log.error('❌ [MCPCoordinator] 委托初始化失败:', error)
+      throw error
     }
-
-    // 如果MCPConfigService中没有配置，才创建内置服务器（备用逻辑）
-    log.info('🔧 [MCPCoordinator] 创建备用PromptX内置服务器...')
-    const promptxServer = await this.createBuiltinPromptXServer()
-    this.builtinServers.push(promptxServer)
-
-    log.info('✅ [MCPCoordinator] 内置服务器初始化完成')
   }
 
-  /**
-   * 创建内置PromptX服务器配置
-   */
-  private async createBuiltinPromptXServer(): Promise<MCPServerEntity> {
-    const { app } = require('electron')
-    const path = require('path')
-    const fs = require('fs')
-
-    // 创建PromptX工作空间
-    const promptxWorkspace = path.join(app.getPath('userData'), 'promptx-workspace')
-    
-    if (!fs.existsSync(promptxWorkspace)) {
-      fs.mkdirSync(promptxWorkspace, { recursive: true, mode: 0o755 })
-      log.info(`📁 [MCPCoordinator] 创建PromptX工作空间: ${promptxWorkspace}`)
-    }
-
-    // 🔥 智能选择PromptX启动方式（使用Electron内置Node.js环境）
-    let command: string
-    let args: string[]
-
-    const isDev = process.env.NODE_ENV === 'development'
-    
-    // 🚀 获取Electron内置的Node.js路径（避免启动新的Electron实例）
-    const getElectronNodePath = () => {
-      const electronPath = process.execPath
-      if (process.platform === 'darwin') {
-        // macOS: Electron.app/Contents/MacOS/Electron -> Electron.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/node
-        return path.join(path.dirname(electronPath), '..', 'Frameworks', 'Electron Framework.framework', 'Versions', 'A', 'Resources', 'node')
-      } else if (process.platform === 'win32') {
-        // Windows: electron.exe 同目录下应该有 node.exe
-        return path.join(path.dirname(electronPath), 'node.exe')
-      } else {
-        // Linux: 通常与electron在同目录
-        return path.join(path.dirname(electronPath), 'node')
-      }
-    }
-
-    const electronNodePath = getElectronNodePath()
-    log.info(`🔍 [MCPCoordinator] Electron Node.js路径: ${electronNodePath}`)
-    
-    if (isDev) {
-      // 开发模式：使用项目内置的PromptX + Electron Node.js
-      const projectPromptxPath = path.resolve(__dirname, '../../../../resources/promptx/package/src/bin/promptx.js')
-      log.info(`🔍 [MCPCoordinator] 检查PromptX路径: ${projectPromptxPath}`)
-      
-      if (fs.existsSync(projectPromptxPath)) {
-        // 🎯 优先尝试使用Electron内置Node.js
-        if (fs.existsSync(electronNodePath)) {
-          command = electronNodePath
-          args = [projectPromptxPath, 'mcp-server']
-          log.info(`✅ [MCPCoordinator] 使用Electron内置Node.js: ${electronNodePath}`)
-        } else {
-          // 回退：使用系统Node.js（通过which node查找）
-          command = 'node'
-          args = [projectPromptxPath, 'mcp-server']
-          log.info(`⚠️ [MCPCoordinator] 回退到系统Node.js`)
-        }
-        log.info(`✅ [MCPCoordinator] 找到PromptX文件: ${projectPromptxPath}`)
-      } else {
-        log.info(`❌ [MCPCoordinator] 找不到PromptX文件: ${projectPromptxPath}`)
-        command = 'node'
-        args = ['-e', 'log.info("PromptX服务器启动失败：找不到PromptX可执行文件")']
-      }
-    } else {
-      // 生产模式：使用内置资源 + Electron Node.js
-      const promptxPath = path.join(process.resourcesPath, 'resources/promptx/package/src/bin/promptx.js')
-      if (fs.existsSync(promptxPath)) {
-        command = fs.existsSync(electronNodePath) ? electronNodePath : process.execPath
-        args = [promptxPath, 'mcp-server']
-      } else {
-        // 回退方案：使用项目内置
-        const projectPromptxPath = path.join(__dirname, '../../../resources/promptx/package/src/bin/promptx.js')
-        command = fs.existsSync(electronNodePath) ? electronNodePath : process.execPath
-        args = [projectPromptxPath, 'mcp-server']
-      }
-    }
-
-    log.info(`🔧 [MCPCoordinator] PromptX启动配置: ${command} ${args.join(' ')}`)
-
-    const server = new MCPServerEntity({
-      id: 'promptx-builtin',
-      name: 'PromptX (内置)',
-      description: 'PromptX AI专业能力增强框架 - 提供角色激活、记忆管理和专业工具',
-      type: 'stdio',
-      isEnabled: true,
-      command,
-      args,
-      workingDirectory: promptxWorkspace,
-      env: {
-        NODE_OPTIONS: '--max-old-space-size=2048',
-        MCP_DEBUG: isDev ? 'true' : 'false'
-      },
-      timeout: 15000,
-      retryCount: 3,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    })
-
-    return server
-  }
+  // 未使用的方法已删除
 
   /**
    * 启动所有启用的服务器
+   * 🔥 简化：MCPIntegrationService已经处理了所有服务器启动
    */
   private async startEnabledServers(): Promise<void> {
-    log.info('🚀 [MCPCoordinator] 启动启用的MCP服务器...')
-
-    // 启动内置服务器
-    for (const server of this.builtinServers) {
-      if (server.isEnabled) {
-        try {
-          await this.connectServer(server)
-        } catch (error) {
-          log.error(`❌ [MCPCoordinator] 内置服务器连接失败: ${server.name}`, error)
-        }
-      }
-    }
-
-    // TODO: 加载用户配置的服务器
-    // const userServers = await this.loadUserServers()
-    // ...
-
+    log.info('🚀 [MCPCoordinator] 服务器启动已由MCPIntegrationService处理')
+    
+    // MCPIntegrationService.initialize() 已经连接了所有启用的服务器
+    // 这里不需要重复操作
+    
     log.info('✅ [MCPCoordinator] 启用的服务器启动完成')
   }
 
@@ -394,18 +267,21 @@ export class MCPServiceCoordinator extends EventEmitter {
   }
 
   /**
-   * 获取所有可用工具
+   * 获取所有可用工具 - 委托给MCPIntegrationService
    */
-  public getAllAvailableTools(): MCPToolEntity[] {
-    const allTools: MCPToolEntity[] = []
-    
-    for (const connection of this.connections.values()) {
-      if (connection.status === 'connected') {
-        allTools.push(...connection.tools)
-      }
+  public async getAllAvailableTools(): Promise<MCPToolEntity[]> {
+    try {
+      const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
+      const mcpService = MCPIntegrationService.getInstance()
+      
+      // 确保服务已初始化
+      await mcpService.initialize()
+      
+      return await mcpService.getAllTools()
+    } catch (error) {
+      log.error('[MCPCoordinator] 获取工具失败:', error)
+      return []
     }
-
-    return allTools
   }
 
   /**
@@ -465,7 +341,7 @@ export class MCPServiceCoordinator extends EventEmitter {
     await Promise.allSettled(disconnectPromises)
 
     this.connections.clear()
-    this.builtinServers = []
+    // this.builtinServers = []  // 未使用
 
     log.info('✅ [MCPCoordinator] MCP服务协调器已关闭')
   }

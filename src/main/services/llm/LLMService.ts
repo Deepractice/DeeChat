@@ -4,7 +4,7 @@ import { ProviderConfigEntity } from '../../../shared/entities/ProviderConfigEnt
 import { LLMRequest, LLMResponse } from '../../../shared/interfaces/IModelProvider'
 import { ModelService } from '../model/ModelService'
 import { MCPIntegrationService } from '../mcp/MCPIntegrationService.js'
-import { MCPToolService } from '../mcp/MCPToolService.js'
+// MCPToolService已删除，功能直接集成到MCPIntegrationService中
 import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
 
 /**
@@ -15,13 +15,13 @@ export class LLMService {
   private langChainService: LangChainLLMService
   private modelManagementService: ModelService
   private mcpService: MCPIntegrationService
-  private mcpToolService: MCPToolService
+  // mcpToolService功能已整合到mcpService中
 
   constructor() {
     this.langChainService = new LangChainLLMService()
     this.modelManagementService = new ModelService()
     this.mcpService = MCPIntegrationService.getInstance()
-    this.mcpToolService = new MCPToolService(this.mcpService)
+    // mcpToolService功能已整合到mcpService中
   }
 
   /**
@@ -620,7 +620,21 @@ export class LLMService {
    */
   async getMCPTools(): Promise<any[]> {
     try {
-      return await this.mcpToolService.getAllLangChainTools()
+      const tools = await this.mcpService.getAllTools()
+      // 转换为LangChain工具格式（简化实现）
+      return tools.map(tool => ({
+        name: tool.name,
+        description: tool.description || '',
+        schema: tool.inputSchema,
+        func: async (args: any) => {
+          const response = await this.mcpService.callTool({
+            serverId: tool.serverId,
+            toolName: tool.name,
+            arguments: args
+          })
+          return response.success ? response.result : response.error
+        }
+      }))
     } catch (error) {
       console.error('获取MCP工具失败:', error)
       return []
@@ -632,7 +646,21 @@ export class LLMService {
    */
   async searchMCPTools(query: string): Promise<any[]> {
     try {
-      return await this.mcpToolService.searchLangChainTools(query)
+      const tools = await this.mcpService.searchTools(query)
+      // 转换为LangChain工具格式
+      return tools.map(tool => ({
+        name: tool.name,
+        description: tool.description || '',
+        schema: tool.inputSchema,
+        func: async (args: any) => {
+          const response = await this.mcpService.callTool({
+            serverId: tool.serverId,
+            toolName: tool.name,
+            arguments: args
+          })
+          return response.success ? response.result : response.error
+        }
+      }))
     } catch (error) {
       console.error('搜索MCP工具失败:', error)
       return []
@@ -644,7 +672,7 @@ export class LLMService {
    */
   async getMCPToolStats(): Promise<any> {
     try {
-      return await this.mcpToolService.getToolUsageStats()
+      return await this.mcpService.getToolUsageStats()
     } catch (error) {
       console.error('获取MCP工具统计失败:', error)
       return {
@@ -661,7 +689,17 @@ export class LLMService {
    */
   async refreshMCPTools(): Promise<void> {
     try {
-      await this.mcpToolService.refreshTools()
+      // 重新发现所有服务器工具
+      const servers = await this.mcpService.getAllServers()
+      for (const server of servers) {
+        if (server.isEnabled) {
+          try {
+            await this.mcpService.discoverServerTools(server.id)
+          } catch (error) {
+            console.warn(`刷新服务器工具失败: ${server.name}`, error)
+          }
+        }
+      }
     } catch (error) {
       console.error('刷新MCP工具失败:', error)
     }
@@ -821,7 +859,7 @@ ${request.systemPrompt || ''}`
   async cleanupMCP(): Promise<void> {
     try {
       await this.mcpService.cleanup()
-      this.mcpToolService.clearCache()
+      // 清理功能已整合到cleanup中
     } catch (error) {
       console.error('清理MCP资源失败:', error)
     }

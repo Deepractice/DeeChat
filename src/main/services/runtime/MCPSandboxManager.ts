@@ -111,7 +111,8 @@ class MCPSandbox {
       // 在沙箱中启动进程
       const childProcess = await this.isolationManager.spawnInSandbox(command, args, {
         stdio: ['pipe', 'pipe', 'pipe'], // MCP stdio协议
-        timeout: options.timeout || 30000
+        timeout: options.timeout || 30000,
+        cwd: serverConfig.workingDirectory // 使用服务器指定的工作目录
       });
 
       // 记录运行的进程
@@ -271,8 +272,9 @@ export class MCPSandboxManager {
     }
 
     try {
-      // 获取Node命令
-      const nodeCommand = await this.nodeRuntimeManager.getNodeCommand();
+      // 获取Node命令（强制刷新以确保路径正确）
+      const nodeCommand = await this.nodeRuntimeManager.refreshNodeCommand();
+      log.info(`[MCPSandboxManager] 使用Node命令: ${nodeCommand}`);
       
       // 创建沙箱目录路径
       const sandboxPath = join(this.sandboxBasePath, mcpId);

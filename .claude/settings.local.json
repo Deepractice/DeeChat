@@ -95,7 +95,15 @@
       "Bash(claude mcp:*)",
       "Bash(claude --version)",
       "Bash(jq:*)",
-      "Bash(echo \"DeeChat已成功启动！现在可以通过浏览器访问 http://localhost:5173 来测试智能沙箱功能。\n\n测试步骤：\n1. 打开 http://localhost:5173\n2. 在MCP管理页面尝试连接PromptX服务器\n3. 观察控制台是否显示沙箱检测和启动日志\n\n从当前日志可以看到：\n✅ 配置成功生成为标准node命令\n✅ MCPSandboxManager已初始化\n✅ 智能检测逻辑已就绪\n❌ PromptX服务器需要手动连接来触发沙箱检测\")"
+      "Bash(echo \"DeeChat已成功启动！现在可以通过浏览器访问 http://localhost:5173 来测试智能沙箱功能。\n\n测试步骤：\n1. 打开 http://localhost:5173\n2. 在MCP管理页面尝试连接PromptX服务器\n3. 观察控制台是否显示沙箱检测和启动日志\n\n从当前日志可以看到：\n✅ 配置成功生成为标准node命令\n✅ MCPSandboxManager已初始化\n✅ 智能检测逻辑已就绪\n❌ PromptX服务器需要手动连接来触发沙箱检测\")",
+      "Bash(git rm:*)",
+      "Bash(NODE_ENV=development timeout 30s npm run dev)",
+      "Bash(NODE_ENV=development gtimeout 30s npm run dev)",
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" --version)",
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" \"/Users/macmima1234/Desktop/DeeChat/release/mac/DeeChat.app/Contents/Resources/resources/promptx/package/src/bin/promptx.js\" mcp-server)",
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" src/bin/promptx.js mcp-server)",
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" -e \"console.log(''Node.js工作正常''); process.exit(0);\")",
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" -e \"try { require(''commander''); console.log(''commander OK''); } catch(e) { console.error(''commander error:'', e.message); }\")"
     ],
     "deny": []
   }

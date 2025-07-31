@@ -4,7 +4,6 @@
  */
 
 export { MCPIntegrationService } from './MCPIntegrationService';
-export { MCPClientManager } from './MCPClientManager';
+export { SimpleMCPClientManager } from './SimpleMCPClientManager';
 export { MCPConfigService } from './MCPConfigService';
 export { MCPCacheService } from './MCPCacheService';
-export { MCPToolService } from './MCPToolService';

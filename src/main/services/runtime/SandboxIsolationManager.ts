@@ -172,6 +172,11 @@ export class SandboxIsolationManager {
       // 保留必要的系统环境变量
       NODE_ENV: process.env.NODE_ENV || 'production',
       
+      // 🔥 为PromptX提供更多必要的环境变量
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL || 'en_US.UTF-8',
+      SHELL: process.env.SHELL || '/bin/bash',
+      
       // 🔥 改进文件系统访问权限
       ...(this.options.enableFileSystemAccess ? {
         // 允许访问用户文档目录
@@ -339,23 +344,46 @@ export class SandboxIsolationManager {
     if (command === 'node' || command.endsWith('node') || command.endsWith('node.exe')) {
       // 如果command是node，直接使用nodeCommand，args保持不变
       actualCommand = this.nodeCommand;
-      actualArgs = args;
-      log.info(`[SandboxIsolation] 使用沙箱Node.js: ${this.nodeCommand} ${args.join(' ')}`);
+      actualArgs = [...args]; // 复制数组以避免修改原始参数
+      log.info(`[SandboxIsolation] 使用沙箱Node.js执行: ${actualCommand}`);
+      log.info(`[SandboxIsolation] 参数: [${actualArgs.map(arg => `"${arg}"`).join(', ')}]`);
     } else {
       // 其他命令，通过Node.js执行
       actualCommand = this.nodeCommand;
       actualArgs = [command, ...args];
-      log.info(`[SandboxIsolation] 通过Node.js执行: ${this.nodeCommand} ${command} ${args.join(' ')}`);
+      log.info(`[SandboxIsolation] 通过Node.js执行: ${actualCommand}`);
+      log.info(`[SandboxIsolation] 参数: [${actualArgs.map(arg => `"${arg}"`).join(', ')}]`);
     }
     
-    const childProcess = spawn(actualCommand, actualArgs, {
-      cwd: this.sandboxPath,
+    // 🔥 确保参数是字符串数组，防止参数传递问题
+    const safeArgs = actualArgs.map(arg => String(arg).trim()).filter(arg => arg.length > 0);
+    
+    log.info(`[SandboxIsolation] 最终执行命令: ${actualCommand}`);
+    log.info(`[SandboxIsolation] 最终参数: [${safeArgs.map(arg => `"${arg}"`).join(', ')}]`);
+    
+    // 🔥 验证第一个参数是否为有效的脚本文件
+    if (safeArgs.length > 0 && command === 'node') {
+      const scriptPath = safeArgs[0];
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(scriptPath)) {
+          log.info(`[SandboxIsolation] ✅ 验证脚本文件存在: ${scriptPath}`);
+        } else {
+          log.error(`[SandboxIsolation] ❌ 脚本文件不存在: ${scriptPath}`);
+        }
+      } catch (error) {
+        log.warn(`[SandboxIsolation] ⚠️ 无法验证脚本文件: ${scriptPath}`, error);
+      }
+    }
+    
+    const childProcess = spawn(actualCommand, safeArgs, {
+      cwd: options.cwd || this.sandboxPath, // 优先使用传入的工作目录
       env: this.createIsolatedEnvironment(),
       stdio: options.stdio || ['pipe', 'pipe', 'pipe'],
       ...options
     });
 
-    log.info(`[SandboxIsolation] 在沙箱中启动子进程: ${actualCommand} ${actualArgs.join(' ')}`);
+    log.info(`[SandboxIsolation] 在沙箱中启动子进程: ${actualCommand} ${safeArgs.join(' ')}`);
     
     // 记录进程信息
     childProcess.on('spawn', () => {
@@ -369,6 +397,25 @@ export class SandboxIsolationManager {
     childProcess.on('exit', (code, signal) => {
       log.info(`[SandboxIsolation] 子进程退出，code: ${code}, signal: ${signal}`);
     });
+
+    // 🔥 添加子进程输出监听来调试问题
+    if (childProcess.stderr) {
+      childProcess.stderr.on('data', (data) => {
+        const output = data.toString().trim();
+        if (output) {
+          log.error(`[SandboxIsolation] 子进程stderr: ${output}`);
+        }
+      });
+    }
+    
+    if (childProcess.stdout) {
+      childProcess.stdout.on('data', (data) => {
+        const output = data.toString().trim();
+        if (output && !output.includes('Content-Length:')) { // 过滤MCP协议消息
+          log.info(`[SandboxIsolation] 子进程stdout: ${output}`);
+        }
+      });
+    }
 
     return childProcess;
   }

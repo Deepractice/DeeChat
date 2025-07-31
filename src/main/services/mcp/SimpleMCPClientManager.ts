@@ -1,0 +1,562 @@
+/**
+ * 简化版MCP客户端管理器
+ * 参考Cherry Studio设计，使用官方MCP SDK
+ */
+
+import log from 'electron-log'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
+import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
+import {
+  MCPToolCallRequest,
+  MCPToolCallResponse,
+  MCPEvent,
+  MCPEventType
+} from '../../../shared/interfaces/IMCPProvider'
+import { MCPSandboxManager } from '../runtime/MCPSandboxManager'
+import { InProcessMCPServer } from './InProcessMCPServer'
+
+/**
+ * 简化版MCP客户端管理器
+ * 借鉴Cherry Studio的简洁设计模式
+ */
+export class SimpleMCPClientManager {
+  private clients: Map<string, Client> = new Map()
+  private pendingClients: Map<string, Promise<Client>> = new Map()
+  private eventListeners: ((event: MCPEvent) => void)[] = []
+  private sandboxManager: MCPSandboxManager
+  private inProcessServers: Map<string, InProcessMCPServer> = new Map()
+
+  constructor() {
+    this.sandboxManager = MCPSandboxManager.getInstance()
+    log.info('[Simple MCP] 🚀 智能客户端管理器初始化完成 (进程内 > Electron内置 > 沙箱)')
+  }
+
+  /**
+   * 获取服务器唯一键
+   */
+  private getServerKey(server: MCPServerEntity): string {
+    return JSON.stringify({
+      id: server.id,
+      name: server.name,
+      type: server.type,
+      command: server.command,
+      args: server.args
+    })
+  }
+
+  /**
+   * 初始化客户端（智能模式：进程内跳过客户端创建）
+   */
+  async initClient(server: MCPServerEntity): Promise<Client> {
+    const executionMode = this.getExecutionMode(server)
+    
+    // 🎯 进程内模式：不需要创建外部客户端，直接创建进程内服务器
+    if (executionMode === 'inprocess') {
+      log.info(`[Simple MCP] 🎯 进程内模式，跳过外部客户端创建: ${server.name}`)
+      
+      const serverKey = this.getServerKey(server)
+      let inProcessServer = this.inProcessServers.get(serverKey)
+      
+      if (!inProcessServer) {
+        log.info(`[Simple MCP] 🎯 创建进程内服务器用于初始化: ${server.name}`)
+        inProcessServer = new InProcessMCPServer(server)
+        await inProcessServer.start()
+        this.inProcessServers.set(serverKey, inProcessServer)
+      }
+      
+      // 返回一个假的客户端对象（避免调用方出错）
+      return {} as Client
+    }
+    
+    // 🚀 标准模式：创建外部客户端
+    const serverKey = this.getServerKey(server)
+
+    // 如果有pending初始化，等待它完成
+    const pendingClient = this.pendingClients.get(serverKey)
+    if (pendingClient) {
+      log.debug(`[Simple MCP] 等待pending客户端: ${server.name}`)
+      try {
+        return await pendingClient
+      } catch (error) {
+        // 如果pending失败，清理后重新尝试
+        log.warn(`[Simple MCP] Pending客户端失败，重新尝试: ${server.name}`, error)
+        this.pendingClients.delete(serverKey)
+        this.clients.delete(serverKey)
+      }
+    }
+
+    // 检查现有客户端是否还有效
+    const existingClient = this.clients.get(serverKey)
+    if (existingClient) {
+      try {
+        // 🔥 改进ping检查 - 使用更短的超时
+        const pingPromise = existingClient.ping()
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('ping超时')), 3000) // 3秒超时
+        })
+        
+        await Promise.race([pingPromise, timeoutPromise])
+        
+        log.debug(`[Simple MCP] ✅ 使用现有客户端: ${server.name}`)
+        return existingClient
+      } catch (error) {
+        log.warn(`[Simple MCP] 客户端ping失败，移除: ${server.name}`, error)
+        this.clients.delete(serverKey)
+        // 清理可能的pending状态
+        this.pendingClients.delete(serverKey)
+      }
+    }
+
+    // 创建初始化Promise
+    const initPromise = this.createClientPromise(server, serverKey)
+    this.pendingClients.set(serverKey, initPromise)
+
+    return initPromise
+  }
+
+  /**
+   * 创建客户端Promise
+   */
+  private async createClientPromise(server: MCPServerEntity, serverKey: string): Promise<Client> {
+    try {
+      log.info(`[Simple MCP] 🔨 创建新客户端: ${server.name}`)
+      
+      // 🔥 添加详细的调试信息
+      log.info(`[Simple MCP] 服务器配置:`, {
+        id: server.id,
+        name: server.name,
+        type: server.type,
+        command: server.command,
+        args: server.args,
+        workingDirectory: server.workingDirectory
+      })
+      
+      // 创建官方SDK客户端
+      const client = new Client(
+        { name: 'DeeChat', version: '1.0.0' },
+        { capabilities: {} }
+      )
+
+      // 创建传输层
+      log.info(`[Simple MCP] 🔌 创建传输层: ${server.type}`)
+      const transport = await this.createTransport(server)
+      
+      // 🔥 添加连接超时保护
+      log.info(`[Simple MCP] 🚀 开始连接客户端...`)
+      const connectPromise = client.connect(transport)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`连接超时: ${server.name}`)), 15000) // 15秒超时
+      })
+      
+      await Promise.race([connectPromise, timeoutPromise])
+      
+      // 🔥 验证连接是否真正成功
+      log.info(`[Simple MCP] 🔍 验证连接状态...`)
+      try {
+        await client.ping()
+        log.info(`[Simple MCP] ✅ 连接验证成功: ${server.name}`)
+      } catch (pingError) {
+        log.warn(`[Simple MCP] ⚠️ 连接验证失败，但继续: ${server.name}`, pingError)
+        // 不抛出错误，有些服务器可能不支持ping
+      }
+      
+      // 缓存客户端
+      this.clients.set(serverKey, client)
+      
+      // 发送连接成功事件
+      this.emitEvent({
+        type: MCPEventType.SERVER_CONNECTED,
+        serverId: server.id,
+        timestamp: new Date()
+      })
+
+      log.info(`[Simple MCP] ✅ 客户端连接成功: ${server.name}`)
+      return client
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      log.error(`[Simple MCP] ❌ 客户端连接失败: ${server.name}`, error)
+      
+      // 🔥 详细的错误日志
+      if (error instanceof Error) {
+        log.error(`[Simple MCP] 错误详情:`, {
+          name: error.name,
+          message: error.message,
+          stack: error.stack?.split('\n').slice(0, 5).join('\n') // 只显示前5行堆栈
+        })
+      }
+      
+      // 发送连接失败事件
+      this.emitEvent({
+        type: MCPEventType.SERVER_ERROR,
+        serverId: server.id,
+        timestamp: new Date(),
+        error: errorMessage
+      })
+      
+      throw error
+    } finally {
+      // 清理pending状态
+      this.pendingClients.delete(serverKey)
+    }
+  }
+
+  /**
+   * 创建传输层（支持沙箱）
+   */
+  private async createTransport(server: MCPServerEntity) {
+    if (server.type === 'sse') {
+      // SSE传输
+      if (!server.url) {
+        throw new Error('SSE服务器缺少URL配置')
+      }
+      return new SSEClientTransport(new URL(server.url))
+    } else {
+      // Stdio传输 - 支持沙箱
+      return this.createStdioTransport(server)
+    }
+  }
+
+  /**
+   * 创建Stdio传输（智能沙箱检测）
+   */
+  private async createStdioTransport(server: MCPServerEntity) {
+    if (!server.command) {
+      throw new Error('Stdio服务器缺少命令配置')
+    }
+
+    // 🔥 智能沙箱检测（保留原有逻辑）
+    const shouldUseSandbox = this.shouldUseSandbox(server)
+    
+    log.info(`[Simple MCP] 📊 沙箱检测结果: ${server.name} -> ${shouldUseSandbox ? '启用沙箱' : '标准启动'}`)
+    
+    if (shouldUseSandbox) {
+      log.info(`[Simple MCP] 🎯 使用沙箱启动: ${server.name}`)
+      
+      try {
+        // 通过沙箱启动
+        const childProcess = await this.sandboxManager.startMCPServer(
+          server,
+          ['dpml-prompt@latest'], // PromptX依赖
+          { timeout: 30000 }
+        )
+        
+        log.info(`[Simple MCP] ✅ 沙箱进程创建成功:`, {
+          spawnfile: childProcess.spawnfile,
+          spawnargs: childProcess.spawnargs?.slice(0, 3) // 只显示前3个参数
+        })
+        
+        return new StdioClientTransport({
+          command: childProcess.spawnfile || server.command,
+          args: childProcess.spawnargs || server.args || [],
+          env: process.env as Record<string, string>
+        })
+      } catch (sandboxError) {
+        log.error(`[Simple MCP] ❌ 沙箱启动失败，回退到标准启动: ${server.name}`, sandboxError)
+        // 沙箱失败时回退到标准启动
+      }
+    }
+    
+    // 🔥 优化：直接使用Electron内置Node.js运行时
+    let actualCommand = server.command
+    let actualArgs = server.args || []
+    
+    // 如果是Node.js脚本，直接使用Electron的Node.js
+    if (server.command === 'node' || server.command?.endsWith('node') || server.command?.endsWith('node.exe')) {
+      actualCommand = process.execPath  // 使用Electron的Node.js
+      // args保持不变，第一个参数就是要执行的脚本
+      log.info(`[Simple MCP] ⚡ 使用Electron内置Node.js: ${actualCommand}`)
+    } else {
+      log.info(`[Simple MCP] 🚀 使用原始命令: ${actualCommand}`)
+    }
+    
+    log.info(`[Simple MCP] 启动命令: ${actualCommand} ${actualArgs.join(' ')}`)
+    
+    // 标准启动配置
+    let transportConfig: any = {
+      command: actualCommand,
+      args: actualArgs,
+      env: { 
+        ...process.env as Record<string, string>, 
+        ...server.env 
+      }
+    }
+    
+    // 🔥 如果有工作目录，添加到配置中
+    if (server.workingDirectory) {
+      log.info(`[Simple MCP] 设置工作目录: ${server.workingDirectory}`)
+      transportConfig.cwd = server.workingDirectory
+    }
+    
+    return new StdioClientTransport(transportConfig)
+  }
+
+  /**
+   * 🔥 智能执行模式检测：进程内 > Electron内置 > 沙箱
+   */
+  private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' | 'sandbox' {
+    if (!server.command) return 'builtin'
+
+    // 明确的沙箱协议
+    if (server.command.startsWith('sandbox://')) {
+      return 'sandbox'
+    }
+
+    const command = server.command
+    const args = server.args || []
+    
+    // 🎯 检查是否是PromptX服务器 - 优先使用进程内模式（解决双进程问题）
+    const isPromptXServer = (
+      command === 'node' &&
+      args.some(arg => arg.includes('promptx.js') || arg.includes('dpml-prompt')) &&
+      args.includes('mcp-server')
+    )
+    
+    if (isPromptXServer) {
+      log.info(`[Simple MCP] 🎯 PromptX服务器 -> 进程内模式 (单进程): ${server.name}`)
+      return 'inprocess'
+    }
+    
+    // 🚀 其他Node.js脚本用Electron内置运行时
+    const isNodeScript = (
+      command === 'node' || 
+      command.endsWith('node') ||
+      command.endsWith('node.exe')
+    )
+    
+    if (isNodeScript) {
+      log.info(`[Simple MCP] ⚡ Node.js脚本 -> Electron内置运行时: ${server.name}`)
+      return 'builtin'
+    }
+    
+    // 🔥 需要包管理的情况使用沙箱
+    const needsPackageManagement = (
+      args.includes('npx') ||
+      args.includes('npm') ||
+      args.some(arg => arg.includes('@'))
+    )
+    
+    const mode = needsPackageManagement ? 'sandbox' : 'builtin'
+    log.info(`[Simple MCP] 🎯 其他情况 -> ${mode}: ${server.name}`)
+    return mode
+  }
+
+  /**
+   * 向后兼容的沙箱检测方法
+   */
+  private shouldUseSandbox(server: MCPServerEntity): boolean {
+    return this.getExecutionMode(server) === 'sandbox'
+  }
+
+  /**
+   * 调用工具（智能模式：进程内 > 客户端）
+   */
+  async callTool(request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
+    log.info(`[Simple MCP] 调用工具: ${request.serverId}:${request.toolName}`)
+
+    try {
+      // 获取服务器配置
+      const server = await this.getServerConfig(request.serverId)
+      if (!server) {
+        throw new Error(`服务器配置不存在: ${request.serverId}`)
+      }
+
+      const executionMode = this.getExecutionMode(server)
+      
+      // 🎯 PromptX优先使用进程内调用（单进程，零开销）
+      if (executionMode === 'inprocess') {
+        return await this.callToolInProcess(server, request)
+      }
+      
+      // 🚀 其他情况用客户端调用（自动用Electron内置Node.js）
+      return await this.callToolViaClient(server, request)
+
+    } catch (error) {
+      log.error(`[Simple MCP] 工具调用失败: ${request.toolName}`, error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '工具调用失败',
+        duration: 0
+      }
+    }
+  }
+
+  /**
+   * 进程内工具调用（PromptX专用，单进程解决方案）
+   */
+  private async callToolInProcess(server: MCPServerEntity, request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
+    const serverKey = this.getServerKey(server)
+    
+    // 获取或创建进程内服务器
+    let inProcessServer = this.inProcessServers.get(serverKey)
+    if (!inProcessServer) {
+      log.info(`[Simple MCP] 🎯 创建进程内PromptX服务器: ${server.name}`)
+      inProcessServer = new InProcessMCPServer(server)
+      await inProcessServer.start()
+      this.inProcessServers.set(serverKey, inProcessServer)
+      
+      // 发送连接成功事件
+      this.emitEvent({
+        type: MCPEventType.SERVER_CONNECTED,
+        serverId: server.id,
+        timestamp: new Date()
+      })
+    }
+    
+    // 直接调用工具（同进程，零开销）
+    const startTime = Date.now()
+    const result = await inProcessServer.callTool(request.toolName, request.arguments || {})
+    const duration = Date.now() - startTime
+    
+    log.info(`[Simple MCP] ✅ 进程内工具调用成功: ${request.toolName} (${duration}ms)`)
+    
+    return {
+      success: true,
+      result: result.content || [result],
+      duration
+    }
+  }
+
+  /**
+   * 客户端工具调用（其他MCP服务器）
+   */
+  private async callToolViaClient(server: MCPServerEntity, request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
+    // 初始化客户端（自动用Electron内置Node.js）
+    const client = await this.initClient(server)
+    
+    // 调用工具
+    const result = await client.callTool({
+      name: request.toolName,
+      arguments: request.arguments || {}
+    })
+
+    return {
+      success: true,
+      result: result.content || [],
+      duration: 0
+    }
+  }
+
+  /**
+   * 发现工具（智能模式：进程内 > 客户端）
+   */
+  async discoverTools(server: MCPServerEntity): Promise<MCPToolEntity[]> {
+    try {
+      const executionMode = this.getExecutionMode(server)
+      let tools: any[] = []
+      
+      if (executionMode === 'inprocess') {
+        // 🎯 进程内服务器
+        const serverKey = this.getServerKey(server)
+        let inProcessServer = this.inProcessServers.get(serverKey)
+        
+        if (!inProcessServer) {
+          log.info(`[Simple MCP] 🎯 为工具发现创建进程内服务器: ${server.name}`)
+          inProcessServer = new InProcessMCPServer(server)
+          await inProcessServer.start()
+          this.inProcessServers.set(serverKey, inProcessServer)
+        }
+        
+        tools = await inProcessServer.listTools()
+      } else {
+        // 🚀 标准客户端
+        const client = await this.initClient(server)
+        const { tools: clientTools } = await client.listTools()
+        tools = clientTools
+      }
+
+      return tools.map(tool => MCPToolEntity.create({
+        name: tool.name,
+        description: tool.description || '',
+        serverId: server.id,
+        serverName: server.name,
+        inputSchema: tool.inputSchema
+      }))
+
+    } catch (error) {
+      log.error(`[Simple MCP] 工具发现失败: ${server.name}`, error)
+      return []
+    }
+  }
+
+  /**
+   * 关闭客户端
+   */
+  async closeClient(serverId: string): Promise<void> {
+    const serverKey = Array.from(this.clients.keys()).find(key => 
+      key.includes(`"id":"${serverId}"`)
+    )
+    
+    if (serverKey) {
+      const client = this.clients.get(serverKey)
+      if (client) {
+        try {
+          await client.close()
+          this.clients.delete(serverKey)
+          log.info(`[Simple MCP] 客户端已关闭: ${serverId}`)
+        } catch (error) {
+          log.error(`[Simple MCP] 关闭客户端失败: ${serverId}`, error)
+        }
+      }
+    }
+  }
+
+  /**
+   * 添加事件监听器
+   */
+  onEvent(listener: (event: MCPEvent) => void): void {
+    this.eventListeners.push(listener)
+  }
+
+  /**
+   * 发送事件
+   */
+  private emitEvent(event: MCPEvent): void {
+    for (const listener of this.eventListeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        log.error('[Simple MCP] 事件监听器异常:', error)
+      }
+    }
+  }
+
+  /**
+   * 设置配置服务（依赖注入）
+   */
+  private configService: any = null
+
+  setConfigService(configService: any): void {
+    this.configService = configService
+  }
+
+  /**
+   * 获取服务器配置
+   */
+  private async getServerConfig(serverId: string): Promise<MCPServerEntity | null> {
+    if (!this.configService) {
+      log.error('[Simple MCP] 配置服务未注入')
+      return null
+    }
+    return await this.configService.getServerConfig(serverId)
+  }
+
+  /**
+   * 清理所有客户端
+   */
+  async cleanup(): Promise<void> {
+    const closePromises = Array.from(this.clients.keys()).map(serverKey => 
+      this.closeClient(serverKey)
+    )
+    
+    await Promise.allSettled(closePromises)
+    this.clients.clear()
+    this.pendingClients.clear()
+    
+    log.info('[Simple MCP] 所有客户端已清理')
+  }
+
+}
