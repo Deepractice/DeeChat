@@ -9,6 +9,19 @@ import ModelSelector from './ModelSelector'
 import ModelManagement from '../pages/ModelManagement'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 
+// 内置默认配置
+const DEFAULT_CONFIG = {
+  id: 'default-config',
+  name: 'ChatAnywhere (内置)',
+  provider: 'openai',
+  model: 'gpt-4o-mini',
+  apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
+  baseURL: 'https://api.chatanywhere.tech/v1/',
+  isEnabled: true,
+  priority: 10,
+  enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+}
+
 const { Content } = Layout
 const { Title, Text } = Typography
 
@@ -72,46 +85,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
 
   // 🔥 简化：直接从持久化的会话数据中恢复模型选择，无需额外的 SessionService 调用
 
-  // 异步加载模型配置
+  // 简化模型配置加载 - 直接使用默认配置
   const loadModelConfig = async (configId: string, modelName: string) => {
     try {
-//       console.log('🔍 [ChatArea] 开始加载模型配置:', { configId, modelName })
-
-      // 调用API获取配置列表（使用正确的API路径）
-      const configsResponse = await window.electronAPI?.langchain?.getAllConfigs()
-//       console.log('🔍 [ChatArea] 配置API原始响应:', configsResponse)
-
-      // 处理不同的响应格式（参考 SessionService 的处理方式）
-      let configs: any[] = []
-      if (Array.isArray(configsResponse)) {
-        // 直接返回数组格式
-        configs = configsResponse
-      } else if (configsResponse?.success && configsResponse.data) {
-        // 标准 {success, data} 格式
-        configs = configsResponse.data
-      } else if (configsResponse?.data) {
-        // 只有 data 字段
-        configs = configsResponse.data
+      // 如果是默认配置的模型，直接使用默认配置
+      if (configId === DEFAULT_CONFIG.id) {
+        const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
+        setSelectedModel({
+          id: modelName,
+          config: defaultConfig
+        })
+        return
       }
-
-      // console.log('🔍 [ChatArea] 解析后的配置列表:', { 配置数量: configs.length, 配置列表: configs.map((c: any) => ({ id: c.id, name: c.name })) })
-
-      if (configs.length > 0) {
-        const config = configs.find((c: any) => c.id === configId)
-        if (config) {
-//           console.log('✅ [ChatArea] 找到模型配置:', config.name)
-          setSelectedModel({
-            id: modelName,
-            config: config
-          })
-        } else {
-          console.warn('⚠️ [ChatArea] 未找到模型配置:', configId)
-          setSelectedModel(null)
-        }
-      } else {
-        console.error('❌ [ChatArea] 获取配置列表失败或为空')
-        setSelectedModel(null)
-      }
+      
+      // 兼容其他可能的配置ID，也使用默认配置
+      console.warn('⚠️ [ChatArea] 使用默认配置替代未知配置:', configId)
+      const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
+      setSelectedModel({
+        id: modelName,
+        config: defaultConfig
+      })
     } catch (error) {
       console.error('❌ [ChatArea] 加载模型配置出错:', error)
       setSelectedModel(null)

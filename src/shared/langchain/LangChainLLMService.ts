@@ -446,12 +446,42 @@ export class LangChainLLMService {
         return data.data
           .map((model: any) => model.id)
           .filter((id: string) => {
-            // 过滤出聊天模型
-            return id && (
-              id.includes('gpt') ||
-              id.includes('o1') ||
-              id.includes('chatgpt')
-            );
+            if (!id) return false;
+            
+            // 排除非聊天模型
+            const excludePatterns = [
+              'text-embedding',    // embedding模型
+              'tts-',             // 文本转语音模型
+              'whisper',          // 语音识别模型
+              'dall-e',           // 图像生成模型
+              'davinci-002',      // 旧版本模型
+              'text-ada',         // 旧版本embedding
+              'transcribe',       // 转录模型
+              'image-1'           // 图像处理模型
+            ];
+            
+            // 如果包含排除模式，跳过
+            if (excludePatterns.some(pattern => id.includes(pattern))) {
+              return false;
+            }
+            
+            // 包含聊天模型模式
+            const includePatterns = [
+              'gpt',              // GPT系列
+              'o1',               // O1系列
+              'o3',               // O3系列
+              'o4',               // O4系列
+              'chatgpt',          // ChatGPT系列
+              'claude',           // Claude系列
+              'gemini',           // Gemini系列
+              'deepseek',         // DeepSeek系列
+              'grok',             // Grok系列
+              'qwen',             // Qwen系列
+              'kimi'              // Kimi系列
+            ];
+            
+            // 包含任意一个模式即可
+            return includePatterns.some(pattern => id.includes(pattern));
           })
           .sort();
       }

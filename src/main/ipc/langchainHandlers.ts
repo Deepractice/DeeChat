@@ -215,6 +215,36 @@ export function registerLangChainHandlers() {
     }
   });
 
+  // 获取可用模型列表 (AI API)
+  ipcMain.handle('ai:getAvailableModels', async (_, params: any) => {
+    try {
+      console.log('IPC: AI获取可用模型列表:', params.baseURL);
+      
+      // 构造临时配置对象来调用/models API
+      const tempConfig = new ModelConfigEntity({
+        id: 'temp-config',
+        name: 'Temporary Config',
+        provider: 'openai',
+        model: 'gpt-3.5-turbo',
+        apiKey: params.apiKey,
+        baseURL: params.baseURL,
+        isEnabled: true,
+        priority: 1,
+        enabledModels: [],
+        status: 'available',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      const models = await langChainService.getAvailableModels(tempConfig);
+      console.log(`IPC: AI获取到 ${models.length} 个模型`);
+      return models;
+    } catch (error) {
+      console.error('IPC: AI获取模型列表失败:', error);
+      throw error;
+    }
+  });
+
   // === 会话管理相关处理器 ===
 
   // 获取所有会话
@@ -333,7 +363,9 @@ export function unregisterLangChainHandlers() {
     'langchain:saveSession',
     'langchain:deleteSession',
     'ai:sendMessage',
-    'ai:testProvider'
+    'ai:testProvider',
+    'ai:getAvailableModels',
+    'ai:sendMessageWithMCPTools'
   ];
 
   handlers.forEach(handler => {

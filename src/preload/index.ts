@@ -47,6 +47,7 @@ const electronAPI = {
     sendMessage: (request: any) => ipcRenderer.invoke('ai:sendMessage', request),
     sendMessageWithMCPTools: (request: any) => ipcRenderer.invoke('ai:sendMessageWithMCPTools', request),
     testProvider: (configId: string) => ipcRenderer.invoke('ai:testProvider', configId),
+    getAvailableModels: (params: any) => ipcRenderer.invoke('ai:getAvailableModels', params),
   },
 
   // LangChain集成API

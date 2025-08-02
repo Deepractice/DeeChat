@@ -710,6 +710,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
           dataSource={providerConfigs}
           renderItem={(config) => (
             <List.Item
+              key={config.id}
               style={{ 
                 padding: '12px 16px',
                 cursor: 'pointer',
@@ -916,7 +917,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
                     width: '100%'
                   }}>
                     {selectedConfig.enabledModels.map((model: string, index: number) => (
-                      <div key={model} style={{
+                      <div key={`${selectedConfig.id}-${model}-${index}`} style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
