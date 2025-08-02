@@ -4,8 +4,7 @@
  */
 
 import { ipcMain } from 'electron';
-import { MCPIntegrationService } from '../services/mcp/MCPIntegrationService.js';
-import { MCPConfigService } from '../services/mcp/MCPConfigService.js';
+import { MCPIntegrationService, MCPConfigService } from '../services/mcp/index.js';
 import { MCPServerEntity } from '../../shared/entities/MCPServerEntity.js';
 
 console.log('🔧 [MCP] mcpHandlers模块开始加载...')

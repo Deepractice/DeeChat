@@ -3,7 +3,7 @@ import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 import { ProviderConfigEntity } from '../../../shared/entities/ProviderConfigEntity'
 import { LLMRequest, LLMResponse } from '../../../shared/interfaces/IModelProvider'
 import { ModelService } from '../model/ModelService'
-import { MCPIntegrationService } from '../mcp/MCPIntegrationService.js'
+import { MCPIntegrationService } from '../mcp/index.js'
 // MCPToolService已删除，功能直接集成到MCPIntegrationService中
 import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
 
