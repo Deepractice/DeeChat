@@ -94,34 +94,111 @@ export class LLMService {
     let configId: string
     let specificModel: string | undefined
 
-    // UUID格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (8-4-4-4-12字符，用-分隔成5部分)
+    // 🔥 新的解析逻辑：支持多种格式
+    // 1. UUID格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-modelName
+    // 2. 固定ID格式：default-config-modelName
+    // 3. 纯ID格式：configId
+    
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
     const uuidMatch = modelId.match(uuidPattern)
 
     if (uuidMatch) {
+      // UUID格式配置ID
       const uuid = uuidMatch[0]
       const remaining = modelId.substring(uuid.length)
 
       if (remaining.startsWith('-')) {
-        // 组合ID格式：configId-modelName
         configId = uuid
-        specificModel = remaining.substring(1) // 去掉开头的-
+        specificModel = remaining.substring(1)
       } else {
-        // 纯UUID
         configId = uuid
       }
+    } else if (modelId.includes('-')) {
+      // 非UUID但包含连字符，可能是固定ID格式
+      const parts = modelId.split('-')
+      
+      // 检查是否是 default-config-modelName 格式
+      if (parts.length >= 3 && parts[0] === 'default' && parts[1] === 'config') {
+        configId = 'default-config'
+        specificModel = parts.slice(2).join('-') // 重新组合模型名（可能包含连字符）
+      } else {
+        // 其他格式，假设第一个部分是配置ID
+        configId = parts[0]
+        specificModel = parts.slice(1).join('-')
+      }
     } else {
-      // 不是UUID格式，直接使用
+      // 纯ID格式
       configId = modelId
     }
 
-    console.log(`解析模型ID: ${modelId} -> 配置ID: ${configId}, 指定模型: ${specificModel}`)
+    console.log(`🔍 [模型解析] 输入模型ID: ${modelId}`)
+    console.log(`🔍 [模型解析] 解析结果 -> 配置ID: ${configId}, 指定模型: ${specificModel}`)
 
     try {
       // 获取模型配置
       let config = await this.modelManagementService.getConfigById(configId)
       
-      // 🔥 兜底策略：如果配置ID不存在，可能是旧版本保存的模型名称，尝试查找支持该模型的配置
+      // 🔥 处理内置默认配置
+      if (!config && configId === 'default-config') {
+        console.log(`🔧 [内置配置] 使用默认配置: ${configId}`)
+        
+        // 创建内置默认配置
+        const DEFAULT_CONFIG = {
+          id: 'default-config',
+          name: 'ChatAnywhere (内置)',
+          provider: 'openai',
+          model: specificModel || 'gpt-4o-mini', // 使用指定模型或默认模型
+          apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
+          baseURL: 'https://api.chatanywhere.tech/v1/',
+          isEnabled: true,
+          priority: 10,
+          enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-sonnet-4-20250514'],
+          status: 'available' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        
+        config = new ModelConfigEntity(DEFAULT_CONFIG)
+      }
+      
+      // 🔥 兜底策略1：处理无效的模型ID格式，如 "20250514-thinking"
+      if (!config && modelId.includes('-')) {
+        console.log(`🔍 [兜底] 无效格式 "${modelId}"，尝试重构模型名称...`)
+        
+        // 检查是否是类似 "20250514-thinking" 这样的格式
+        const parts = modelId.split('-')
+        if (parts.length === 2) {
+          const [datePart, suffix] = parts
+          
+          // 尝试重构为完整的模型名称
+          let reconstructedModelName = ''
+          if (datePart === '20250514' && suffix === 'thinking') {
+            reconstructedModelName = 'claude-sonnet-4-20250514-thinking'
+          } else if (datePart === '20250514') {
+            reconstructedModelName = 'claude-sonnet-4-20250514'
+          }
+          
+          if (reconstructedModelName) {
+            console.log(`🔧 [兜底] 重构模型名称: ${modelId} -> ${reconstructedModelName}`)
+            
+            // 查找支持该模型的配置
+            const allConfigs = await this.modelManagementService.getAllConfigs()
+            const enabledConfigs = allConfigs.filter(c => c.isEnabled)
+            
+            const foundConfig = enabledConfigs.find(c => {
+              return c.enabledModels && c.enabledModels.includes(reconstructedModelName)
+            })
+            
+            if (foundConfig) {
+              config = foundConfig
+              specificModel = reconstructedModelName
+              console.log(`✅ [兜底] 找到支持重构模型 "${reconstructedModelName}" 的配置: ${config.name} (${config.id})`)
+            }
+          }
+        }
+      }
+      
+      // 🔥 兜底策略2：如果配置ID不存在，可能是旧版本保存的模型名称，尝试查找支持该模型的配置
       if (!config && !uuidMatch) {
         console.log(`🔍 [兜底] configId "${configId}" 不是UUID格式，尝试查找支持模型的配置...`)
         

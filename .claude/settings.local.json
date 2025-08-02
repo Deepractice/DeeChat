@@ -103,7 +103,16 @@
       "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" \"/Users/macmima1234/Desktop/DeeChat/release/mac/DeeChat.app/Contents/Resources/resources/promptx/package/src/bin/promptx.js\" mcp-server)",
       "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" src/bin/promptx.js mcp-server)",
       "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" -e \"console.log(''Node.js工作正常''); process.exit(0);\")",
-      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" -e \"try { require(''commander''); console.log(''commander OK''); } catch(e) { console.error(''commander error:'', e.message); }\")"
+      "Bash(\"/Users/macmima1234/Library/Application Support/deechat/node-runtime/bin/node\" -e \"try { require(''commander''); console.log(''commander OK''); } catch(e) { console.error(''commander error:'', e.message); }\")",
+      "Bash(mcp-proxy:*)",
+      "WebFetch(domain:mcp.windsor.ai)",
+      "WebFetch(domain:windsor.ai)",
+      "Bash(NODE_ENV=development gtimeout 300s npm run dev)",
+      "Bash(NODE_ENV=development timeout 300s npm run dev)",
+      "Bash(NODE_ENV=development npm run dev)",
+      "Bash(npm test:*)",
+      "Bash(NODE_ENV=development electron test-delete-server.js)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }

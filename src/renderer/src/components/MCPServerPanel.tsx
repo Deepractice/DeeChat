@@ -22,7 +22,8 @@ import {
   Typography,
   Avatar,
   Divider,
-  Switch
+  Switch,
+  App
 } from 'antd';
 import {
   SearchOutlined,
@@ -96,8 +97,10 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
     setServerInfoModal(true);
   };
 
+  const { modal, message: messageApi } = App.useApp();
+
   const handleRemoveServer = async (serverId: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: '确定要删除这个插件吗？此操作不可撤销。',
       okText: '删除',
@@ -107,9 +110,9 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
         try {
           setRemoving(serverId);
           await onRemoveServer(serverId);
-          message.success('插件删除成功');
+          // 成功消息由父组件处理，这里不再显示
         } catch (error) {
-          message.error(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`);
+          messageApi.error(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`);
         } finally {
           setRemoving(null);
         }

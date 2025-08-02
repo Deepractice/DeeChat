@@ -7,7 +7,7 @@ export interface MCPServerConfig {
   id: string;
   name: string;
   description?: string;
-  type: 'stdio' | 'sse';
+  type: 'stdio' | 'sse' | 'websocket' | 'streamable-http';
   isEnabled: boolean;
 
   // Stdio配置
@@ -23,6 +23,17 @@ export interface MCPServerConfig {
   // 通用配置
   timeout?: number;
   retryCount?: number;
+  
+  // 🔥 新增：执行策略配置
+  execution?: 'inprocess' | 'sandbox' | 'standard';
+  
+  // 🔥 新增：OAuth认证配置
+  auth?: {
+    clientId: string;
+    clientSecret: string;
+    authorizationEndpoint: string;
+    tokenEndpoint: string;
+  };
 
   // 元数据
   createdAt: Date;
@@ -33,7 +44,7 @@ export class MCPServerEntity {
   public readonly id: string;
   public name: string;
   public description?: string;
-  public type: 'stdio' | 'sse';
+  public type: 'stdio' | 'sse' | 'websocket' | 'streamable-http';
   public isEnabled: boolean;
 
   // Stdio配置
@@ -49,6 +60,17 @@ export class MCPServerEntity {
   // 通用配置
   public timeout: number;
   public retryCount: number;
+  
+  // 🔥 新增：执行策略配置
+  public execution?: 'inprocess' | 'sandbox' | 'standard';
+  
+  // 🔥 新增：OAuth认证配置
+  public auth?: {
+    clientId: string;
+    clientSecret: string;
+    authorizationEndpoint: string;
+    tokenEndpoint: string;
+  };
 
   // 元数据
   public readonly createdAt: Date;
@@ -74,6 +96,10 @@ export class MCPServerEntity {
     // 通用配置
     this.timeout = config.timeout || 30000; // 默认30秒
     this.retryCount = config.retryCount || 3; // 默认重试3次
+    
+    // 🔥 新增字段
+    this.execution = config.execution;
+    this.auth = config.auth;
 
     // 元数据
     this.createdAt = config.createdAt;
@@ -103,6 +129,10 @@ export class MCPServerEntity {
     if (updates.timeout !== undefined) this.timeout = updates.timeout;
     if (updates.retryCount !== undefined) this.retryCount = updates.retryCount;
     
+    // 🔥 新增字段更新
+    if (updates.execution !== undefined) this.execution = updates.execution;
+    if (updates.auth !== undefined) this.auth = updates.auth;
+    
     this.updatedAt = new Date();
   }
 
@@ -120,18 +150,18 @@ export class MCPServerEntity {
       if (!this.command?.trim()) {
         errors.push('Stdio类型服务器必须指定命令');
       }
-    } else if (this.type === 'sse') {
+    } else if (['sse', 'websocket', 'streamable-http'].includes(this.type)) {
       if (!this.url?.trim()) {
-        errors.push('SSE类型服务器必须指定URL');
+        errors.push(`${this.type}类型服务器必须指定URL`);
       } else {
         try {
           new URL(this.url);
         } catch {
-          errors.push('SSE URL格式无效');
+          errors.push(`${this.type} URL格式无效`);
         }
       }
     } else {
-      errors.push('服务器类型必须是stdio或sse');
+      errors.push('服务器类型必须是stdio、sse、websocket或streamable-http');
     }
 
     if (this.timeout < 1000) {
@@ -166,6 +196,8 @@ export class MCPServerEntity {
       headers: this.headers,
       timeout: this.timeout,
       retryCount: this.retryCount,
+      execution: this.execution, // 🔥 新增字段
+      auth: this.auth, // 🔥 新增字段
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };

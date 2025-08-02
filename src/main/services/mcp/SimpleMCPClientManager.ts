@@ -7,6 +7,9 @@ import log from 'electron-log'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+// 🔥 新增传输协议导入
+import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
 import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
 import {
@@ -205,18 +208,51 @@ export class SimpleMCPClientManager {
   }
 
   /**
-   * 创建传输层（支持沙箱）
+   * 创建传输层（支持5种协议）
+   * 🔥 简单直接的switch模式，学习Cherry Studio
    */
   private async createTransport(server: MCPServerEntity) {
-    if (server.type === 'sse') {
-      // SSE传输
-      if (!server.url) {
-        throw new Error('SSE服务器缺少URL配置')
-      }
-      return new SSEClientTransport(new URL(server.url))
-    } else {
-      // Stdio传输 - 支持沙箱
-      return this.createStdioTransport(server)
+    switch (server.type) {
+      case 'sse':
+        // SSE传输
+        if (!server.url) {
+          throw new Error('SSE服务器缺少URL配置')
+        }
+        return new SSEClientTransport(new URL(server.url), {
+          requestInit: {
+            headers: server.headers
+          }
+        })
+        
+      case 'websocket':
+        // 🔥 新增：WebSocket传输
+        if (!server.url) {
+          throw new Error('WebSocket服务器缺少URL配置')
+        }
+        return new WebSocketClientTransport(new URL(server.url))
+        
+      case 'streamable-http':
+        // 🔥 新增：StreamableHTTP传输
+        if (!server.url) {
+          throw new Error('StreamableHTTP服务器缺少URL配置')
+        }
+        return new StreamableHTTPClientTransport(new URL(server.url), {
+          requestInit: {
+            headers: server.headers
+          },
+          // TODO: 支持OAuth认证
+          // authProvider: server.auth ? new OAuthClientProvider(server.auth) : undefined,
+          reconnectionOptions: {
+            maxRetries: 3,
+            initialReconnectionDelay: 1000,
+            maxReconnectionDelay: 30000,
+            reconnectionDelayGrowFactor: 1.5
+          }
+        })
+        
+      default:
+        // stdio传输 - 支持沙箱
+        return this.createStdioTransport(server)
     }
   }
 
@@ -482,27 +518,6 @@ export class SimpleMCPClientManager {
     }
   }
 
-  /**
-   * 关闭客户端
-   */
-  async closeClient(serverId: string): Promise<void> {
-    const serverKey = Array.from(this.clients.keys()).find(key => 
-      key.includes(`"id":"${serverId}"`)
-    )
-    
-    if (serverKey) {
-      const client = this.clients.get(serverKey)
-      if (client) {
-        try {
-          await client.close()
-          this.clients.delete(serverKey)
-          log.info(`[Simple MCP] 客户端已关闭: ${serverId}`)
-        } catch (error) {
-          log.error(`[Simple MCP] 关闭客户端失败: ${serverId}`, error)
-        }
-      }
-    }
-  }
 
   /**
    * 添加事件监听器
@@ -542,6 +557,41 @@ export class SimpleMCPClientManager {
       return null
     }
     return await this.configService.getServerConfig(serverId)
+  }
+
+  /**
+   * 关闭特定客户端
+   */
+  async closeClient(serverId: string): Promise<void> {
+    log.info(`[Simple MCP] 关闭客户端: ${serverId}`)
+    
+    // 查找并关闭所有匹配的客户端
+    const keysToRemove: string[] = []
+    
+    for (const [key, client] of this.clients.entries()) {
+      // 检查key是否包含serverId（key格式: serverId::toolName）
+      if (key.startsWith(serverId)) {
+        keysToRemove.push(key)
+        try {
+          await client.close()
+          log.info(`[Simple MCP] 已关闭客户端: ${key}`)
+        } catch (error) {
+          log.error(`[Simple MCP] 关闭客户端失败: ${key}`, error)
+        }
+      }
+    }
+    
+    // 从缓存中移除
+    keysToRemove.forEach(key => this.clients.delete(key))
+    
+    // 清理pending客户端
+    for (const key of this.pendingClients.keys()) {
+      if (key.startsWith(serverId)) {
+        this.pendingClients.delete(key)
+      }
+    }
+    
+    log.info(`[Simple MCP] 已清理服务器 ${serverId} 的所有客户端 (${keysToRemove.length}个)`)
   }
 
   /**

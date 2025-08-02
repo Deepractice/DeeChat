@@ -79,7 +79,8 @@ export enum MCPEventType {
   SERVER_ERROR = 'server_error',
   TOOL_DISCOVERED = 'tool_discovered',
   TOOL_CALLED = 'tool_called',
-  TOOL_ERROR = 'tool_error'
+  TOOL_ERROR = 'tool_error',
+  SERVER_MESSAGE = 'server_message'
 }
 
 /**

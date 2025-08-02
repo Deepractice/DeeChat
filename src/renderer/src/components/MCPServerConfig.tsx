@@ -15,7 +15,7 @@ import {
   Card,
   Divider,
   InputNumber,
-  message,
+  App,
   Tabs,
   Tag,
   Alert
@@ -49,6 +49,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
   onSave,
   editingServer
 }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [quickForm] = Form.useForm(); // 为快速配置添加独立的表单
   const [serverType, setServerType] = useState<'stdio' | 'sse'>('stdio');
@@ -318,18 +319,22 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
   };
 
   const handleSave = async () => {
+    console.log('🔧 [配置组件Debug] 开始保存配置');
     try {
       const values = await form.validateFields();
+      console.log('🔧 [配置组件Debug] 表单验证通过:', values);
 
       let config;
       if (editingServer) {
         // 编辑模式：使用配置构建器重建配置
+        console.log('🔧 [配置组件Debug] 编辑模式，重建配置');
         config = {
           ...editingServer,
           ...buildServerConfig(values, editingServer)
         };
       } else {
         // 新建模式：创建新配置
+        console.log('🔧 [配置组件Debug] 新建模式，创建配置');
         config = {
           ...values,
           args: values.args ? values.args.split(' ').filter((arg: string) => arg.trim()) : [],
@@ -344,16 +349,28 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
         };
       }
 
-      onSave(config);
-      message.success(editingServer ? '服务器配置更新成功' : '服务器配置保存成功');
+      console.log('🔧 [配置组件Debug] 最终配置:', config);
+      console.log('🔧 [配置组件Debug] 调用onSave回调');
+      
+      await onSave(config);
+      
+      console.log('✅ [配置组件Debug] onSave回调完成');
+      // 注意：success消息已经在父组件中处理，这里不重复显示
     } catch (error) {
-      message.error('请检查表单输入');
+      console.error('❌ [配置组件Debug] 保存失败:', error);
+      if (error && typeof error === 'object' && 'errorFields' in error) {
+        message.error('请检查表单输入');
+      } else {
+        message.error(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
     }
   };
 
-  const handleJsonSave = () => {
+  const handleJsonSave = async () => {
+    console.log('🔧 [JSON配置Debug] 开始保存JSON配置');
     try {
       const config = JSON.parse(jsonConfig);
+      console.log('🔧 [JSON配置Debug] JSON解析成功:', config);
 
       // 检查是否是mcpServers格式
       if (config.mcpServers) {
@@ -381,15 +398,18 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
           retryCount: 3
         };
 
-        onSave(processedConfig);
+        console.log('🔧 [JSON配置Debug] 处理后的配置:', processedConfig);
+        await onSave(processedConfig);
       } else {
         // 直接的服务器配置
-        onSave(config);
+        console.log('🔧 [JSON配置Debug] 直接保存配置:', config);
+        await onSave(config);
       }
 
-      message.success(editingServer ? '服务器配置更新成功' : '服务器配置保存成功');
+      console.log('✅ [JSON配置Debug] 保存完成');
+      // 注意：success消息已经在父组件中处理
     } catch (error) {
-      console.error('JSON配置解析错误:', error);
+      console.error('❌ [JSON配置Debug] 保存失败:', error);
       if (error instanceof SyntaxError) {
         message.error(`JSON格式错误: ${error.message}`);
       } else {
@@ -417,7 +437,8 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
     }
   };
 
-  const handleQuickSave = (values: any) => {
+  const handleQuickSave = async (values: any) => {
+    console.log('🔧 [快速配置Debug] 开始保存快速配置:', values);
     try {
       // 解析命令行为command和args
       const commandParts = values.command.trim().split(/\s+/);
@@ -437,10 +458,13 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
         retryCount: 3
       };
 
-      onSave(config);
-      message.success(editingServer ? '服务器配置更新成功' : '服务器配置保存成功');
+      console.log('🔧 [快速配置Debug] 生成的配置:', config);
+      await onSave(config);
+      console.log('✅ [快速配置Debug] 保存完成');
+      // 注意：success消息已经在父组件中处理
     } catch (error) {
-      message.error('配置保存失败，请检查输入');
+      console.error('❌ [快速配置Debug] 保存失败:', error);
+      message.error(`配置保存失败: ${error instanceof Error ? error.message : '请检查输入'}`);
     }
   };
 
@@ -519,7 +543,7 @@ const MCPServerConfig: React.FC<MCPServerConfigProps> = ({
         <Button key="save" type="primary" onClick={
           editingServer ? handleSave :
           activeTab === 'json' ? handleJsonSave :
-          handleQuickSave
+          () => quickForm.submit()
         }>
           {editingServer ? '更新' : '保存'}
         </Button>

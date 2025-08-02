@@ -61,9 +61,12 @@
     "@langchain/openai": "^0.5.18",
     "@modelcontextprotocol/sdk": "^1.17.0",
     "@reduxjs/toolkit": "^2.0.1",
+    "@types/eventsource": "^1.1.15",
+    "@types/ws": "^8.18.1",
     "antd": "^5.12.8",
     "crypto-js": "^4.2.0",
     "electron-log": "^5.4.1",
+    "eventsource": "^4.0.0",
     "https-proxy-agent": "^7.0.6",
     "langchain": "^0.3.29",
     "openai": "^4.20.1",
@@ -71,6 +74,7 @@
     "react-dom": "^18.2.0",
     "react-redux": "^9.0.4",
     "tar": "^7.4.3",
+    "ws": "^8.18.3",
     "zod": "^3.25.76"
   },
   "build": {

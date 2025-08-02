@@ -75,9 +75,9 @@ async function downloadPromptX() {
     
     console.log('🔧 [构建] 开始npm安装...');
     
-    // 执行npm install
+    // 执行npm install，只安装生产依赖
     execSync(
-      `cd "${tempDir}" && npm install --registry https://registry.npmmirror.com --no-fund --no-audit`, 
+      `cd "${tempDir}" && npm install --production --registry https://registry.npmmirror.com --no-fund --no-audit --no-optional`, 
       { 
         stdio: 'inherit',
         timeout: 120000
@@ -95,10 +95,27 @@ async function downloadPromptX() {
     // 复制包文件
     copyDirectory(sourceDir, targetDir);
     
-    // 复制node_modules依赖
+    // 🔥 优化：只复制必需的运行时依赖，排除重型依赖
+    console.log('🔧 [构建] 开始优化依赖复制...');
     const nodeModulesSource = path.join(tempDir, 'node_modules');
     const nodeModulesTarget = path.join(targetDir, 'node_modules');
-    copyDirectory(nodeModulesSource, nodeModulesTarget);
+    
+    // 排除列表：去掉巨大的依赖包
+    const excludePackages = [
+      'node',           // 459MB - 最大的包，使用Electron自带Node.js
+      'pnpm',           // 22MB - 包管理器，运行时不需要
+      '@types',         // TypeScript类型定义，运行时不需要
+      'typescript',     // TypeScript编译器，运行时不需要
+      'eslint',         // 代码检查工具，运行时不需要
+      'jest',           // 测试框架，运行时不需要
+      '@jest',          // Jest相关包
+      'webpack',        // 构建工具，运行时不需要
+      'rollup',         // 构建工具，运行时不需要
+      'vite',           // 构建工具，运行时不需要
+      'esbuild',        // 构建工具，运行时不需要
+    ];
+    
+    copyNodeModulesSelectively(nodeModulesSource, nodeModulesTarget, excludePackages);
     
     // 清理临时目录
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -130,6 +147,98 @@ function copyDirectory(src, dest) {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+/**
+ * 选择性复制node_modules，排除重型依赖
+ */
+function copyNodeModulesSelectively(src, dest, excludePackages = []) {
+  if (!fs.existsSync(src)) {
+    console.warn(`⚠️ [构建] node_modules源目录不存在: ${src}`);
+    return;
+  }
+  
+  fs.mkdirSync(dest, { recursive: true });
+  
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  let excludedCount = 0;
+  let includedCount = 0;
+  let totalSizeExcluded = 0;
+  
+  for (const entry of entries) {
+    const packageName = entry.name;
+    const srcPath = path.join(src, packageName);
+    const destPath = path.join(dest, packageName);
+    
+    // 检查是否在排除列表中
+    const shouldExclude = excludePackages.some(excludePattern => {
+      return packageName === excludePattern || 
+             packageName.startsWith(excludePattern + '/') ||
+             packageName.startsWith(excludePattern);
+    });
+    
+    if (shouldExclude) {
+      // 计算被排除包的大小
+      try {
+        const stats = getDirectorySize(srcPath);
+        totalSizeExcluded += stats;
+        console.log(`❌ [构建] 排除依赖: ${packageName} (${formatBytes(stats)})`);
+        excludedCount++;
+      } catch (e) {
+        console.log(`❌ [构建] 排除依赖: ${packageName}`);
+        excludedCount++;
+      }
+      continue;
+    }
+    
+    if (entry.isDirectory()) {
+      copyDirectory(srcPath, destPath);
+      console.log(`✅ [构建] 包含依赖: ${packageName}`);
+      includedCount++;
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+  
+  console.log(`📊 [构建] 依赖统计: 包含 ${includedCount} 个，排除 ${excludedCount} 个`);
+  console.log(`💾 [构建] 节省空间: ${formatBytes(totalSizeExcluded)}`);
+}
+
+/**
+ * 计算目录大小
+ */
+function getDirectorySize(dirPath) {
+  let totalSize = 0;
+  
+  function calculateSize(currentPath) {
+    try {
+      const stats = fs.statSync(currentPath);
+      if (stats.isDirectory()) {
+        const files = fs.readdirSync(currentPath);
+        for (const file of files) {
+          calculateSize(path.join(currentPath, file));
+        }
+      } else {
+        totalSize += stats.size;
+      }
+    } catch (e) {
+      // 忽略无法访问的文件
+    }
+  }
+  
+  calculateSize(dirPath);
+  return totalSize;
+}
+
+/**
+ * 格式化字节数
+ */
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 async function validateDownload() {

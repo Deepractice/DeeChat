@@ -11,7 +11,7 @@ import {
   Space,
   Tag,
   Popconfirm,
-  message,
+  App,
   Tabs,
   Badge,
   Tooltip,
@@ -81,6 +81,7 @@ interface MCPTool {
 }
 
 const MCPManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [loading, setLoading] = useState(false);
@@ -196,39 +197,37 @@ const MCPManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteServer = async (serverId: string) => {
-    try {
-      const response = await window.electronAPI.mcp.removeServer(serverId);
-      if (response.success) {
-        message.success('服务器删除成功');
-        loadServers();
-        loadTools(); // 重新加载工具列表
-      } else {
-        message.error(`删除服务器失败: ${response.error}`);
-      }
-    } catch (error) {
-      message.error('删除服务器失败');
-    }
-  };
 
   const handleSaveServer = async (config: any) => {
+    console.log('🔧 [前端Debug] 开始保存服务器配置:', config);
+    console.log('🔧 [前端Debug] 编辑模式:', !!editingServer);
+    
     try {
       let response;
       if (editingServer) {
+        console.log('🔧 [前端Debug] 更新现有服务器:', editingServer.id);
         response = await window.electronAPI.mcp.updateServerConfig(editingServer.id, config);
       } else {
+        console.log('🔧 [前端Debug] 添加新服务器');
         response = await window.electronAPI.mcp.addServer(config);
       }
 
-      if (response.success) {
+      console.log('🔧 [前端Debug] 服务器响应:', response);
+
+      if (response && response.success) {
+        console.log('✅ [前端Debug] 保存成功，关闭模态框');
+        message.success(editingServer ? '服务器配置更新成功' : '服务器配置保存成功');
         setConfigModalVisible(false);
+        console.log('🔄 [前端Debug] 重新加载服务器列表');
         loadServers();
         loadTools(); // 重新加载工具列表
       } else {
-        message.error(`保存服务器失败: ${response.error}`);
+        console.error('❌ [前端Debug] 保存失败:', response?.error);
+        message.error(`保存服务器失败: ${response?.error || '未知错误'}`);
       }
     } catch (error) {
-      message.error('保存服务器失败');
+      console.error('❌ [前端Debug] 保存异常:', error);
+      message.error(`保存服务器失败: ${error instanceof Error ? error.message : '未知异常'}`);
     }
   };
 
@@ -408,7 +407,7 @@ const MCPManagement: React.FC = () => {
           </Tooltip>
           <Popconfirm
             title="确定要删除这个服务器吗？"
-            onConfirm={() => handleDeleteServer(record.id)}
+            onConfirm={() => handleRemoveServer(record.id)}
             okText="确定"
             cancelText="取消"
           >

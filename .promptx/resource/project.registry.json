@@ -4,9 +4,9 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-07-31T10:03:58.772Z",
-    "updatedAt": "2025-07-31T10:03:58.781Z",
-    "resourceCount": 4
+    "createdAt": "2025-08-02T05:34:09.030Z",
+    "updatedAt": "2025-08-02T05:34:09.038Z",
+    "resourceCount": 7
   },
   "resources": [
     {
@@ -17,9 +17,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/promptx-client-dev/execution/desktop-app-development.execution.md",
       "metadata": {
-        "createdAt": "2025-07-31T10:03:58.776Z",
-        "updatedAt": "2025-07-31T10:03:58.776Z",
-        "scannedAt": "2025-07-31T10:03:58.776Z",
+        "createdAt": "2025-08-02T05:34:09.033Z",
+        "updatedAt": "2025-08-02T05:34:09.033Z",
+        "scannedAt": "2025-08-02T05:34:09.033Z",
         "path": "role/promptx-client-dev/execution/desktop-app-development.execution.md"
       }
     },
@@ -31,10 +31,24 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/promptx-client-dev/promptx-client-dev.role.md",
       "metadata": {
-        "createdAt": "2025-07-31T10:03:58.777Z",
-        "updatedAt": "2025-07-31T10:03:58.777Z",
-        "scannedAt": "2025-07-31T10:03:58.777Z",
+        "createdAt": "2025-08-02T05:34:09.034Z",
+        "updatedAt": "2025-08-02T05:34:09.034Z",
+        "scannedAt": "2025-08-02T05:34:09.034Z",
         "path": "role/promptx-client-dev/promptx-client-dev.role.md"
+      }
+    },
+    {
+      "id": "debt-management",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Debt Management 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/debt-management.thought.md",
+      "metadata": {
+        "createdAt": "2025-08-02T05:34:09.035Z",
+        "updatedAt": "2025-08-02T05:34:09.035Z",
+        "scannedAt": "2025-08-02T05:34:09.035Z",
+        "path": "role/promptx-client-dev/thought/debt-management.thought.md"
       }
     },
     {
@@ -45,10 +59,38 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/layered-architecture.thought.md",
       "metadata": {
-        "createdAt": "2025-07-31T10:03:58.778Z",
-        "updatedAt": "2025-07-31T10:03:58.778Z",
-        "scannedAt": "2025-07-31T10:03:58.778Z",
+        "createdAt": "2025-08-02T05:34:09.036Z",
+        "updatedAt": "2025-08-02T05:34:09.036Z",
+        "scannedAt": "2025-08-02T05:34:09.036Z",
         "path": "role/promptx-client-dev/thought/layered-architecture.thought.md"
+      }
+    },
+    {
+      "id": "mvp-first",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Mvp First 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/mvp-first.thought.md",
+      "metadata": {
+        "createdAt": "2025-08-02T05:34:09.036Z",
+        "updatedAt": "2025-08-02T05:34:09.036Z",
+        "scannedAt": "2025-08-02T05:34:09.036Z",
+        "path": "role/promptx-client-dev/thought/mvp-first.thought.md"
+      }
+    },
+    {
+      "id": "ux-focused",
+      "source": "project",
+      "protocol": "thought",
+      "name": "Ux Focused 思维模式",
+      "description": "思维模式，指导AI的思考方式",
+      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/ux-focused.thought.md",
+      "metadata": {
+        "createdAt": "2025-08-02T05:34:09.037Z",
+        "updatedAt": "2025-08-02T05:34:09.037Z",
+        "scannedAt": "2025-08-02T05:34:09.037Z",
+        "path": "role/promptx-client-dev/thought/ux-focused.thought.md"
       }
     },
     {
@@ -59,22 +101,22 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/resource-gateway/resource-gateway.role.md",
       "metadata": {
-        "createdAt": "2025-07-31T10:03:58.780Z",
-        "updatedAt": "2025-07-31T10:03:58.780Z",
-        "scannedAt": "2025-07-31T10:03:58.780Z",
+        "createdAt": "2025-08-02T05:34:09.038Z",
+        "updatedAt": "2025-08-02T05:34:09.038Z",
+        "scannedAt": "2025-08-02T05:34:09.038Z",
         "path": "role/resource-gateway/resource-gateway.role.md"
       }
     }
   ],
   "stats": {
-    "totalResources": 4,
+    "totalResources": 7,
     "byProtocol": {
       "execution": 1,
       "role": 2,
-      "thought": 1
+      "thought": 4
     },
     "bySource": {
-      "project": 4
+      "project": 7
     }
   }
 }
