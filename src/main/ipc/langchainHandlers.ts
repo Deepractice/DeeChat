@@ -34,6 +34,7 @@ export function registerLangChainHandlers() {
     }
   });
 
+
   // 保存配置
   ipcMain.handle('langchain:saveConfig', async (_, configData) => {
     try {
@@ -350,6 +351,7 @@ export function unregisterLangChainHandlers() {
   
   const handlers = [
     'langchain:getAllConfigs',
+    'langchain:getOrCreateDefaultConfig',
     'langchain:saveConfig',
     'langchain:deleteConfig',
     'langchain:testConfig',

@@ -15,13 +15,14 @@ interface ChatMessage {
 export interface ChatSessionData {
   id: string
   title: string
-  selectedModelId?: string
+  selectedModelId?: string      // 废弃，保留用于向后兼容
   messages: ChatMessage[]
   createdAt: string
   updatedAt: string
 
   // 增强字段
-  modelConfigId?: string        // 关联的模型配置ID
+  modelConfigId?: string        // 模型配置ID
+  modelName?: string            // 具体的模型名称（如 gpt-4, claude-3.5-sonnet）
   metadata?: {
     tags?: string[]            // 会话标签
     category?: string          // 会话分类

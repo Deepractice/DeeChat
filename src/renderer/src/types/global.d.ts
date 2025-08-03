@@ -1,4 +1,6 @@
 // 直接定义ElectronAPI类型，确保与preload实现一致
+export {}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -77,6 +79,20 @@ declare global {
         // 配置管理
         exportConfigs: () => Promise<any>
         importConfigs: (configData: string) => Promise<any>
+      }
+
+      // PromptX本地调用API
+      promptx: {
+        execute: (command: string, args?: any[]) => Promise<any>
+        isCommandAvailable: (command: string) => Promise<boolean>
+        getAvailableCommands: () => Promise<string[]>
+        getAvailableRoles: () => Promise<any>
+        activateRole: (roleId: string) => Promise<any>
+        learn: (resourceUrl: string) => Promise<any>
+        initWorkspace: (workspacePath?: string, ideType?: string) => Promise<any>
+        remember: (role: string, content: string) => Promise<any>
+        recall: (role: string, query?: string) => Promise<any>
+        think: (role: string, thought: any) => Promise<any>
       }
     }
   }

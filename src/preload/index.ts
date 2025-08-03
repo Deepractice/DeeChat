@@ -103,6 +103,21 @@ const electronAPI = {
     importConfigs: (configData: string) => ipcRenderer.invoke('mcp:importConfigs', configData)
   },
 
+  // PromptX本地调用API
+  promptx: {
+    execute: (command: string, args?: any[]) => ipcRenderer.invoke('promptx:execute', command, args),
+    isCommandAvailable: (command: string) => ipcRenderer.invoke('promptx:isCommandAvailable', command),
+    getAvailableCommands: () => ipcRenderer.invoke('promptx:getAvailableCommands'),
+    getAvailableRoles: () => ipcRenderer.invoke('promptx:getAvailableRoles'),
+    activateRole: (roleId: string) => ipcRenderer.invoke('promptx:activateRole', roleId),
+    learn: (resourceUrl: string) => ipcRenderer.invoke('promptx:learn', resourceUrl),
+    initWorkspace: (workspacePath?: string, ideType?: string) => 
+      ipcRenderer.invoke('promptx:initWorkspace', workspacePath, ideType),
+    remember: (role: string, content: string) => ipcRenderer.invoke('promptx:remember', role, content),
+    recall: (role: string, query?: string) => ipcRenderer.invoke('promptx:recall', role, query),
+    think: (role: string, thought: any) => ipcRenderer.invoke('promptx:think', role, thought)
+  },
+
   // 🤖 调试API（仅开发环境）
   debug: {
     getSystemRoleStatus: () => ipcRenderer.invoke('debug:getSystemRoleStatus'),

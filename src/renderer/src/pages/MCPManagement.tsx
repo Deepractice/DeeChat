@@ -90,6 +90,7 @@ const MCPManagement: React.FC = () => {
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [editingServer, setEditingServer] = useState<MCPServer | undefined>();
   const [activeTab, setActiveTab] = useState('servers');
+  const [removingServers, setRemovingServers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadServers();
@@ -277,9 +278,21 @@ const MCPManagement: React.FC = () => {
   };
 
   const handleRemoveServer = async (serverId: string) => {
+    console.log('🗑️ [MCPManagement] handleRemoveServer 被调用:', serverId);
+    
+    // 防止重复调用
+    if (removingServers.has(serverId)) {
+      console.log('⚠️ [MCPManagement] 服务器正在删除中，忽略重复调用');
+      return;
+    }
+    
     try {
+      // 添加到删除中状态
+      setRemovingServers(prev => new Set(prev).add(serverId));
+      
       const response = await window.electronAPI.mcp.removeServer(serverId);
       if (response.success) {
+        console.log('✅ [MCPManagement] 删除成功，显示成功消息');
         message.success('插件删除成功');
         loadServers();
         loadTools();
@@ -288,6 +301,13 @@ const MCPManagement: React.FC = () => {
       }
     } catch (error) {
       throw error;
+    } finally {
+      // 移除删除中状态
+      setRemovingServers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(serverId);
+        return newSet;
+      });
     }
   };
 

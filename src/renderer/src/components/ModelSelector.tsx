@@ -56,20 +56,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
       return
     }
 
-    // 🔥 解析完整的modelId，提取模型名称
-    const parseModelId = (modelId: string) => {
-      const parts = modelId.split('-')
-      if (parts.length >= 6) {
-        // 前5段是UUID配置ID，后面的部分是模型名称
-        const configId = parts.slice(0, 5).join('-')
-        const modelName = parts.slice(5).join('-')
-        return { configId, modelName }
-      }
-      return { configId: modelId, modelName: '' }
-    }
-
-    const { configId, modelName } = parseModelId(value)
-    setCurrentModelName(modelName)
+    // 新方案：value 直接就是模型ID
+    setCurrentModelName(value)
 
     // 🔥 优先使用传入的完整配置
     if (selectedConfig && value) {
@@ -90,14 +78,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
       const configs = await window.electronAPI.langchain.getAllConfigs()
 //       console.log('🔍 [ModelSelector] 获取到配置列表:', configs.length, '个')
 
-      // 从完整的 modelId 中提取配置ID
-      const uuidRegex = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/
-      const match = value.match(uuidRegex)
-      const configId = match ? match[1] : value.split('-').slice(0, 5).join('-')
-
-//       console.log('🔍 [ModelSelector] 解析配置ID:', configId)
-
-      const configData = configs.find((c: any) => c.id === configId)
+      // 新方案：直接使用默认配置，不需要查找
+      // 因为 value 现在就是纯模型ID，比如 "gpt-4o-mini"
+      const configData = null
 //       console.log('🔍 [ModelSelector] 查找配置结果:', configData ? '找到' : '未找到', configId)
 
       if (configData) {
@@ -316,8 +299,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
 
 
 
-  // 渲染已选中的配置
-  if (!currentConfig) {
+  // 简化渲染逻辑：如果没有选中模型，显示选择按钮
+  if (!value || !currentModelName) {
     return (
       <>
         <Button
@@ -352,8 +335,18 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     )
   }
 
-  const providerInfo = getProviderInfo(currentConfig.provider)
-  const statusInfo = getStatusInfo(currentConfig.status)
+  // 根据模型名称推断提供商
+  const getProviderFromModelName = (modelName: string) => {
+    const name = modelName.toLowerCase()
+    if (name.includes('gpt') || name.includes('o1') || name.includes('o3')) return 'openai'
+    if (name.includes('claude')) return 'claude'
+    if (name.includes('gemini')) return 'gemini'
+    if (name.includes('grok')) return 'grok'
+    return 'custom'
+  }
+  
+  const provider = getProviderFromModelName(currentModelName)
+  const providerInfo = getProviderInfo(provider)
 
   return (
     <>
@@ -363,7 +356,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         loading={loading}
         size="small"
         style={{
-          minWidth: 160,
+          minWidth: 180,
+          maxWidth: 220,
           height: 32,
           padding: '6px 12px',
           display: 'flex',
@@ -383,12 +377,23 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
             }}
             icon={providerInfo.icon}
           />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1.2 }}>
-              {currentConfig.name}
+          <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+            <div 
+              style={{ 
+                fontSize: '12px', 
+                fontWeight: 500, 
+                lineHeight: 1.2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '140px'
+              }}
+              title={currentModelName}
+            >
+              {currentModelName}
             </div>
             <div style={{ fontSize: '10px', color: '#999', lineHeight: 1.2 }}>
-              {providerInfo.name} · {currentModelName || currentConfig.model}
+              {providerInfo.name} · ChatAnywhere
             </div>
           </div>
         </Space>

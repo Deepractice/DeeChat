@@ -10,6 +10,7 @@ import { ServiceManager } from './core/ServiceManager'
 // 导入旧的IPC处理器
 import { registerLangChainHandlers, unregisterLangChainHandlers } from './ipc/langchainHandlers'
 import { unregisterMCPHandlers } from './ipc/mcpHandlers'
+import { registerPromptXHandlers } from './ipc/promptxHandlers'
 
 // 导入核心服务
 import { ConfigService } from './services/core/ConfigService'
@@ -17,6 +18,9 @@ import { ChatService } from './services/core/ChatService'
 import { LLMService } from './services/llm/LLMService'
 import { ModelService } from './services/model/ModelService'
 import { silentSystemRoleManager } from './services/core/SilentSystemRoleManager'
+import { LocalStorageService } from './services/core/LocalStorageService'
+import { FrontendUserPreferenceRepository } from './repositories/FrontendUserPreferenceRepository'
+import { UserPreferenceEntity } from '../shared/entities/UserPreferenceEntity'
 
 // 开发环境检测
 const isDev = process.env.NODE_ENV === 'development'
@@ -63,6 +67,7 @@ if (!gotTheLock) {
   let serviceManager: ServiceManager | null = null
 
   // 延迟初始化核心服务实例（避免在app.whenReady之前调用app.getPath）
+  let localStorageService: LocalStorageService
   let configService: ConfigService
   let chatService: ChatService  
   let langChainService: LLMService
@@ -723,22 +728,22 @@ function registerIPCHandlers(): void {
   })
 
   // 用户偏好管理API
+  const userPreferenceRepository = new FrontendUserPreferenceRepository(localStorageService)
+  
   ipcMain.handle('preference:get', async () => {
     try {
-      const preferences = {
-        theme: 'light',
-        language: 'zh-CN',
-        autoSave: true
-      }
-      return { success: true, data: preferences }
+      const preferences = await userPreferenceRepository.get()
+      return { success: true, data: preferences.toData() }
     } catch (error) {
       console.error('获取用户偏好失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
 
-  ipcMain.handle('preference:save', async (_, _preferences: any) => {
+  ipcMain.handle('preference:save', async (_, preferencesData: any) => {
     try {
+      const preferences = new UserPreferenceEntity(preferencesData)
+      await userPreferenceRepository.save(preferences)
       return { success: true }
     } catch (error) {
       console.error('保存用户偏好失败:', error)
@@ -818,6 +823,7 @@ app.whenReady().then(async () => {
 
   // 0. 初始化核心服务实例（现在app已准备就绪）
   console.log('🔧 [主进程] 初始化核心服务实例...')
+  localStorageService = new LocalStorageService()
   configService = new ConfigService()
   chatService = new ChatService()
   langChainService = new LLMService()
@@ -829,6 +835,9 @@ app.whenReady().then(async () => {
   
   // 2. 注册旧的IPC处理器（兼容现有前端）
   registerLangChainHandlers()
+  
+  // 3. 注册PromptX本地调用处理器
+  registerPromptXHandlers()
   
   // 注意：MCP IPC处理器已通过新架构在registerIPCHandlers()中注册
 

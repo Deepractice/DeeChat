@@ -1,5 +1,6 @@
 import { EnhancedChatSession, ChatSession } from '../../../shared/types'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
+import { parseModelId } from '../../../shared/utils/modelIdHelper'
 import { store } from '../store'
 
 /**
@@ -46,10 +47,8 @@ export class SessionService {
       if (session.selectedModelId) {
         console.log('🔍 [SessionService] 开始加载模型配置:', session.selectedModelId)
         
-        // 从 selectedModelId 中提取配置ID
-        const uuidRegex = /^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/
-        const match = session.selectedModelId.match(uuidRegex)
-        const configId = match ? match[1] : session.selectedModelId.split('-').slice(0, 5).join('-')
+        // 使用parseModelId解析selectedModelId
+        const { configId } = parseModelId(session.selectedModelId)
         
         console.log('🔍 [SessionService] 解析配置ID:', {
           原始modelId: session.selectedModelId,

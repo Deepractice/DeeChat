@@ -211,7 +211,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
             })
             
             modelOptions.push({
-              id: `${DEFAULT_CONFIG.id}-${modelName}`,
+              id: modelName,  // 直接使用模型ID
               configId: DEFAULT_CONFIG.id,
               configName: DEFAULT_CONFIG.name,
               provider: actualProvider,
@@ -234,7 +234,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
           })
           
           modelOptions.push({
-            id: `${DEFAULT_CONFIG.id}-${modelName}`,
+            id: modelName,  // 直接使用模型ID
             configId: DEFAULT_CONFIG.id,
             configName: DEFAULT_CONFIG.name,
             provider: actualProvider,
@@ -261,7 +261,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
         })
         
         fallbackOptions.push({
-          id: `${DEFAULT_CONFIG.id}-${modelName}`,
+          id: modelName,  // 直接使用模型ID
           configId: DEFAULT_CONFIG.id,
           configName: DEFAULT_CONFIG.name,
           provider: actualProvider,

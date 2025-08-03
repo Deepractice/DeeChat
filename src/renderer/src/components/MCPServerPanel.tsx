@@ -100,6 +100,7 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
   const { modal, message: messageApi } = App.useApp();
 
   const handleRemoveServer = async (serverId: string) => {
+    console.log('🗑️ [MCPServerPanel] handleRemoveServer 被调用:', serverId);
     modal.confirm({
       title: '确认删除',
       content: '确定要删除这个插件吗？此操作不可撤销。',
@@ -107,6 +108,7 @@ const MCPServerPanel: React.FC<MCPServerPanelProps> = ({
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
+        console.log('✅ [MCPServerPanel] 用户确认删除，调用 onRemoveServer');
         try {
           setRemoving(serverId);
           await onRemoveServer(serverId);

@@ -5,9 +5,11 @@ import { RootState, AppDispatch } from '../store'
 import { createNewSession, saveCurrentSession, updateSessionModel } from '../store/slices/chatSlice'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
-import ModelSelector from './ModelSelector'
 import ModelManagement from '../pages/ModelManagement'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
+import { parseModelId } from '../../../shared/utils/modelIdHelper'
+import { ApiResponse } from '../../../shared/types'
+import { UserPreferenceEntity } from '../../../shared/entities/UserPreferenceEntity'
 
 // 内置默认配置
 const DEFAULT_CONFIG = {
@@ -19,7 +21,10 @@ const DEFAULT_CONFIG = {
   baseURL: 'https://api.chatanywhere.tech/v1/',
   isEnabled: true,
   priority: 10,
-  enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+  enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+  status: 'untested' as const,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
 }
 
 const { Content } = Layout
@@ -78,6 +83,27 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
 //       console.log('🔄 [ChatArea] 开始保存会话...')
       await dispatch(saveCurrentSession()).unwrap()
 //       console.log('✅ [ChatArea] 模型选择已保存:', modelId, '配置ID:', modelConfig.id)
+      
+      // 更新用户偏好设置 - 记住最后选择的模型
+      if (window.electronAPI?.preference?.get && window.electronAPI?.preference?.save) {
+        try {
+          console.log('🔄 [ChatArea] 开始保存用户模型偏好:', modelId)
+          const prefResponse: ApiResponse<UserPreferenceEntity> = await window.electronAPI.preference.get()
+          if (prefResponse?.success && prefResponse.data) {
+            // 更新最后选择的模型ID
+            const updatedPreferences = new UserPreferenceEntity(prefResponse.data)
+            updatedPreferences.updateLastSelected(modelId)
+            const saveResult = await window.electronAPI.preference.save(updatedPreferences.toData())
+            console.log('✅ [ChatArea] 用户模型偏好已更新:', modelId, saveResult)
+          } else {
+            console.warn('⚠️ [ChatArea] 获取用户偏好失败:', prefResponse)
+          }
+        } catch (prefError) {
+          console.error('❌ [ChatArea] 更新用户偏好失败:', prefError)
+        }
+      } else {
+        console.warn('⚠️ [ChatArea] preference API 不可用')
+      }
     } catch (error) {
       console.error('❌ [ChatArea] 保存模型选择失败:', error)
     }
@@ -88,8 +114,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
   // 简化模型配置加载 - 直接使用默认配置
   const loadModelConfig = async (configId: string, modelName: string) => {
     try {
-      // 如果是默认配置的模型，直接使用默认配置
-      if (configId === DEFAULT_CONFIG.id) {
+      // 如果是默认配置的模型，或者配置ID以 'default-config' 开头，都使用默认配置
+      if (configId === DEFAULT_CONFIG.id || configId.startsWith('default-config')) {
         const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
         setSelectedModel({
           id: modelName,
@@ -99,7 +125,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
       }
       
       // 兼容其他可能的配置ID，也使用默认配置
-      console.warn('⚠️ [ChatArea] 使用默认配置替代未知配置:', configId)
+      // 只在开发模式下输出警告，避免生产环境噪音
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ [ChatArea] 使用默认配置替代未知配置:', configId)
+      }
       const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
       setSelectedModel({
         id: modelName,
@@ -132,71 +161,74 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
       if (currentSession.selectedModelId) {
 //         console.log('🔍 [ChatArea] 开始从持久化数据恢复模型选择:', currentSession.selectedModelId)
 
-        // 解析 selectedModelId 格式：configId-modelName
-        // UUID格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (5段，用4个-连接)
-        const parts = currentSession.selectedModelId.split('-')
-
-        // 检查是否是正确的格式（至少6段：5段UUID + 1段模型名）
-        if (parts.length >= 6) {
-          // 前5段是UUID配置ID，后面的部分是模型名称
-          const configId = parts.slice(0, 5).join('-')
-          const pureModelName = parts.slice(5).join('-')
-
-          // console.log('🔍 [ChatArea] 解析模型ID:', { 原始ID: currentSession.selectedModelId, 配置ID: configId, 模型名称: pureModelName })
-
-          // 异步加载模型配置
-          loadModelConfig(configId, pureModelName)
-        } else {
-          // 🔧 兼容旧格式：如果只是模型名称，尝试查找默认配置
-          console.warn('⚠️ [ChatArea] selectedModelId 格式不正确，尝试兼容处理:', currentSession.selectedModelId)
-
-          // 异步处理兼容逻辑
-          const handleLegacyModelId = async () => {
-            try {
-              const configsResponse = await window.electronAPI?.langchain?.getAllConfigs()
-              let configs: any[] = []
-              if (Array.isArray(configsResponse)) {
-                configs = configsResponse
-              } else if (configsResponse?.success && configsResponse.data) {
-                configs = configsResponse.data
-              } else if (configsResponse?.data) {
-                configs = configsResponse.data
+        // 新方案：直接使用模型ID，不需要解析
+        const modelId = currentSession.selectedModelId
+        
+        // 使用默认配置（ChatAnywhere）
+        const defaultConfig = new ModelConfigEntity({
+          ...DEFAULT_CONFIG,
+          model: modelId  // 使用实际的模型ID
+        })
+        
+        setSelectedModel({
+          id: modelId,
+          config: defaultConfig
+        })
+      } else {
+        // 新会话或未设置模型的会话 - 加载用户的默认模型配置
+//         console.log('🆕 [ChatArea] 会话无模型选择，尝试加载用户默认模型')
+        
+        // 异步加载用户默认模型配置
+        const loadDefaultModel = async () => {
+          try {
+            console.log('🔍 [ChatArea] 开始加载用户默认模型配置...')
+            // 获取用户偏好设置
+            if (window.electronAPI?.preference?.get) {
+              const prefResponse: ApiResponse<UserPreferenceEntity> = await window.electronAPI.preference.get()
+              console.log('🔍 [ChatArea] 用户偏好响应:', prefResponse)
+              if (prefResponse?.success && prefResponse.data) {
+                const preferences = new UserPreferenceEntity(prefResponse.data)
+                const defaultModelId = preferences.getDefaultModelId()
+                console.log('🔍 [ChatArea] 用户默认模型ID:', defaultModelId)
+                
+                if (defaultModelId) {
+                  // 新方案：直接使用模型ID
+                  const defaultConfig = new ModelConfigEntity({
+                    ...DEFAULT_CONFIG,
+                    model: defaultModelId
+                  })
+                  
+                  setSelectedModel({
+                    id: defaultModelId,
+                    config: defaultConfig
+                  })
+                  return
+                }
               }
-
-              // 查找包含该模型的配置
-              const matchingConfig = configs.find((config: any) =>
-                config.isEnabled && (
-                  config.model === currentSession.selectedModelId ||
-                  config.enabledModels?.includes(currentSession.selectedModelId)
-                )
-              )
-
-              if (matchingConfig) {
-                console.log('✅ [ChatArea] 找到匹配的配置，自动修复模型ID')
-                const correctModelId = `${matchingConfig.id}-${currentSession.selectedModelId}`
-
-                // 更新会话的模型ID为正确格式
-                dispatch(updateSessionModel(correctModelId))
-
-                // 加载配置
-                loadModelConfig(matchingConfig.id, currentSession.selectedModelId)
-              } else {
-                console.warn('❌ [ChatArea] 未找到匹配的配置，清空模型选择')
-                setSelectedModel(null)
-              }
-            } catch (error) {
-              console.error('❌ [ChatArea] 兼容处理失败:', error)
+            }
+            
+            // 如果没有用户偏好，使用内置默认配置的第一个模型
+            const defaultModelName = DEFAULT_CONFIG.enabledModels?.[0] || DEFAULT_CONFIG.model
+            if (defaultModelName) {
+              const defaultConfig = new ModelConfigEntity({
+                ...DEFAULT_CONFIG,
+                model: defaultModelName
+              })
+              
+              setSelectedModel({
+                id: defaultModelName,
+                config: defaultConfig
+              })
+            } else {
               setSelectedModel(null)
             }
+          } catch (error) {
+            console.error('❌ [ChatArea] 加载默认模型失败:', error)
+            setSelectedModel(null)
           }
-
-          // 执行异步处理
-          handleLegacyModelId()
         }
-      } else {
-        // 新会话或未设置模型的会话
-//         console.log('🆕 [ChatArea] 会话无模型选择，等待用户设置')
-        setSelectedModel(null)
+        
+        loadDefaultModel()
       }
     }
   }, [currentSession]) // 🔥 关键修复：只监听 currentSession，移除 selectedModel 依赖

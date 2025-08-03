@@ -228,12 +228,24 @@ const chatSlice = createSlice({
       }
     },
 
-    // 更新当前会话的模型选择
+    // 更新当前会话的模型选择（废弃，保留用于向后兼容）
     updateSessionModel: (state, action: PayloadAction<string>) => {
       if (state.currentSession) {
         state.currentSession.selectedModelId = action.payload
         state.currentSession.updatedAt = Date.now()
         // console.log('🔄 更新会话模型选择:', action.payload)
+      }
+    },
+
+    // 新方法：更新模型配置（分开存储配置ID和模型名称）
+    updateSessionModelConfig: (state, action: PayloadAction<{ configId: string; modelName: string }>) => {
+      if (state.currentSession) {
+        const { configId, modelName } = action.payload
+        state.currentSession.modelConfigId = configId
+        state.currentSession.modelName = modelName
+        // 为了向后兼容，同时更新 selectedModelId
+        state.currentSession.selectedModelId = `${configId}-${modelName}`
+        state.currentSession.updatedAt = Date.now()
       }
     },
 
@@ -364,6 +376,7 @@ export const {
   removeSession,
   updateSessionTitle,
   updateSessionModel,
+  updateSessionModelConfig,
   clearError,
   setLoading
 } = chatSlice.actions

@@ -29,7 +29,10 @@ export class FrontendUserPreferenceRepository implements IUserPreferenceReposito
   }
 
   async get(): Promise<UserPreferenceEntity> {
-    this.ensureInitialized()
+    // 如果未初始化，先自动初始化
+    if (!this.initialized) {
+      await this.initialize()
+    }
     
     if (!this.preferences) {
       this.preferences = UserPreferenceEntity.createDefault()
@@ -40,7 +43,10 @@ export class FrontendUserPreferenceRepository implements IUserPreferenceReposito
   }
 
   async save(preferences: UserPreferenceEntity): Promise<void> {
-    this.ensureInitialized()
+    // 如果未初始化，先自动初始化
+    if (!this.initialized) {
+      await this.initialize()
+    }
     
     this.preferences = preferences
     await this.storageService.saveUserPreferences(preferences)

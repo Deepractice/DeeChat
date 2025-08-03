@@ -59,27 +59,7 @@ interface ProviderConfigWithStatus {
   enabledModels?: string[];   // 启用的模型列表
 }
 
-// IPC通信接口
-declare global {
-  interface Window {
-    electronAPI: {
-      // LangChain集成服务调用
-      langchain: {
-        getAllConfigs: () => Promise<ModelConfigEntity[]>;
-        saveConfig: (config: ModelConfigEntity) => Promise<void>;
-        deleteConfig: (id: string) => Promise<void>;
-        testConfig: (config: ModelConfigEntity) => Promise<{
-          success: boolean;
-          responseTime?: number;
-          response?: string;
-          error?: string;
-        }>;
-        getAvailableModels: (config: ModelConfigEntity) => Promise<string[]>;
-        sendMessageWithConfig: (request: LLMRequest, config: ModelConfigEntity) => Promise<any>;
-      };
-    };
-  }
-}
+// IPC通信接口已在 global.d.ts 中定义，无需重复声明
 
 // 提供商配置模板
 const PROVIDERS = [
