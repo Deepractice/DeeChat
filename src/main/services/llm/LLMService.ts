@@ -25,6 +25,13 @@ export class LLMService {
   }
 
   /**
+   * 获取LangChain服务的系统提示词提供器
+   */
+  getSystemPromptProvider() {
+    return this.langChainService.getSystemPromptProvider()
+  }
+
+  /**
    * 使用临时配置发送消息（支持模型配置和提供商配置）
    * @param request LLM请求对象
    * @param config 配置实体
@@ -84,70 +91,45 @@ export class LLMService {
   /**
    * 发送消息到AI模型（使用LangChain）
    * @param request LLM请求对象
-   * @param modelId 模型ID（可以是纯配置ID或组合ID：configId-modelName）
+   * @param modelId 模型ID（新方案：直接就是模型名称，如 gpt-4o-mini）
    */
   async sendMessage(request: LLMRequest, modelId: string): Promise<LLMResponse> {
     // 🤖 静默确保系统角色激活
     await this.ensureSystemRoleActive()
 
-    // 解析模型ID，支持组合ID格式：configId-modelName
-    let configId: string
-    let specificModel: string | undefined
-
-    // 🔥 新的解析逻辑：支持多种格式
-    // 1. UUID格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-modelName
-    // 2. 固定ID格式：default-config-modelName
-    // 3. 纯ID格式：configId
-    
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-    const uuidMatch = modelId.match(uuidPattern)
-
-    if (uuidMatch) {
-      // UUID格式配置ID
-      const uuid = uuidMatch[0]
-      const remaining = modelId.substring(uuid.length)
-
-      if (remaining.startsWith('-')) {
-        configId = uuid
-        specificModel = remaining.substring(1)
-      } else {
-        configId = uuid
-      }
-    } else if (modelId.includes('-')) {
-      // 非UUID但包含连字符，可能是固定ID格式
-      const parts = modelId.split('-')
-      
-      // 检查是否是 default-config-modelName 格式
-      if (parts.length >= 3 && parts[0] === 'default' && parts[1] === 'config') {
-        configId = 'default-config'
-        specificModel = parts.slice(2).join('-') // 重新组合模型名（可能包含连字符）
-      } else {
-        // 其他格式，假设第一个部分是配置ID
-        configId = parts[0]
-        specificModel = parts.slice(1).join('-')
-      }
-    } else {
-      // 纯ID格式
-      configId = modelId
-    }
-
     console.log(`🔍 [模型解析] 输入模型ID: ${modelId}`)
-    console.log(`🔍 [模型解析] 解析结果 -> 配置ID: ${configId}, 指定模型: ${specificModel}`)
+    
+    // 新方案：modelId 直接就是模型名称
+    let config: ModelConfigEntity | null = null
 
     try {
-      // 获取模型配置
-      let config = await this.modelManagementService.getConfigById(configId)
+      // 新方案：先尝试查找用户配置的模型
+      const allConfigs = await this.modelManagementService.getAllConfigs()
+      const enabledConfigs = allConfigs.filter(c => c.isEnabled)
       
-      // 🔥 处理内置默认配置
-      if (!config && configId === 'default-config') {
-        console.log(`🔧 [内置配置] 使用默认配置: ${configId}`)
+      // 查找支持该模型的配置
+      const foundConfig = enabledConfigs.find(c => {
+        // 检查配置的默认模型
+        if (c.model === modelId) return true
+        // 检查配置的启用模型列表
+        if (c.enabledModels && c.enabledModels.includes(modelId)) return true
+        return false
+      })
+      
+      if (foundConfig) {
+        config = foundConfig
+      }
+      
+      // 如果没有找到用户配置，使用内置的 ChatAnywhere 配置
+      if (!config) {
+        console.log(`🔧 [内置配置] 使用ChatAnywhere默认配置服务模型: ${modelId}`)
         
         // 创建内置默认配置
         const DEFAULT_CONFIG = {
-          id: 'default-config',
+          id: 'chatanywhere-default',
           name: 'ChatAnywhere (内置)',
           provider: 'openai',
-          model: specificModel || 'gpt-4o-mini', // 使用指定模型或默认模型
+          model: modelId, // 使用请求的模型
           apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
           baseURL: 'https://api.chatanywhere.tech/v1/',
           isEnabled: true,
@@ -161,100 +143,21 @@ export class LLMService {
         config = new ModelConfigEntity(DEFAULT_CONFIG)
       }
       
-      // 🔥 兜底策略1：处理无效的模型ID格式，如 "20250514-thinking"
-      if (!config && modelId.includes('-')) {
-        console.log(`🔍 [兜底] 无效格式 "${modelId}"，尝试重构模型名称...`)
-        
-        // 检查是否是类似 "20250514-thinking" 这样的格式
-        const parts = modelId.split('-')
-        if (parts.length === 2) {
-          const [datePart, suffix] = parts
-          
-          // 尝试重构为完整的模型名称
-          let reconstructedModelName = ''
-          if (datePart === '20250514' && suffix === 'thinking') {
-            reconstructedModelName = 'claude-sonnet-4-20250514-thinking'
-          } else if (datePart === '20250514') {
-            reconstructedModelName = 'claude-sonnet-4-20250514'
-          }
-          
-          if (reconstructedModelName) {
-            console.log(`🔧 [兜底] 重构模型名称: ${modelId} -> ${reconstructedModelName}`)
-            
-            // 查找支持该模型的配置
-            const allConfigs = await this.modelManagementService.getAllConfigs()
-            const enabledConfigs = allConfigs.filter(c => c.isEnabled)
-            
-            const foundConfig = enabledConfigs.find(c => {
-              return c.enabledModels && c.enabledModels.includes(reconstructedModelName)
-            })
-            
-            if (foundConfig) {
-              config = foundConfig
-              specificModel = reconstructedModelName
-              console.log(`✅ [兜底] 找到支持重构模型 "${reconstructedModelName}" 的配置: ${config.name} (${config.id})`)
-            }
-          }
-        }
-      }
-      
-      // 🔥 兜底策略2：如果配置ID不存在，可能是旧版本保存的模型名称，尝试查找支持该模型的配置
-      if (!config && !uuidMatch) {
-        console.log(`🔍 [兜底] configId "${configId}" 不是UUID格式，尝试查找支持模型的配置...`)
-        
-        const allConfigs = await this.modelManagementService.getAllConfigs()
-        const enabledConfigs = allConfigs.filter(c => c.isEnabled)
-        
-        // 查找支持该模型的配置
-        const foundConfig = enabledConfigs.find(c => {
-          // 检查配置的默认模型
-          if (c.model === configId) return true
-          // 检查配置的启用模型列表
-          if (c.enabledModels && c.enabledModels.includes(configId)) return true
-          return false
-        })
-        
-        if (foundConfig) {
-          config = foundConfig
-          console.log(`✅ [兜底] 找到支持模型 "${configId}" 的配置: ${config.name} (${config.id})`)
-          // 使用原始的configId作为specificModel
-          specificModel = configId
-        }
-      }
-      
       if (!config) {
-        throw new Error(`模型配置不存在: ${configId}`)
+        throw new Error(`找不到支持模型 ${modelId} 的配置`)
       }
 
       if (!config.isEnabled) {
         throw new Error(`模型配置已禁用: ${config.name}`)
       }
 
-      // 如果指定了特定模型，使用sendMessageWithConfig方法
-      let content: string
-      if (specificModel) {
-        // 创建一个临时配置副本，使用指定的模型
-        const tempConfig = new ModelConfigEntity({
-          ...config.toData(),
-          model: specificModel
-        })
-        console.log(`使用指定模型: ${specificModel}`)
-
-        // 直接使用临时配置发送消息
-        content = await this.langChainService.sendMessageWithConfig(
-          request.message,
-          tempConfig,
-          request.systemPrompt
-        )
-      } else {
-        // 使用默认配置发送消息
-        this.langChainService.setConfig(configId, config)
-        content = await this.langChainService.sendMessage(
-          request.message,
-          configId,
-          request.systemPrompt
-        )
-      }
+      // 使用配置发送消息
+      console.log(`使用模型: ${config.model}`)
+      const content = await this.langChainService.sendMessageWithConfig(
+        request.message,
+        config,
+        request.systemPrompt
+      )
       
       // 构造响应对象
       const response: LLMResponse = {
@@ -275,14 +178,16 @@ export class LLMService {
       console.error('LangChain服务调用失败:', error)
       
       // 更新配置状态为错误
-      try {
-        const errorConfig = await this.modelManagementService.getConfigById(configId)
-        if (errorConfig) {
-          errorConfig.updateStatus('error', error instanceof Error ? error.message : '未知错误')
-          await this.modelManagementService.updateConfig(errorConfig)
+      if (config && config.id !== 'chatanywhere-default') {
+        try {
+          const errorConfig = await this.modelManagementService.getConfigById(config.id)
+          if (errorConfig) {
+            errorConfig.updateStatus('error', error instanceof Error ? error.message : '未知错误')
+            await this.modelManagementService.updateConfig(errorConfig)
+          }
+        } catch (updateError) {
+          console.error('更新配置状态失败:', updateError)
         }
-      } catch (updateError) {
-        console.error('更新配置状态失败:', updateError)
       }
       
       throw error
@@ -960,6 +865,7 @@ ${request.systemPrompt || ''}`
       console.error('清理MCP资源失败:', error)
     }
   }
+
 
   /**
    * 🤖 静默确保系统角色激活

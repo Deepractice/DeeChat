@@ -8,6 +8,8 @@ import {
 
 import { LangChainModelFactory } from './LangChainModelFactory';
 import { ModelConfigEntity } from '../entities/ModelConfigEntity';
+import { systemPromptProvider } from '../services/SystemPromptProvider';
+import { ISystemPromptProvider } from '../interfaces/ISystemPromptProvider';
 
 /**
  * LangChain LLM服务
@@ -16,6 +18,11 @@ import { ModelConfigEntity } from '../entities/ModelConfigEntity';
 export class LangChainLLMService {
   private modelCache: Map<string, BaseChatModel> = new Map();
   private configCache: Map<string, ModelConfigEntity> = new Map();
+  private promptProvider: ISystemPromptProvider;
+
+  constructor(promptProvider?: ISystemPromptProvider) {
+    this.promptProvider = promptProvider || systemPromptProvider;
+  }
 
   /**
    * 发送消息
@@ -31,8 +38,18 @@ export class LangChainLLMService {
   ): Promise<string> {
     const model = await this.getModel(configId);
 
+    // 构建系统提示词
+    let finalSystemPrompt = this.promptProvider.buildSystemPrompt();
+    
+    // 如果提供了额外的系统提示词，追加到最后
+    if (systemPrompt) {
+      finalSystemPrompt = finalSystemPrompt ? 
+        `${finalSystemPrompt}\n\n${systemPrompt}` : 
+        systemPrompt;
+    }
+
     const messages: BaseMessage[] = [
-      ...(systemPrompt ? [new SystemMessage(systemPrompt)] : []),
+      ...(finalSystemPrompt ? [new SystemMessage(finalSystemPrompt)] : []),
       new HumanMessage(message)
     ];
 
@@ -55,8 +72,18 @@ export class LangChainLLMService {
     // 直接创建模型，不使用缓存
     const model = LangChainModelFactory.createChatModel(config);
 
+    // 构建系统提示词
+    let finalSystemPrompt = this.promptProvider.buildSystemPrompt();
+    
+    // 如果提供了额外的系统提示词，追加到最后
+    if (systemPrompt) {
+      finalSystemPrompt = finalSystemPrompt ? 
+        `${finalSystemPrompt}\n\n${systemPrompt}` : 
+        systemPrompt;
+    }
+
     const messages: BaseMessage[] = [
-      ...(systemPrompt ? [new SystemMessage(systemPrompt)] : []),
+      ...(finalSystemPrompt ? [new SystemMessage(finalSystemPrompt)] : []),
       new HumanMessage(message)
     ];
 
@@ -584,5 +611,13 @@ export class LangChainLLMService {
       'mistral-7b-instruct',
       'custom-model'
     ];
+  }
+
+  /**
+   * 获取系统提示词提供器
+   * @returns 系统提示词提供器实例
+   */
+  getSystemPromptProvider(): ISystemPromptProvider {
+    return this.promptProvider;
   }
 }
