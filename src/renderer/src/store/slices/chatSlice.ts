@@ -226,8 +226,9 @@ const chatSlice = createSlice({
     addUserMessage: (state, action: PayloadAction<{
       message: string
       modelId?: string
+      attachmentIds?: string[]
     }>) => {
-      const { message, modelId } = action.payload
+      const { message, modelId, attachmentIds } = action.payload
 
       if (!state.currentSession) {
         // 如果没有当前会话，创建一个新的
@@ -253,6 +254,7 @@ const chatSlice = createSlice({
         role: 'user',
         content: message,
         timestamp: Date.now(),
+        attachments: attachmentIds, // 添加附件ID列表
       }
 
       state.currentSession.messages.push(userMessage)

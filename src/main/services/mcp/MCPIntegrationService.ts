@@ -57,47 +57,58 @@ export class MCPIntegrationService implements IMCPProvider {
    * 初始化服务
    */
   public async initialize(): Promise<void> {
+    const initId = Math.random().toString(36).substr(2, 6)
+    log.info(`[MCP-${initId}] initialize被调用`)
+    log.info(`[MCP-${initId}] 当前状态: isInitialized=${this.isInitialized}, _initializing=${MCPIntegrationService._initializing}`)
+    
     if (this.isInitialized) {
-      log.info('[MCP] 服务已初始化，跳过重复初始化')
+      log.info(`[MCP-${initId}] 服务已初始化，跳过重复初始化`)
       return
     }
 
     // 🔒 防止并发初始化
     if (MCPIntegrationService._initializing) {
-      log.info('[MCP] 正在初始化中，等待完成...')
+      log.info(`[MCP-${initId}] 正在初始化中，等待完成...`)
       return new Promise((resolve) => {
         const checkInterval = setInterval(() => {
+          log.info(`[MCP-${initId}] 等待初始化完成，当前_initializing=${MCPIntegrationService._initializing}`)
           if (!MCPIntegrationService._initializing) {
             clearInterval(checkInterval)
+            log.info(`[MCP-${initId}] 等待结束，初始化已完成`)
             resolve()
           }
         }, 100)
       })
     }
 
+    log.info(`[MCP-${initId}] 设置_initializing=true`)
     MCPIntegrationService._initializing = true
 
     try {
-      log.info('[MCP] 🚀 开始初始化服务...')
+      log.info(`[MCP-${initId}] 🚀 开始初始化服务...`)
 
       // 🔍 调试：检查配置服务状态
-      log.info('[MCP] 🔍 检查配置服务状态...')
+      log.info(`[MCP-${initId}] 🔍 检查配置服务状态...`)
       const allServers = await this.configService.getAllServerConfigs()
-      log.info(`[MCP] 📋 找到 ${allServers.length} 个服务器配置:`)
+      log.info(`[MCP-${initId}] 📋 找到 ${allServers.length} 个服务器配置:`)
       allServers.forEach((server, index) => {
-        log.info(`[MCP]   ${index + 1}. ${server.name} (${server.id}) - 启用: ${server.isEnabled}`)
+        log.info(`[MCP-${initId}]   ${index + 1}. ${server.name} (${server.id}) - 启用: ${server.isEnabled}`)
       })
 
       // 自动连接已启用的服务器
+      log.info(`[MCP-${initId}] 开始初始化已启用的服务器...`)
       await this.initializeEnabledServers()
+      log.info(`[MCP-${initId}] 已启用的服务器初始化完成`)
 
       this.isInitialized = true
+      log.info(`[MCP-${initId}] 设置isInitialized=true, _initializing=false`)
       MCPIntegrationService._initializing = false
       
-      log.info('[MCP] ✅ 服务初始化完成')
+      log.info(`[MCP-${initId}] ✅ 服务初始化完成`)
     } catch (error) {
+      log.info(`[MCP-${initId}] ❌ 异常发生，设置_initializing=false`)
       MCPIntegrationService._initializing = false
-      log.error('[MCP] ❌ 服务初始化失败:', error)
+      log.error(`[MCP-${initId}] ❌ 服务初始化失败:`, error)
       throw error
     }
   }

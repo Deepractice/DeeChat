@@ -6,6 +6,10 @@ import { ModelService } from '../model/ModelService'
 import { MCPIntegrationService } from '../mcp/index.js'
 // MCPToolService已删除，功能直接集成到MCPIntegrationService中
 import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
+import { FileService } from '../FileService.js'
+import { conversationManager } from '../../../shared/services/ConversationManager'
+import { ChatMessage } from '../../../shared/types'
+import log from 'electron-log'
 
 /**
  * LLM服务
@@ -30,6 +34,7 @@ export class LLMService {
   getSystemPromptProvider() {
     return this.langChainService.getSystemPromptProvider()
   }
+
 
   /**
    * 使用临时配置发送消息（支持模型配置和提供商配置）
@@ -89,15 +94,16 @@ export class LLMService {
   }
 
   /**
-   * 发送消息到AI模型（使用LangChain）
+   * 发送消息到AI模型（使用LangChain，支持消息历史）
    * @param request LLM请求对象
    * @param modelId 模型ID（新方案：直接就是模型名称，如 gpt-4o-mini）
+   * @param chatHistory 可选的聊天历史
    */
-  async sendMessage(request: LLMRequest, modelId: string): Promise<LLMResponse> {
+  async sendMessage(request: LLMRequest, modelId: string, chatHistory?: ChatMessage[]): Promise<LLMResponse> {
     // 🤖 静默确保系统角色激活
     await this.ensureSystemRoleActive()
 
-    console.log(`🔍 [模型解析] 输入模型ID: ${modelId}`)
+    log.info(`🔍 [模型解析] 输入模型ID: ${modelId}`)
     
     // 新方案：modelId 直接就是模型名称
     let config: ModelConfigEntity | null = null
@@ -122,13 +128,29 @@ export class LLMService {
       
       // 如果没有找到用户配置，使用内置的 ChatAnywhere 配置
       if (!config) {
-        console.log(`🔧 [内置配置] 使用ChatAnywhere默认配置服务模型: ${modelId}`)
+        log.info(`🔧 [内置配置] 使用ChatAnywhere默认配置服务模型: ${modelId}`)
+        
+        // 🎯 根据模型名称智能识别provider
+        const detectProviderByModel = (model: string): string => {
+          if (model.includes('claude') || model.includes('anthropic')) {
+            return 'claude'
+          } else if (model.includes('gpt') || model.includes('openai')) {
+            return 'openai'
+          } else if (model.includes('gemini') || model.includes('google')) {
+            return 'google'
+          }
+          // 默认使用openai（兼容大多数API）
+          return 'openai'
+        }
+        
+        const detectedProvider = detectProviderByModel(modelId)
+        log.info(`🔍 [模型识别] ${modelId} -> provider: ${detectedProvider}`)
         
         // 创建内置默认配置
         const DEFAULT_CONFIG = {
           id: 'chatanywhere-default',
           name: 'ChatAnywhere (内置)',
-          provider: 'openai',
+          provider: detectedProvider, // 🎯 使用智能识别的provider
           model: modelId, // 使用请求的模型
           apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
           baseURL: 'https://api.chatanywhere.tech/v1/',
@@ -151,20 +173,82 @@ export class LLMService {
         throw new Error(`模型配置已禁用: ${config.name}`)
       }
 
-      // 使用配置发送消息
-      console.log(`使用模型: ${config.model}`)
-      const content = await this.langChainService.sendMessageWithConfig(
-        request.message,
-        config,
-        request.systemPrompt
-      )
+      // 处理附件内容
+      let enhancedMessage = request.message
+      if (request.attachmentIds && request.attachmentIds.length > 0) {
+        console.log(`🔗 [附件处理] 处理 ${request.attachmentIds.length} 个附件`)
+        
+        // 创建FileService实例来处理附件
+        const fileService = new FileService()
+        await fileService.initialize()
+        if (fileService) {
+          const attachmentContents: string[] = []
+          
+          for (const attachmentId of request.attachmentIds) {
+            try {
+              const attachmentContent = await fileService.getAttachmentContent(attachmentId)
+              attachmentContents.push(attachmentContent)
+              console.log(`✅ [附件处理] 附件 ${attachmentId} 内容获取成功`)
+            } catch (error) {
+              console.error(`❌ [附件处理] 获取附件 ${attachmentId} 内容失败:`, error)
+              attachmentContents.push(`[附件读取失败: ${attachmentId}]`)
+            }
+          }
+          
+          // 将附件内容添加到消息中
+          if (attachmentContents.length > 0) {
+            enhancedMessage = `${request.message}\n\n附件内容:\n${attachmentContents.join('\n\n---\n\n')}`
+            console.log(`🔗 [附件处理] 消息已增强，包含 ${attachmentContents.length} 个附件`)
+          }
+        } else {
+          console.warn(`⚠️ [附件处理] FileService 未找到，跳过附件处理`)
+        }
+      }
+
+      // 🆕 使用ConversationManager准备上下文
+      let content: string
+      let contextInfo: any = undefined
+
+      if (chatHistory && chatHistory.length > 0) {
+        log.info(`📚 [消息历史] 包含 ${chatHistory.length} 条历史消息，使用上下文管理`)
+        
+        // 使用ConversationManager准备对话上下文
+        const contextResult = await conversationManager.prepareConversationContext(
+          chatHistory,
+          enhancedMessage,
+          config.model,
+          request.systemPrompt
+        )
+
+        // 使用LangChain的sendConversation方法处理多轮对话
+        content = await this.langChainService.sendConversation(
+          contextResult.messages,
+          config.id || 'temp-config'
+        )
+        
+        contextInfo = contextResult.contextInfo
+        log.info(`📊 [上下文管理] Token使用率: ${(contextInfo.tokenStats.utilizationRate * 100).toFixed(1)}%`)
+        
+      } else {
+        log.info(`💬 [单消息模式] 无历史消息，使用标准模式`)
+        
+        // 使用配置发送单条消息
+        content = await this.langChainService.sendMessageWithConfig(
+          enhancedMessage,
+          config,
+          request.systemPrompt
+        )
+      }
+
+      log.info(`🎯 [最终模型使用] Provider: ${config.provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
       
       // 构造响应对象
       const response: LLMResponse = {
         content,
         model: config.model,
         usage: undefined, // LangChain可能不提供详细的usage信息
-        finishReason: 'stop'
+        finishReason: 'stop',
+        ...(contextInfo && { contextInfo }) // 如果有上下文信息，包含在响应中
       }
 
       // 更新配置状态为可用
@@ -694,16 +778,18 @@ export class LLMService {
    * @param request LLM请求对象
    * @param configId 模型配置ID
    * @param enableMCPTools 是否启用MCP工具
+   * @param chatHistory 可选的聊天历史
    */
   async sendMessageWithMCPTools(
     request: LLMRequest,
     configId: string,
-    enableMCPTools: boolean = false
+    enableMCPTools: boolean = false,
+    chatHistory?: ChatMessage[]
   ): Promise<LLMResponse> {
     try {
       if (!enableMCPTools) {
         // 不使用MCP工具，直接调用原有方法
-        return await this.sendMessage(request, configId)
+        return await this.sendMessage(request, configId, chatHistory)
       }
 
       // 获取可用的MCP工具
@@ -712,7 +798,7 @@ export class LLMService {
 
       if (mcpTools.length === 0) {
         // 没有可用工具，使用普通模式
-        return await this.sendMessage(request, configId)
+        return await this.sendMessage(request, configId, chatHistory)
       }
 
       // 构建工具描述的系统提示词
@@ -742,7 +828,7 @@ ${request.systemPrompt || ''}`
         systemPrompt
       }
 
-      const response = await this.sendMessage(enhancedRequest, configId)
+      const response = await this.sendMessage(enhancedRequest, configId, chatHistory)
 
       // 检查响应中是否包含工具调用
       const toolCallMatch = response.content.match(/\[TOOL_CALL\]([\s\S]*?)\[\/TOOL_CALL\]/g)
@@ -850,7 +936,7 @@ ${request.systemPrompt || ''}`
     } catch (error) {
       console.error('MCP工具增强消息发送失败:', error)
       // 降级到普通模式
-      return await this.sendMessage(request, configId)
+      return await this.sendMessage(request, configId, chatHistory)
     }
   }
 

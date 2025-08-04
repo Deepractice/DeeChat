@@ -20,6 +20,7 @@ export interface ChatMessage {
   timestamp: number  // 使用Unix时间戳保持一致性
   modelId?: string
   toolExecutions?: ToolExecution[]  // 新增：工具执行记录
+  attachments?: string[]  // 新增：附件ID列表
   metadata?: {
     tokens?: number
     responseTime?: number

@@ -173,7 +173,13 @@ export function registerLangChainHandlers() {
     try {
       console.log('IPC: AI发送消息:', request.llmRequest?.message?.substring(0, 50) + '...');
       console.log('IPC: 配置ID:', request.configId);
-      const response = await langChainService.sendMessage(request.llmRequest, request.configId);
+      console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
+      
+      const response = await langChainService.sendMessage(
+        request.llmRequest, 
+        request.configId, 
+        request.chatHistory
+      );
       console.log('IPC: AI消息发送成功');
       return { success: true, data: response };
     } catch (error) {
@@ -201,11 +207,13 @@ export function registerLangChainHandlers() {
       console.log('IPC: AI发送消息(启用MCP工具):', request.llmRequest?.message?.substring(0, 50) + '...');
       console.log('IPC: 配置ID:', request.configId);
       console.log('IPC: 启用MCP工具:', request.enableMCPTools);
+      console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
 
       const response = await langChainService.sendMessageWithMCPTools(
         request.llmRequest,
         request.configId,
-        request.enableMCPTools || false
+        request.enableMCPTools || false,
+        request.chatHistory
       );
 
       console.log('IPC: AI消息发送成功(MCP工具)');
@@ -215,6 +223,7 @@ export function registerLangChainHandlers() {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' };
     }
   });
+
 
   // 获取可用模型列表 (AI API)
   ipcMain.handle('ai:getAvailableModels', async (_, params: any) => {

@@ -4,93 +4,79 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-08-03T06:18:02.731Z",
-    "updatedAt": "2025-08-03T06:18:02.740Z",
-    "resourceCount": 7
+    "createdAt": "2025-08-04T09:09:24.635Z",
+    "updatedAt": "2025-08-04T09:09:24.644Z",
+    "resourceCount": 6
   },
   "resources": [
     {
-      "id": "desktop-app-development",
-      "source": "project",
-      "protocol": "execution",
-      "name": "Desktop App Development 执行模式",
-      "description": "执行模式，定义具体的行为模式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/execution/desktop-app-development.execution.md",
-      "metadata": {
-        "createdAt": "2025-08-03T06:18:02.734Z",
-        "updatedAt": "2025-08-03T06:18:02.734Z",
-        "scannedAt": "2025-08-03T06:18:02.734Z",
-        "path": "role/promptx-client-dev/execution/desktop-app-development.execution.md"
-      }
-    },
-    {
-      "id": "promptx-client-dev",
+      "id": "deechat-architect",
       "source": "project",
       "protocol": "role",
-      "name": "Promptx Client Dev 角色",
+      "name": "Deechat Architect 角色",
       "description": "专业角色，提供特定领域的专业能力",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/promptx-client-dev.role.md",
+      "reference": "@project://.promptx/resource/role/deechat-architect/deechat-architect.role.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.735Z",
-        "updatedAt": "2025-08-03T06:18:02.735Z",
-        "scannedAt": "2025-08-03T06:18:02.735Z",
-        "path": "role/promptx-client-dev/promptx-client-dev.role.md"
+        "createdAt": "2025-08-04T09:09:24.639Z",
+        "updatedAt": "2025-08-04T09:09:24.639Z",
+        "scannedAt": "2025-08-04T09:09:24.638Z",
+        "path": "role/deechat-architect/deechat-architect.role.md"
       }
     },
     {
-      "id": "debt-management",
+      "id": "code-development-protocol",
       "source": "project",
-      "protocol": "thought",
-      "name": "Debt Management 思维模式",
-      "description": "思维模式，指导AI的思考方式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/debt-management.thought.md",
+      "protocol": "execution",
+      "name": "Code Development Protocol 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/deechat-architect/execution/code-development-protocol.execution.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.736Z",
-        "updatedAt": "2025-08-03T06:18:02.736Z",
-        "scannedAt": "2025-08-03T06:18:02.736Z",
-        "path": "role/promptx-client-dev/thought/debt-management.thought.md"
+        "createdAt": "2025-08-04T09:09:24.641Z",
+        "updatedAt": "2025-08-04T09:09:24.641Z",
+        "scannedAt": "2025-08-04T09:09:24.641Z",
+        "path": "role/deechat-architect/execution/code-development-protocol.execution.md"
       }
     },
     {
-      "id": "layered-architecture",
+      "id": "deechat-development",
       "source": "project",
-      "protocol": "thought",
-      "name": "Layered Architecture 思维模式",
-      "description": "思维模式，指导AI的思考方式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/layered-architecture.thought.md",
+      "protocol": "execution",
+      "name": "Deechat Development 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/deechat-architect/execution/deechat-development.execution.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.737Z",
-        "updatedAt": "2025-08-03T06:18:02.737Z",
-        "scannedAt": "2025-08-03T06:18:02.737Z",
-        "path": "role/promptx-client-dev/thought/layered-architecture.thought.md"
+        "createdAt": "2025-08-04T09:09:24.641Z",
+        "updatedAt": "2025-08-04T09:09:24.641Z",
+        "scannedAt": "2025-08-04T09:09:24.641Z",
+        "path": "role/deechat-architect/execution/deechat-development.execution.md"
       }
     },
     {
-      "id": "mvp-first",
+      "id": "deechat-architecture",
       "source": "project",
       "protocol": "thought",
-      "name": "Mvp First 思维模式",
+      "name": "Deechat Architecture 思维模式",
       "description": "思维模式，指导AI的思考方式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/mvp-first.thought.md",
+      "reference": "@project://.promptx/resource/role/deechat-architect/thought/deechat-architecture.thought.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.737Z",
-        "updatedAt": "2025-08-03T06:18:02.737Z",
-        "scannedAt": "2025-08-03T06:18:02.737Z",
-        "path": "role/promptx-client-dev/thought/mvp-first.thought.md"
+        "createdAt": "2025-08-04T09:09:24.642Z",
+        "updatedAt": "2025-08-04T09:09:24.642Z",
+        "scannedAt": "2025-08-04T09:09:24.642Z",
+        "path": "role/deechat-architect/thought/deechat-architecture.thought.md"
       }
     },
     {
-      "id": "ux-focused",
+      "id": "occams-razor-thinking",
       "source": "project",
       "protocol": "thought",
-      "name": "Ux Focused 思维模式",
+      "name": "Occams Razor Thinking 思维模式",
       "description": "思维模式，指导AI的思考方式",
-      "reference": "@project://.promptx/resource/role/promptx-client-dev/thought/ux-focused.thought.md",
+      "reference": "@project://.promptx/resource/role/deechat-architect/thought/occams-razor-thinking.thought.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.738Z",
-        "updatedAt": "2025-08-03T06:18:02.738Z",
-        "scannedAt": "2025-08-03T06:18:02.738Z",
-        "path": "role/promptx-client-dev/thought/ux-focused.thought.md"
+        "createdAt": "2025-08-04T09:09:24.643Z",
+        "updatedAt": "2025-08-04T09:09:24.643Z",
+        "scannedAt": "2025-08-04T09:09:24.643Z",
+        "path": "role/deechat-architect/thought/occams-razor-thinking.thought.md"
       }
     },
     {
@@ -101,22 +87,22 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/resource-gateway/resource-gateway.role.md",
       "metadata": {
-        "createdAt": "2025-08-03T06:18:02.740Z",
-        "updatedAt": "2025-08-03T06:18:02.740Z",
-        "scannedAt": "2025-08-03T06:18:02.740Z",
+        "createdAt": "2025-08-04T09:09:24.644Z",
+        "updatedAt": "2025-08-04T09:09:24.644Z",
+        "scannedAt": "2025-08-04T09:09:24.644Z",
         "path": "role/resource-gateway/resource-gateway.role.md"
       }
     }
   ],
   "stats": {
-    "totalResources": 7,
+    "totalResources": 6,
     "byProtocol": {
-      "execution": 1,
       "role": 2,
-      "thought": 4
+      "execution": 2,
+      "thought": 2
     },
     "bySource": {
-      "project": 7
+      "project": 6
     }
   }
 }

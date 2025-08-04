@@ -4,6 +4,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 
 import { ModelConfigEntity } from '../entities/ModelConfigEntity';
+import log from 'electron-log';
 
 /**
  * LangChain模型工厂
@@ -17,9 +18,11 @@ export class LangChainModelFactory {
    */
   static createChatModel(config: ModelConfigEntity): BaseChatModel {
     const provider = config.provider.toLowerCase();
+    log.info(`🔧 [ModelFactory] 开始创建模型 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
     
     switch (provider) {
       case 'openai':
+        log.info(`🤖 [ModelFactory] 创建ChatOpenAI实例 - Model: ${config.model}`)
         return new ChatOpenAI({
           modelName: config.model,
           openAIApiKey: config.apiKey,
@@ -32,6 +35,7 @@ export class LangChainModelFactory {
       
       case 'claude':
       case 'anthropic':
+        log.info(`🧠 [ModelFactory] 创建ChatAnthropic实例 - Model: ${config.model}`)
         return new ChatAnthropic({
           modelName: config.model,
           anthropicApiKey: config.apiKey,
@@ -44,6 +48,7 @@ export class LangChainModelFactory {
       
       case 'gemini':
       case 'google':
+        log.info(`🌟 [ModelFactory] 创建ChatGoogleGenerativeAI实例 - Model: ${config.model}`)
         // 检查是否有代理设置
         const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
         const clientOptions: any = {}
@@ -69,6 +74,7 @@ export class LangChainModelFactory {
       // 对于自定义提供商，使用ChatOpenAI with 自定义baseURL
       // 大多数自定义API都是OpenAI兼容的
       default:
+        log.info(`🔧 [ModelFactory] 创建默认ChatOpenAI实例 - Provider: ${provider}, Model: ${config.model}`)
         return new ChatOpenAI({
           apiKey: config.apiKey,
           model: config.model,

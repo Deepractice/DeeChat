@@ -61,46 +61,67 @@ export class ServiceManager extends EventEmitter {
    * 🚀 启动所有服务（顺序初始化）
    */
   public async initialize(): Promise<void> {
+    const instanceId = Math.random().toString(36).substr(2, 6)
+    console.log(`🎯 [ServiceManager-${instanceId}] initialize被调用`)
+    console.log(`🎯 [ServiceManager-${instanceId}] 当前状态: isInitialized=${this.isInitialized}, isInitializing=${this.isInitializing}`)
+    
     if (this.isInitialized) {
-      console.log('✅ [ServiceManager] 服务已初始化')
+      console.log(`✅ [ServiceManager-${instanceId}] 服务已初始化，直接返回`)
       return
     }
 
     if (this.isInitializing) {
-      console.log('⏳ [ServiceManager] 正在初始化中，等待完成...')
+      console.log(`⏳ [ServiceManager-${instanceId}] 正在初始化中，等待完成...`)
       return new Promise((resolve) => {
-        this.once('initialized', resolve)
+        console.log(`⏳ [ServiceManager-${instanceId}] 注册initialized事件监听器`)
+        this.once('initialized', () => {
+          console.log(`✅ [ServiceManager-${instanceId}] initialized事件触发，等待结束`)
+          resolve()
+        })
       })
     }
 
-    console.log('🚀 [ServiceManager] 开始初始化核心服务...')
+    console.log(`🚀 [ServiceManager-${instanceId}] 开始初始化核心服务...`)
+    console.log(`🔒 [ServiceManager-${instanceId}] 设置isInitializing=true`)
     this.isInitializing = true
 
     try {
       // 🔥 Phase 1: 基础设施初始化
+      console.log(`📁 [ServiceManager-${instanceId}] Phase 1: 开始基础设施初始化`)
       await this.initializeInfrastructure()
+      console.log(`✅ [ServiceManager-${instanceId}] Phase 1: 基础设施初始化完成`)
 
       // 🔥 Phase 2: 进程池初始化
+      console.log(`⚙️ [ServiceManager-${instanceId}] Phase 2: 开始进程池初始化`)
       await this.initializeProcessPool()
+      console.log(`✅ [ServiceManager-${instanceId}] Phase 2: 进程池初始化完成`)
 
       // 🔥 Phase 3: MCP服务协调器初始化
+      console.log(`🔌 [ServiceManager-${instanceId}] Phase 3: 开始MCP服务初始化`)
       await this.initializeMCPServices()
+      console.log(`✅ [ServiceManager-${instanceId}] Phase 3: MCP服务初始化完成`)
 
       // 🔥 Phase 4: 系统角色管理器初始化
+      console.log(`👤 [ServiceManager-${instanceId}] Phase 4: 开始系统角色初始化`)
       await this.initializeSystemRoles()
+      console.log(`✅ [ServiceManager-${instanceId}] Phase 4: 系统角色初始化完成`)
 
+      console.log(`🔒 [ServiceManager-${instanceId}] 设置isInitialized=true, isInitializing=false`)
       this.isInitialized = true
       this.isInitializing = false
 
-      console.log('✅ [ServiceManager] 所有服务初始化完成')
+      console.log(`✅ [ServiceManager-${instanceId}] 所有服务初始化完成`)
+      console.log(`📡 [ServiceManager-${instanceId}] 发射initialized事件`)
       this.emit('initialized')
       this.emit('status-change', this.getAllServiceStatuses())
 
     } catch (error) {
+      console.error(`❌ [ServiceManager-${instanceId}] 服务初始化失败:`, error)
+      console.log(`🔓 [ServiceManager-${instanceId}] 异常设置isInitializing=false`)
       this.isInitializing = false
-      console.error('❌ [ServiceManager] 服务初始化失败:', error)
       
       // 尝试清理已初始化的服务
+      console.log(`🧹 [ServiceManager-${instanceId}] 开始清理已初始化的服务`)
       await this.cleanup()
       throw error
     }
@@ -197,6 +218,9 @@ export class ServiceManager extends EventEmitter {
           console.log(`📁 [ServiceManager] 创建目录: ${dir}`)
         }
       }
+
+      // 基础设施初始化完成（文件服务已在主进程中独立初始化）
+      console.log(`📁 [ServiceManager] 基础设施初始化完成`)
 
       this.updateServiceStatus('infrastructure', 'ready', '基础设施就绪')
     } catch (error) {

@@ -11,6 +11,18 @@ export interface LLMResponse {
     total_tokens: number
   }
   finishReason?: string
+  contextInfo?: {  // 新增：上下文管理信息
+    originalMessageCount: number
+    finalMessageCount: number
+    tokenStats: {
+      currentTokens: number
+      maxTokens: number
+      utilizationRate: number
+      status: 'optimal' | 'near_limit' | 'compressed'
+    }
+    compressionApplied: boolean
+    removedCount: number
+  }
 }
 
 export interface LLMRequest {
@@ -19,6 +31,7 @@ export interface LLMRequest {
   temperature?: number
   maxTokens?: number
   stream?: boolean
+  attachmentIds?: string[]  // 附件ID列表
 }
 
 // LLM提供商接口

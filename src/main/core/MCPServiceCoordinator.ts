@@ -42,20 +42,29 @@ export class MCPServiceCoordinator extends EventEmitter {
    * 初始化MCP服务协调器
    */
   public async initialize(): Promise<void> {
+    const coordId = Math.random().toString(36).substr(2, 6)
+    log.info(`🔌 [MCPCoordinator-${coordId}] initialize被调用`)
+    log.info(`🔌 [MCPCoordinator-${coordId}] 当前状态: isInitialized=${this.isInitialized}`)
+    
     if (this.isInitialized) {
+      log.info(`✅ [MCPCoordinator-${coordId}] 已初始化，直接返回`)
       return
     }
 
-    log.info('🔌 [MCPCoordinator] 初始化MCP服务协调器...')
+    log.info(`🔌 [MCPCoordinator-${coordId}] 开始初始化MCP服务协调器...`)
 
     // 初始化内置服务器
+    log.info(`🔧 [MCPCoordinator-${coordId}] 开始初始化内置服务器...`)
     await this.initializeBuiltinServers()
+    log.info(`✅ [MCPCoordinator-${coordId}] 内置服务器初始化完成`)
 
     // 启动所有启用的服务器
+    log.info(`🚀 [MCPCoordinator-${coordId}] 开始启动已启用的服务器...`)
     await this.startEnabledServers()
+    log.info(`✅ [MCPCoordinator-${coordId}] 已启用的服务器启动完成`)
 
     this.isInitialized = true
-    log.info('✅ [MCPCoordinator] MCP服务协调器初始化完成')
+    log.info(`✅ [MCPCoordinator-${coordId}] MCP服务协调器初始化完成`)
   }
 
   /**

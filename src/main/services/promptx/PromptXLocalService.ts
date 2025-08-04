@@ -9,41 +9,56 @@ export class PromptXLocalService implements IPromptXService {
   private promptxCLI: any;
   private initialized: boolean = false;
   private availableCommands: Set<string> = new Set();
+  private promptxPath: string;
 
   constructor() {
-    this.initialize();
+    // 确定PromptX模块路径
+    if (process.env.NODE_ENV === 'development') {
+      this.promptxPath = path.join(__dirname, '../../../../resources/promptx/package');
+    } else {
+      this.promptxPath = path.join(process.resourcesPath, 'promptx/package');
+    }
+    // 延迟初始化，等待首次使用时再初始化
   }
 
   /**
-   * 初始化PromptX CLI
+   * 初始化PromptX，按照正确的流程：ServerEnvironment -> CLI -> 工作区
    */
-  private initialize(): void {
+  private async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
     try {
-      // 确定PromptX模块路径
-      let promptxPath: string;
+      console.log(`[PromptXLocalService] 开始初始化PromptX: ${this.promptxPath}`);
+
+      // 1. 先初始化 ServerEnvironment（模拟 CLI 模式）
+      const { getGlobalServerEnvironment } = require(path.join(this.promptxPath, 'src/lib/utils/ServerEnvironment'));
+      const serverEnv = getGlobalServerEnvironment();
       
-      if (process.env.NODE_ENV === 'development') {
-        // 开发环境：直接使用resources目录
-        promptxPath = path.join(__dirname, '../../../../resources/promptx/package');
-      } else {
-        // 生产环境：使用打包后的resources路径
-        promptxPath = path.join(process.resourcesPath, 'promptx/package');
+      if (!serverEnv.isInitialized()) {
+        serverEnv.initialize({
+          transport: 'stdio',  // CLI 模式使用 stdio
+          host: null,
+          port: null
+        });
+        console.log('[PromptXLocalService] ServerEnvironment初始化成功');
       }
 
-      console.log(`[PromptXLocalService] 加载PromptX模块: ${promptxPath}`);
+      // 2. 加载并初始化 PromptX CLI
+      const { cli } = require(path.join(this.promptxPath, 'src/lib/core/pouch'));
+      await cli.initialize();
+      this.promptxCLI = cli;
+      console.log('[PromptXLocalService] PromptX CLI初始化成功');
 
-      // 加载PromptX CLI
-      const pouchModule = require(path.join(promptxPath, 'src/lib/core/pouch'));
-      this.promptxCLI = pouchModule.cli;
-
-      // 收集可用命令
+      // 3. 收集可用命令
       this.collectAvailableCommands();
       
       this.initialized = true;
-      console.log('[PromptXLocalService] PromptX模块加载成功');
+      console.log('[PromptXLocalService] PromptX模块初始化完成');
     } catch (error) {
       console.error('[PromptXLocalService] 初始化失败:', error);
-      throw new Error(`无法加载PromptX模块: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`无法初始化PromptX: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -71,8 +86,9 @@ export class PromptXLocalService implements IPromptXService {
    * 执行PromptX命令
    */
   async execute(command: string, args: any[] = []): Promise<any> {
+    // 延迟初始化：首次使用时才初始化
     if (!this.initialized) {
-      throw new Error('PromptXLocalService未初始化');
+      await this.initialize();
     }
 
     if (!this.isCommandAvailable(command)) {
@@ -86,6 +102,33 @@ export class PromptXLocalService implements IPromptXService {
       const result = await this.promptxCLI.execute(command, args);
       
       console.log(`[PromptXLocalService] 命令执行成功: ${command}`);
+      console.log(`[PromptXLocalService] 结果类型: ${typeof result}`, result ? Object.keys(result) : 'null');
+      
+      // 对于welcome命令，返回content字段（包含角色列表的纯文本）
+      if (command === 'welcome' && result) {
+        console.log(`[PromptXLocalService] welcome命令返回result类型:`, typeof result);
+        console.log(`[PromptXLocalService] welcome命令返回result keys:`, Object.keys(result));
+        
+        // 检查是否有content字段
+        if (result.content && typeof result.content === 'string') {
+          console.log(`[PromptXLocalService] welcome命令返回content长度: ${result.content.length}`);
+          console.log(`[PromptXLocalService] welcome命令返回content前500字符:`, result.content.substring(0, 500));
+          return result.content;
+        }
+        
+        // 如果没有content字段，检查是否有toString方法
+        if (result.toString && typeof result.toString === 'function') {
+          const stringResult = result.toString();
+          console.log(`[PromptXLocalService] welcome命令使用toString()转换，长度: ${stringResult.length}`);
+          console.log(`[PromptXLocalService] welcome命令toString前500字符:`, stringResult.substring(0, 500));
+          return stringResult;
+        }
+        
+        // 兜底：返回整个对象
+        console.warn(`[PromptXLocalService] welcome命令返回意外格式，返回原始结果`);
+        return result;
+      }
+      
       return result;
     } catch (error) {
       console.error(`[PromptXLocalService] 命令执行失败: ${command}`, error);

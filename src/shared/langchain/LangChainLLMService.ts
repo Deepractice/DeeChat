@@ -10,6 +10,7 @@ import { LangChainModelFactory } from './LangChainModelFactory';
 import { ModelConfigEntity } from '../entities/ModelConfigEntity';
 import { systemPromptProvider } from '../services/SystemPromptProvider';
 import { ISystemPromptProvider } from '../interfaces/ISystemPromptProvider';
+import log from 'electron-log';
 
 /**
  * LangChain LLM服务
@@ -57,6 +58,7 @@ export class LangChainLLMService {
     return response.content as string;
   }
 
+
   /**
    * 使用临时配置发送消息（不缓存模型）
    * @param message 用户消息
@@ -70,6 +72,7 @@ export class LangChainLLMService {
     systemPrompt?: string
   ): Promise<string> {
     // 直接创建模型，不使用缓存
+    log.info(`🏭 [LangChain工厂] 创建模型 - Provider: ${config.provider}, Model: ${config.model}`)
     const model = LangChainModelFactory.createChatModel(config);
 
     // 构建系统提示词
@@ -90,6 +93,7 @@ export class LangChainLLMService {
     const response = await model.invoke(messages);
     return response.content as string;
   }
+
 
   /**
    * 获取提供商的可用模型列表

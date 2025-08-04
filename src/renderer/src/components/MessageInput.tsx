@@ -5,9 +5,10 @@ import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { addUserMessage, addAIMessage, sendMessage, saveCurrentSession, setLoading } from '../store/slices/chatSlice'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
-import FileUpload, { FileUploadItem } from './FileUpload'
+import FileUploadWithProgress, { FileUploadItem, FileUploadWithProgressRef } from './FileUploadWithProgress'
 import DragDropOverlay from './DragDropOverlay'
 import ModelSelectionModal from './ModelSelectionModal'
+import RoleSelector from './RoleSelector'
 
 const { TextArea } = Input
 
@@ -22,9 +23,12 @@ interface MessageInputProps {
 const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedModel, onSendMessage, onModelSelect, onGoToModelManagement }) => {
   const dispatch = useDispatch<AppDispatch>()
   const { config } = useSelector((state: RootState) => state.config)
+  const { currentSession } = useSelector((state: RootState) => state.chat)
   const [inputValue, setInputValue] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<FileUploadItem[]>([])
+  const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([])
   const [showFileUpload, setShowFileUpload] = useState(false)
+  const fileUploadRef = useRef<FileUploadWithProgressRef>(null)
   const [showModelSelection, setShowModelSelection] = useState(false)
   const textAreaRef = useRef<any>(null)
 
@@ -52,9 +56,20 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       message.warning(`模型 ${selectedModel.config.name} 状态异常 (${selectedModel.config.status})，可能无法正常使用`)
     }
 
+    // 检查文件是否都已上传成功
+    const successfulFiles = attachedFiles.filter(f => f.uploadStatus === 'success' && f.uploadedId)
+    if (attachedFiles.length > 0 && successfulFiles.length !== attachedFiles.length) {
+      message.error('请等待所有文件上传完成后再发送')
+      return
+    }
+    
+    // 使用已上传的文件ID
+    const attachmentIds = uploadedFileIds
+
     // 清空输入框和文件
     setInputValue('')
     setAttachedFiles([])
+    setUploadedFileIds([])
     setShowFileUpload(false)
 
     // 如果有父组件回调，使用父组件处理
@@ -72,15 +87,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
         messageContent = trimmedValue ? `${trimmedValue}\n\n附件:\n${fileList}` : `附件:\n${fileList}`
       }
 
-      // 添加用户消息到状态（包含模型信息和文件）
+      // 添加用户消息到状态（包含模型信息和附件ID）
       dispatch(addUserMessage({
         message: messageContent,
         modelId: selectedModel.id,
-        files: attachedFiles.map(f => ({
-          name: f.name,
-          size: f.size,
-          type: f.type
-        }))
+        attachments: attachmentIds  // 传递附件ID列表
       }))
 
       // 保存用户消息后立即保存会话
@@ -88,6 +99,10 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
       // 🔥 设置加载状态为true
       dispatch(setLoading(true))
+
+      // 🆕 准备聊天历史数据
+      const chatHistory = currentSession?.messages || []
+      console.log(`📚 [前端] 当前会话包含 ${chatHistory.length} 条历史消息`)
 
       // 默认总是启用MCP工具，让AI自己决定是否使用
       // 使用新的AI服务API发送消息
@@ -101,10 +116,12 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
             llmRequest: {
               message: trimmedValue,
               temperature: 0.7,
-              maxTokens: 2000
+              maxTokens: 2000,
+              attachmentIds: attachmentIds
             },
             configId: selectedModel.id,
-            enableMCPTools: true
+            enableMCPTools: true,
+            chatHistory: chatHistory  // 🆕 传递聊天历史
           });
         } else {
           console.log('🔧 [前端] MCP增强模式不可用，使用普通模式');
@@ -112,13 +129,15 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
             llmRequest: {
               message: trimmedValue,
               temperature: 0.7,
-              maxTokens: 2000
+              maxTokens: 2000,
+              attachmentIds: attachmentIds
             },
-            configId: selectedModel.id
+            configId: selectedModel.id,
+            chatHistory: chatHistory  // 🆕 传递聊天历史
           });
         }
 
-        if (response.success) {
+        if (response && response.success) {
           // 🔥 解析实际使用的模型名称
           const parseModelName = (modelId: string) => {
             const parts = modelId.split('-')
@@ -131,34 +150,39 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
           const actualModelName = parseModelName(selectedModel.id)
 
-          // 添加AI响应到状态，包含工具执行记录
-          dispatch(addAIMessage({
-            content: response.data.content,
-            modelId: actualModelName || selectedModel.config.model,
-            toolExecutions: response.data.toolExecutions
-          }))
-
-          // 🔥 清除加载状态
-          dispatch(setLoading(false))
-
-          // 自动保存会话
-          dispatch(saveCurrentSession())
-        } else {
-          throw new Error(response.error || '发送消息失败')
-        }
-      } else {
-        // 降级到旧版API
-        await dispatch(sendMessage({
-          message: trimmedValue,
-          config: {
-            provider: selectedModel.config.provider,
-            model: selectedModel.config.model,
-            apiKey: selectedModel.config.apiKey,
-            baseURL: selectedModel.config.baseURL,
-            temperature: 0.7,
-            maxTokens: 2000
+        // 🆕 如果响应包含上下文信息，记录到日志
+        if (response.data.contextInfo) {
+          const contextInfo = response.data.contextInfo
+          console.log(`📊 [前端] 上下文管理信息:`)
+          console.log(`   - 原始消息数: ${contextInfo.originalMessageCount}`)
+          console.log(`   - 最终消息数: ${contextInfo.finalMessageCount}`)
+          console.log(`   - Token使用率: ${(contextInfo.tokenStats.utilizationRate * 100).toFixed(1)}%`)
+          console.log(`   - 当前Tokens: ${contextInfo.tokenStats.currentTokens}`)
+          console.log(`   - 最大Tokens: ${contextInfo.tokenStats.maxTokens}`)
+          console.log(`   - 状态: ${contextInfo.tokenStats.status}`)
+          
+          if (contextInfo.compressionApplied) {
+            console.warn(`⚠️ [前端] 上下文压缩已应用，移除了 ${contextInfo.removedCount} 条早期消息`)
           }
-        })).unwrap()
+        }
+
+        // 添加AI响应到状态，包含工具执行记录和上下文信息
+        const aiMessage = {
+          content: response.data.content,
+          modelId: actualModelName || selectedModel.config.model,
+          toolExecutions: response.data.toolExecutions
+        }
+
+        dispatch(addAIMessage(aiMessage))
+
+        // 🔥 清除加载状态
+        dispatch(setLoading(false))
+
+        // 自动保存会话
+        dispatch(saveCurrentSession())
+        } else {
+          throw new Error(response?.error || '发送消息失败')
+        }
       }
 
     } catch (error) {
@@ -194,52 +218,30 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
     }
   }
 
+  // 处理已上传文件ID变化
+  const handleUploadedIdsChange = (ids: string[]) => {
+    setUploadedFileIds(ids)
+  }
+
   // 处理拖拽文件
   const handleFileDrop = async (droppedFiles: File[]) => {
     if (disabled) return
-
-    // 检查文件数量限制
-    const maxFiles = 5
-    if (attachedFiles.length + droppedFiles.length > maxFiles) {
-      message.error(`最多只能上传 ${maxFiles} 个文件`)
-      return
-    }
-
-    const fileItems: FileUploadItem[] = []
-    const maxSize = 10 // MB
-
-    for (const file of droppedFiles) {
-      // 检查文件大小
-      if (file.size > maxSize * 1024 * 1024) {
-        message.error(`文件 "${file.name}" 超过大小限制 (${maxSize}MB)`)
-        continue
-      }
-
-      // 创建文件项
-      const fileItem: FileUploadItem = {
-        id: `${Date.now()}-${Math.random()}`,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        file: file
-      }
-
-      // 如果是图片，生成预览
-      if (file.type.startsWith('image/')) {
-        try {
-          fileItem.preview = URL.createObjectURL(file)
-        } catch (error) {
-          console.warn('Failed to create preview for:', file.name)
+    
+    // 确保文件上传区域可见
+    setShowFileUpload(true)
+    
+    // 现在组件始终渲染，ref应该立即可用
+    if (fileUploadRef.current) {
+      fileUploadRef.current.handleAddFiles(droppedFiles)
+    } else {
+      // 如果ref仍然不可用，使用setTimeout确保组件已渲染
+      setTimeout(() => {
+        if (fileUploadRef.current) {
+          fileUploadRef.current.handleAddFiles(droppedFiles)
+        } else {
+          console.error('FileUploadWithProgress ref 仍然不可用')
         }
-      }
-
-      fileItems.push(fileItem)
-    }
-
-    if (fileItems.length > 0) {
-      setAttachedFiles([...attachedFiles, ...fileItems])
-      setShowFileUpload(true) // 自动显示文件上传区域
-      message.success(`成功添加 ${fileItems.length} 个文件`)
+      }, 50)
     }
   }
 
@@ -249,24 +251,27 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       disabled={disabled}
     >
       <div style={{ width: '100%' }}>
-        {/* 文件上传区域 */}
-        {showFileUpload && (
-          <div style={{ 
-            marginBottom: 12, 
-            padding: 12, 
-            backgroundColor: '#fafafa', 
-            borderRadius: 6,
-            border: '1px solid #f0f0f0'
-          }}>
-            <FileUpload
-              files={attachedFiles}
-              onFilesChange={handleFilesChange}
-              maxFiles={5}
-              maxSize={10}
-              disabled={disabled}
-            />
-          </div>
-        )}
+        {/* 文件上传区域 - 始终渲染以确保ref可用 */}
+        <div style={{ 
+          marginBottom: showFileUpload ? 12 : 0, // 动态控制间距
+          padding: showFileUpload ? 12 : 0,     // 动态控制内边距
+          backgroundColor: showFileUpload ? '#fafafa' : 'transparent', 
+          borderRadius: showFileUpload ? 6 : 0,
+          border: showFileUpload ? '1px solid #f0f0f0' : 'none',
+          height: showFileUpload ? 'auto' : 0,  // 隐藏时高度为0
+          overflow: 'hidden',                   // 隐藏时不显示内容
+          transition: 'all 0.2s ease'          // 平滑过渡动画
+        }}>
+          <FileUploadWithProgress
+            ref={fileUploadRef}
+            files={attachedFiles}
+            onFilesChange={handleFilesChange}
+            onUploadedIdsChange={handleUploadedIdsChange}
+            maxFiles={5}
+            maxSize={10}
+            disabled={disabled}
+          />
+        </div>
 
         {/* 消息输入区域 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -318,6 +323,12 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
                 附件
               </Button>
               
+              {/* 角色选择器 */}
+              <RoleSelector
+                disabled={disabled}
+                size="small"
+              />
+              
               {/* 模型选择/显示 */}
               <Button
                 icon={<RobotOutlined />}
@@ -342,12 +353,13 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
               type="primary"
               icon={<SendOutlined />}
               onClick={handleSend}
-              disabled={disabled || (!inputValue.trim() && attachedFiles.length === 0)}
+              disabled={disabled || (!inputValue.trim() && attachedFiles.length === 0) || (attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus !== 'success'))}
               style={{
                 borderRadius: 6
               }}
             >
-              发送
+              {attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'uploading') ? '上传中...' : 
+               attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'error') ? '上传失败' : '发送'}
             </Button>
           </div>
         </div>

@@ -112,7 +112,10 @@
       "Bash(NODE_ENV=development npm run dev)",
       "Bash(npm test:*)",
       "Bash(NODE_ENV=development electron test-delete-server.js)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(NODE_ENV=development timeout 15s npm run dev)",
+      "Bash(NODE_ENV=development gtimeout 15s npm run dev)",
+      "Bash(tree:*)"
     ],
     "deny": []
   }
