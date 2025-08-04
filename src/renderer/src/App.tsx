@@ -8,12 +8,13 @@ import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
 import ChatSessionPanel from './components/ChatSessionPanel'
 import SettingsPage from './pages/SettingsPage'
+import ResourcesPage from './pages/ResourcesPage'
 
 import './App.css'
 
 const { Sider, Content } = Layout
 
-type AppView = 'chat' | 'settings'
+type AppView = 'chat' | 'resources' | 'settings'
 
 const AppContent: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -82,6 +83,12 @@ const AppContent: React.FC = () => {
                 <ChatArea onGoToSettings={() => setCurrentView('settings')} />
               </Content>
             </>
+          )}
+          
+          {currentView === 'resources' && (
+            <Content>
+              <ResourcesPage />
+            </Content>
           )}
           
           {currentView === 'settings' && (

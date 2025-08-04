@@ -94,6 +94,24 @@ declare global {
         recall: (role: string, query?: string) => Promise<any>
         think: (role: string, thought: any) => Promise<any>
       }
+
+      // 文件管理API
+      file: {
+        // 新的附件API
+        upload: (fileBuffer: ArrayBuffer, metadata: { name: string; mimeType: string }) => Promise<any>
+        get: (fileId: string) => Promise<any>
+        getContent: (fileId: string) => Promise<any>
+        delete: (fileId: string) => Promise<any>
+        
+        // 保留原有的资源管理API
+        list: (filters?: any) => Promise<any[]>
+        read: (fileId: string) => Promise<string>
+        stats: () => Promise<any>
+        save: (fileData: any) => Promise<any>
+        export: (fileId: string, targetPath: string) => Promise<void>
+        tree: (category?: string) => Promise<any>
+        updateContent: (fileId: string, content: string) => Promise<any>
+      }
     }
   }
 }

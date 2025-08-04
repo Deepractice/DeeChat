@@ -4,13 +4,16 @@
  */
 
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import * as path from 'path'
+const { join } = path
+import * as fs from 'fs'
 import { ServiceManager } from './core/ServiceManager'
 
 // 导入旧的IPC处理器
 import { registerLangChainHandlers, unregisterLangChainHandlers } from './ipc/langchainHandlers'
 import { unregisterMCPHandlers } from './ipc/mcpHandlers'
 import { registerPromptXHandlers } from './ipc/promptxHandlers'
+import { getPromptXLocalService } from './services/promptx/PromptXLocalService'
 
 // 导入核心服务
 import { ConfigService } from './services/core/ConfigService'
@@ -166,16 +169,23 @@ if (!gotTheLock) {
    * 懒加载MCP服务（支持智能预加载）
    */
   async function ensureMCPServices(): Promise<void> {
+    const callId = Math.random().toString(36).substr(2, 8)
+    console.log(`🔥 [TRACE-${callId}] ensureMCPServices被调用`)
+    console.log(`🔥 [TRACE-${callId}] 当前状态: _initializing=${ensureMCPServices._initializing}, serviceManager=${!!serviceManager}`)
+    
     // 🔒 防止并发初始化导致多进程
     if (ensureMCPServices._initializing) {
-      console.log('⏳ [主进程] MCP服务正在初始化中，等待完成...')
+      console.log(`⏳ [TRACE-${callId}] MCP服务正在初始化中，等待完成...`)
       return new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
+          console.log(`🔄 [TRACE-${callId}] 等待初始化完成，当前状态: _initializing=${ensureMCPServices._initializing}`)
           if (!ensureMCPServices._initializing) {
             clearInterval(checkInterval)
             if (serviceManager) {
+              console.log(`✅ [TRACE-${callId}] 等待成功，初始化已完成`)
               resolve()
             } else {
+              console.log(`❌ [TRACE-${callId}] 等待失败，serviceManager为空`)
               reject(new Error('MCP服务初始化失败'))
             }
           }
@@ -184,29 +194,36 @@ if (!gotTheLock) {
         // 30秒超时保护
         setTimeout(() => {
           clearInterval(checkInterval)
+          console.log(`⏰ [TRACE-${callId}] 等待超时`)
           reject(new Error('MCP服务初始化超时'))
         }, 30000)
       })
     }
 
     if (serviceManager) {
+      console.log(`🔍 [TRACE-${callId}] serviceManager已存在，检查MCP服务状态...`)
       // 检查服务管理器是否真正初始化完成
       const mcpStatus = serviceManager.getServiceStatus('mcp')
+      console.log(`🔍 [TRACE-${callId}] MCP状态检查结果:`, mcpStatus)
       if (mcpStatus && mcpStatus.status === 'ready') {
-        console.log('✅ [主进程] MCP服务已就绪，跳过重复加载')
+        console.log(`✅ [TRACE-${callId}] MCP服务已就绪，跳过重复加载`)
         return
       } else {
-        console.log('🔄 [主进程] MCP服务未完全就绪，继续初始化...')
+        console.log(`🔄 [TRACE-${callId}] MCP服务未完全就绪，继续初始化...`)
       }
+    } else {
+      console.log(`🆕 [TRACE-${callId}] serviceManager不存在，需要创建`)
     }
     
+    console.log(`🔒 [TRACE-${callId}] 设置初始化锁`)
     ensureMCPServices._initializing = true
 
-    console.log('🔧 [主进程] 开始懒加载MCP服务...')
+    console.log(`🔧 [TRACE-${callId}] 开始懒加载MCP服务...`)
 
     try {
       // 获取或创建服务管理器实例
       if (!serviceManager) {
+        console.log(`🏭 [TRACE-${callId}] 创建ServiceManager实例`)
         serviceManager = ServiceManager.getInstance()
         
         // 监听服务状态变化
@@ -238,20 +255,25 @@ if (!gotTheLock) {
             }
           }
         })
+      } else {
+        console.log(`♻️ [TRACE-${callId}] serviceManager已存在，跳过创建`)
       }
 
       // 🔥 关键：初始化MCP服务
-      console.log('🚀 [主进程] 开始初始化ServiceManager...')
+      console.log(`🚀 [TRACE-${callId}] 开始初始化ServiceManager...`)
       await serviceManager.initialize()
 
-      console.log('✅ [主进程] MCP服务懒加载完成')
+      console.log(`✅ [TRACE-${callId}] MCP服务懒加载完成`)
+      console.log(`🔓 [TRACE-${callId}] 释放初始化锁`)
       ensureMCPServices._initializing = false
 
     } catch (error) {
-      console.error('❌ [主进程] MCP服务初始化失败:', error)
+      console.error(`❌ [TRACE-${callId}] MCP服务初始化失败:`, error)
+      console.log(`🔓 [TRACE-${callId}] 异常释放初始化锁`)
       ensureMCPServices._initializing = false
       
       // 🔥 重置serviceManager状态，允许重试
+      console.log(`🔄 [TRACE-${callId}] 重置serviceManager为null`)
       serviceManager = null
       
       // 向渲染进程发送错误状态
@@ -270,6 +292,36 @@ if (!gotTheLock) {
   ensureMCPServices._initializing = false
 
 /**
+ * 初始化PromptX工作区
+ */
+async function initializePromptXWorkspace(): Promise<void> {
+  console.log('🎯 [主进程] 开始初始化PromptX工作区...')
+  
+  try {
+    const promptxService = getPromptXLocalService()
+    const workspacePath = path.join(app.getPath('userData'), 'promptx-workspace')
+    
+    // 确保工作区目录存在
+    if (!fs.existsSync(workspacePath)) {
+      fs.mkdirSync(workspacePath, { recursive: true })
+    }
+    
+    // 初始化PromptX工作区（PromptXLocalService 将在首次使用时自动初始化）
+    const result = await promptxService.initWorkspace(workspacePath, 'electron')
+    
+    if (result.success) {
+      console.log('✅ [主进程] PromptX工作区初始化成功:', workspacePath)
+    } else {
+      console.warn('⚠️ [主进程] PromptX工作区初始化失败:', result.error)
+      // 不抛出错误，允许应用继续运行
+    }
+  } catch (error) {
+    console.error('❌ [主进程] PromptX工作区初始化异常:', error)
+    // 不抛出错误，允许应用继续运行
+  }
+}
+
+/**
  * 注册IPC处理器
  */
 console.log('🔧 [调试] 开始定义registerIPCHandlers函数...')
@@ -281,6 +333,169 @@ function registerIPCHandlers(): void {
   console.log('🔧 [调试] 注册基础应用API...')
   ipcMain.handle('app:getVersion', () => {
     return app.getVersion()
+  })
+
+  // 文件服务API
+  console.log('🔧 [调试] 注册文件服务API...')
+  ipcMain.handle('file:upload', async (_event, fileBuffer: Buffer, metadata: { name: string; mimeType: string }) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        return { success: false, error: '文件服务未初始化' }
+      }
+      
+      const fileId = await fileService.saveAttachment(fileBuffer, metadata)
+      return { success: true, data: { fileId } }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('file:get', async (_event, fileId: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        return { success: false, error: '文件服务未初始化' }
+      }
+      
+      const fileData = await fileService.getAttachment(fileId)
+      return { success: true, data: fileData }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('file:getContent', async (_event, fileId: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        return { success: false, error: '文件服务未初始化' }
+      }
+      
+      const content = await fileService.getAttachmentContent(fileId)
+      return { success: true, data: content }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('file:delete', async (_event, fileId: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        return { success: false, error: '文件服务未初始化' }
+      }
+      
+      await fileService.deleteAttachment(fileId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  // ResourcesPage需要的文件管理API
+  ipcMain.handle('file:list', async (_event, options?: { category?: string }) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        console.error('❌ [文件列表] FileService未初始化')
+        return []
+      }
+      
+      console.log('📋 [文件列表] ResourcesPage请求文件列表:', options)
+      const fileList = await fileService.scanPromptXResources(options?.category)
+      console.log(`✅ [文件列表] 返回 ${fileList.length} 个文件`)
+      
+      return fileList
+    } catch (error) {
+      console.error('❌ [文件列表] 获取失败:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('file:tree', async (_event, category?: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        console.error('❌ [文件树] FileService未初始化')
+        return []
+      }
+      
+      console.log('🌳 [文件树] ResourcesPage请求文件树:', category)
+      const tree = await fileService.buildFileTree(category)
+      console.log(`✅ [文件树] 返回 ${tree.length} 个根节点`)
+      
+      return tree
+    } catch (error) {
+      console.error('❌ [文件树] 获取失败:', error)
+      return []
+    }
+  })
+
+  ipcMain.handle('file:stats', async () => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        console.error('❌ [文件统计] FileService未初始化')
+        return {
+          totalFiles: 0,
+          totalSize: 0,
+          byCategory: {},
+          byType: {}
+        }
+      }
+      
+      console.log('📊 [文件统计] ResourcesPage请求统计信息')
+      const stats = await fileService.getFileStats()
+      console.log(`✅ [文件统计] 返回统计信息: ${stats.totalFiles} 个文件`)
+      
+      return stats
+    } catch (error) {
+      console.error('❌ [文件统计] 获取失败:', error)
+      return {
+        totalFiles: 0,
+        totalSize: 0,
+        byCategory: {},
+        byType: {}
+      }
+    }
+  })
+
+  // 添加文件内容读取和更新API，支持ResourcesPage的编辑功能
+  ipcMain.handle('file:read', async (_event, fileId: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        throw new Error('FileService未初始化')
+      }
+      
+      console.log(`📖 [文件读取] 读取文件内容: ${fileId}`)
+      const content = await fileService.readFileContent(fileId)
+      console.log(`✅ [文件读取] 成功读取文件，长度: ${content.length} 字符`)
+      
+      return content
+    } catch (error) {
+      console.error(`❌ [文件读取] 读取失败: ${fileId}`, error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:updateContent', async (_event, fileId: string, content: string) => {
+    try {
+      const fileService = (global as any).fileService
+      if (!fileService) {
+        throw new Error('FileService未初始化')
+      }
+      
+      console.log(`✍️ [文件更新] 更新文件内容: ${fileId}，长度: ${content.length} 字符`)
+      await fileService.updateFileContent(fileId, content)
+      console.log(`✅ [文件更新] 成功更新文件: ${fileId}`)
+      
+      return { success: true }
+    } catch (error) {
+      console.error(`❌ [文件更新] 更新失败: ${fileId}`, error)
+      throw error
+    }
   })
 
   // 服务管理API
@@ -300,7 +515,9 @@ function registerIPCHandlers(): void {
 
   // MCP服务API - 新架构桥接（懒加载）
   ipcMain.handle('mcp:getServers', async () => {
+    console.log('📞 [IPC] mcp:getServers被调用')
     try {
+      console.log('📞 [IPC] mcp:getServers调用ensureMCPServices')
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
         return { success: false, error: 'MCP服务未就绪: 集成服务未初始化' }
@@ -319,7 +536,9 @@ function registerIPCHandlers(): void {
   })
 
   ipcMain.handle('mcp:getTools', async () => {
+    console.log('📞 [IPC] mcp:getTools被调用')
     try {
+      console.log('📞 [IPC] mcp:getTools调用ensureMCPServices')
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
         return { success: false, error: 'MCP服务未就绪: 集成服务未初始化' }
@@ -839,29 +1058,53 @@ app.whenReady().then(async () => {
   // 3. 注册PromptX本地调用处理器
   registerPromptXHandlers()
   
+  // 4. 初始化PromptX工作区
+  await initializePromptXWorkspace()
+  
   // 注意：MCP IPC处理器已通过新架构在registerIPCHandlers()中注册
 
-  // 4. 创建主窗口
+  // 5. 创建主窗口
   createWindow()
 
-  // 5. 异步初始化基础服务（不阻塞界面显示）
+  // 6. 异步初始化基础服务（不阻塞界面显示）
   setTimeout(() => {
     initializeBasicServices().catch(error => {
       console.error('❌ [主进程] 基础服务初始化失败:', error)
     })
   }, 1000) // 延迟1秒，让界面先显示
 
+  // 7. 初始化文件管理服务（基础服务，独立于MCP）
+  try {
+    // 先初始化数据库
+    const db = (await import('./db')).default
+    await db.initialize()
+    console.log('💾 [主进程] 数据库已初始化')
+    
+    // 初始化文件服务
+    const { FileService } = await import('./services/FileService')
+    const fileService = new FileService()
+    await fileService.initialize()
+    
+    // 将fileService存储为全局变量以便IPC使用
+    ;(global as any).fileService = fileService
+    
+    console.log('📁 [主进程] 文件管理服务已初始化（独立基础服务）')
+  } catch (error) {
+    console.error('❌ [主进程] 文件管理服务初始化失败:', error)
+  }
+
   // 6. 🔥 PromptX改为真正的按需加载（避免启动时多进程）
   // 移除自动预加载，改为用户首次使用PromptX时再启动
   console.log('💡 [主进程] PromptX设为按需加载模式，将在用户首次使用时启动')
   
-  // 🎯 可选：在用户空闲时后台预加载（延迟更长）
-  setTimeout(() => {
-    console.log('🔄 [主进程] 用户空闲时后台预加载PromptX...')
-    ensureMCPServices().catch(error => {
-      console.log('ℹ️ [主进程] PromptX后台预加载跳过，将在用户使用时启动:', error.message)
-    })
-  }, 10000) // 延迟10秒，让用户先熟悉界面
+  // 🎯 暂时禁用后台预加载，避免循环初始化问题
+  console.log('⏸️ [主进程] 后台预加载已禁用，仅在用户主动使用时启动MCP服务')
+  // setTimeout(() => {
+  //   console.log('🔄 [主进程] 用户空闲时后台预加载PromptX...')
+  //   ensureMCPServices().catch(error => {
+  //     console.log('ℹ️ [主进程] PromptX后台预加载跳过，将在用户使用时启动:', error.message)
+  //   })
+  // }, 10000) // 延迟10秒，让用户先熟悉界面
 
   // macOS 特有行为
   app.on('activate', () => {

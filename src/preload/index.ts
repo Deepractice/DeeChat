@@ -122,6 +122,25 @@ const electronAPI = {
   debug: {
     getSystemRoleStatus: () => ipcRenderer.invoke('debug:getSystemRoleStatus'),
     resetSystemRole: () => ipcRenderer.invoke('debug:resetSystemRole')
+  },
+
+  // 📁 文件管理API
+  file: {
+    // 新的附件API
+    upload: (fileBuffer: ArrayBuffer, metadata: { name: string; mimeType: string }) => 
+      ipcRenderer.invoke('file:upload', Buffer.from(fileBuffer), metadata),
+    get: (fileId: string) => ipcRenderer.invoke('file:get', fileId),
+    getContent: (fileId: string) => ipcRenderer.invoke('file:getContent', fileId),
+    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
+    
+    // 保留原有的资源管理API
+    list: (filters?: any) => ipcRenderer.invoke('file:list', filters),
+    read: (fileId: string) => ipcRenderer.invoke('file:read', fileId),
+    stats: () => ipcRenderer.invoke('file:stats'),
+    save: (fileData: any) => ipcRenderer.invoke('file:save', fileData),
+    export: (fileId: string, targetPath: string) => ipcRenderer.invoke('file:export', fileId, targetPath),
+    tree: (category?: string) => ipcRenderer.invoke('file:tree', category),
+    updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content)
   }
 }
 

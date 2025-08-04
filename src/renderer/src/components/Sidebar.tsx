@@ -6,12 +6,13 @@ import {
 } from 'antd'
 import {
   MessageOutlined,
-  SettingOutlined
+  SettingOutlined,
+  FolderOutlined
 } from '@ant-design/icons'
 
 interface SidebarProps {
-  activeView?: 'chat' | 'settings'
-  onViewChange?: (view: 'chat' | 'settings') => void
+  activeView?: 'chat' | 'resources' | 'settings'
+  onViewChange?: (view: 'chat' | 'resources' | 'settings') => void
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -20,6 +21,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const handleChatClick = () => {
     onViewChange?.('chat')
+  }
+
+  const handleResourcesClick = () => {
+    onViewChange?.('resources')
   }
 
   const handleSettingsClick = () => {
@@ -83,6 +88,36 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             onMouseLeave={(e) => {
               if (activeView !== 'chat') {
+                e.currentTarget.style.backgroundColor = 'transparent'
+                e.currentTarget.style.color = '#999999'
+              }
+            }}
+          />
+        </Tooltip>
+        <Tooltip title="资源" placement="right">
+          <Button 
+            type={activeView === 'resources' ? 'primary' : 'text'}
+            icon={<FolderOutlined />} 
+            size="large"
+            onClick={handleResourcesClick}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeView === 'resources' ? '#1890ff' : 'transparent',
+              color: activeView === 'resources' ? '#ffffff' : '#999999',
+              transition: 'all 0.2s ease',
+              boxShadow: activeView === 'resources' ? '0 2px 8px rgba(24, 144, 255, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeView !== 'resources') {
+                e.currentTarget.style.backgroundColor = '#2a2a2a'
+                e.currentTarget.style.color = '#ffffff'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeView !== 'resources') {
                 e.currentTarget.style.backgroundColor = 'transparent'
                 e.currentTarget.style.color = '#999999'
               }
