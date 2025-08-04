@@ -1,12 +1,22 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { ChatMessage, ChatSession, EnhancedChatSession } from '../../../../shared/types'
 import { SessionService } from '../../services/SessionService'
+import { ParsedRole, PromptXWelcomeResponse, parsePromptXWelcome, RoleCache } from '../../utils/promptxParser'
 
 interface ChatState {
   currentSession: EnhancedChatSession | null  // 🔥 使用增强的会话类型
   sessions: ChatSession[]
   isLoading: boolean
   error: string | null
+  // 🎭 角色管理状态
+  roles: {
+    availableRoles: ParsedRole[]
+    currentRole: ParsedRole | null
+    loading: boolean
+    lastUpdated: string | null
+    error: string | null
+    initialized: boolean  // 新增：标记是否已初始化
+  }
 }
 
 const initialState: ChatState = {
@@ -14,6 +24,15 @@ const initialState: ChatState = {
   sessions: [],
   isLoading: false,
   error: null,
+  // 🎭 角色管理初始状态
+  roles: {
+    availableRoles: [],
+    currentRole: null,
+    loading: false,
+    lastUpdated: null,
+    error: null,
+    initialized: false  // 初始值为false
+  },
 }
 
 // 异步 thunk：发送消息
@@ -114,6 +133,67 @@ export const switchToSessionWithConfig = createAsyncThunk(
 
     // console.log('✅ [Redux] 会话切换成功:', enhancedSession.title)
     return enhancedSession
+  }
+)
+
+// 🎭 异步thunk：加载角色列表
+export const loadAvailableRoles = createAsyncThunk(
+  'chat/loadAvailableRoles',
+  async (forceRefresh: boolean = false) => {
+    // 检查缓存
+    if (!forceRefresh) {
+      const cached = RoleCache.load()
+      if (cached) {
+        return cached
+      }
+    }
+    
+    try {
+      // 调用welcome命令获取角色列表
+      const result = await window.electronAPI.promptx.execute('welcome', [])
+      
+      if (!result.success) {
+        throw new Error(result.error || '获取角色列表失败')
+      }
+      
+      // 解析响应数据
+      const parsed = parsePromptXWelcome(result.data)
+      
+      // 缓存结果
+      RoleCache.save(parsed)
+      
+      console.log(`[Redux] 角色列表加载成功，共 ${parsed.roles.length} 个角色`)
+      console.log('[Redux] 即将返回的数据:', parsed)
+      return parsed
+    } catch (error) {
+      console.error('[Redux] loadAvailableRoles 错误:', error)
+      throw error
+    }
+  }
+)
+
+// 🎭 异步thunk：激活角色
+export const activateRole = createAsyncThunk(
+  'chat/activateRole',
+  async (roleId: string, { getState }) => {
+    console.log('[Redux] 开始激活角色:', roleId)
+    
+    const state = getState() as { chat: ChatState }
+    const role = state.chat.roles.availableRoles.find(r => r.id === roleId)
+    
+    if (!role) {
+      throw new Error(`角色不存在: ${roleId}`)
+    }
+    
+    // 调用PromptX action命令激活角色
+    const result = await window.electronAPI.promptx.execute('action', [roleId])
+    
+    if (!result.success) {
+      throw new Error(result.error || '角色激活失败')
+    }
+    
+    console.log('[Redux] 角色激活成功:', role.name)
+    return role
   }
 )
 
@@ -258,6 +338,37 @@ const chatSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload
     },
+
+    // 🎭 角色管理相关reducers
+    // 设置当前角色
+    setCurrentRole: (state, action: PayloadAction<ParsedRole>) => {
+      state.roles.currentRole = action.payload
+      // 同时更新角色的激活状态
+      state.roles.availableRoles.forEach(role => {
+        role.isActive = role.id === action.payload.id
+      })
+    },
+
+    // 清除当前角色
+    clearCurrentRole: (state) => {
+      state.roles.currentRole = null
+      // 清除所有角色的激活状态
+      state.roles.availableRoles.forEach(role => {
+        role.isActive = false
+      })
+    },
+
+    // 清除角色错误
+    clearRoleError: (state) => {
+      state.roles.error = null
+    },
+
+    // 刷新角色缓存
+    refreshRoleCache: (state) => {
+      RoleCache.clear()
+      state.roles.lastUpdated = null
+      state.roles.initialized = false  // 重置初始化标志，允许重新加载
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -365,6 +476,51 @@ const chatSlice = createSlice({
         state.isLoading = false
         state.error = action.error.message || '切换会话失败'
       })
+      // 🎭 角色加载
+      .addCase(loadAvailableRoles.pending, (state) => {
+        state.roles.loading = true
+        state.roles.error = null
+      })
+      .addCase(loadAvailableRoles.fulfilled, (state, action) => {
+        state.roles.loading = false
+        state.roles.initialized = true  // 设置初始化标志
+        
+        if (action.payload && action.payload.roles) {
+          state.roles.availableRoles = action.payload.roles
+          state.roles.lastUpdated = action.payload.metadata.timestamp
+        }
+        
+        // 如果当前有角色选中，更新其激活状态
+        if (state.roles.currentRole) {
+          const currentRole = state.roles.availableRoles.find(
+            r => r.id === state.roles.currentRole?.id
+          )
+          if (currentRole) {
+            currentRole.isActive = true
+          }
+        }
+      })
+      .addCase(loadAvailableRoles.rejected, (state, action) => {
+        state.roles.loading = false
+        state.roles.error = action.error.message || '加载角色列表失败'
+      })
+      // 🎭 角色激活
+      .addCase(activateRole.pending, (state) => {
+        state.roles.loading = true
+        state.roles.error = null
+      })
+      .addCase(activateRole.fulfilled, (state, action) => {
+        state.roles.loading = false
+        state.roles.currentRole = action.payload
+        // 更新角色激活状态
+        state.roles.availableRoles.forEach(role => {
+          role.isActive = role.id === action.payload.id
+        })
+      })
+      .addCase(activateRole.rejected, (state, action) => {
+        state.roles.loading = false
+        state.roles.error = action.error.message || '角色激活失败'
+      })
   },
 })
 
@@ -378,7 +534,12 @@ export const {
   updateSessionModel,
   updateSessionModelConfig,
   clearError,
-  setLoading
+  setLoading,
+  // 🎭 角色管理actions
+  setCurrentRole,
+  clearCurrentRole,
+  clearRoleError,
+  refreshRoleCache
 } = chatSlice.actions
 
 // 🔥 注意：loadSessionWithConfig 和 switchToSessionWithConfig
