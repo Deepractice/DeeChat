@@ -1,0 +1,344 @@
+import { DatabaseService } from './DatabaseService';
+import { LocalStorageService } from './LocalStorageService';
+import { app } from 'electron';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+
+/**
+ * 数据迁移服务 - 奥卡姆剃刀实现
+ * 
+ * 设计原则：
+ * 1. 一次性迁移，简单直接
+ * 2. 完整的安全保障
+ * 3. 详细的进度反馈
+ * 4. 自动回滚机制
+ */
+export class MigrationService {
+  constructor(
+    private databaseService: DatabaseService,
+    private localStorageService: LocalStorageService
+  ) {}
+
+  /**
+   * 执行从JSON到SQLite的完整迁移
+   */
+  async migrateToSQLite(): Promise<MigrationResult> {
+    console.log('🔄 开始数据迁移：JSON → SQLite');
+    
+    const result: MigrationResult = {
+      success: false,
+      migratedSessions: 0,
+      migratedMessages: 0,
+      migratedConfigs: 0,
+      migratedPreferences: 0,
+      backupPath: '',
+      errors: []
+    };
+
+    try {
+      // Step 1: 创建备份
+      result.backupPath = await this.createBackup();
+      console.log(`✅ 备份完成: ${result.backupPath}`);
+
+      // Step 2: 检查数据库健康状态
+      if (!this.databaseService.healthCheck()) {
+        throw new Error('数据库健康检查失败');
+      }
+
+      // Step 3: 执行迁移（不在事务中，因为async不支持）
+      result.migratedSessions = await this.migrateChatSessions();
+      result.migratedMessages = await this.migrateChatMessages();
+      result.migratedConfigs = await this.migrateModelConfigs();
+      result.migratedPreferences = await this.migrateUserPreferences();
+
+      // Step 4: 验证迁移结果
+      await this.validateMigration(result);
+
+      result.success = true;
+      console.log('✅ 数据迁移完成', {
+        sessions: result.migratedSessions,
+        messages: result.migratedMessages,
+        configs: result.migratedConfigs,
+        preferences: result.migratedPreferences
+      });
+
+    } catch (error: any) {
+      result.errors.push(error.message);
+      console.error('❌ 数据迁移失败:', error);
+      
+      // 自动回滚（清空数据库表）
+      try {
+        this.rollbackMigration();
+        console.log('🔄 已自动回滚数据库更改');
+      } catch (rollbackError: any) {
+        console.error('❌ 回滚失败:', rollbackError);
+        result.errors.push(`回滚失败: ${rollbackError.message}`);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 迁移聊天会话数据
+   */
+  private async migrateChatSessions(): Promise<number> {
+    try {
+      // 从现有LocalStorageService加载数据
+      const sessions = await this.localStorageService.get('chat-sessions', []);
+      
+      const insertSession = this.databaseService.prepare(`
+        INSERT OR REPLACE INTO chat_sessions 
+        (id, title, selected_model_id, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      let count = 0;
+      for (const session of sessions) {
+        insertSession.run(
+          session.id,
+          session.title,
+          session.selectedModelId,
+          new Date(session.createdAt).getTime(),
+          new Date(session.updatedAt).getTime()
+        );
+        count++;
+      }
+
+      console.log(`✅ 迁移了 ${count} 个聊天会话`);
+      return count;
+    } catch (error) {
+      console.warn('⚠️ 聊天会话迁移失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 迁移聊天消息数据
+   */
+  private async migrateChatMessages(): Promise<number> {
+    try {
+      const sessions = await this.localStorageService.get('chat-sessions', []);
+      
+      const insertMessage = this.databaseService.prepare(`
+        INSERT OR REPLACE INTO chat_messages 
+        (id, session_id, role, content, timestamp, model_id) 
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      const insertToolExecution = this.databaseService.prepare(`
+        INSERT OR REPLACE INTO tool_executions
+        (id, message_id, tool_name, server_id, server_name, params, result, success, duration, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      let messageCount = 0;
+      
+      for (const session of sessions) {
+        for (const message of session.messages || []) {
+          // 迁移消息
+          insertMessage.run(
+            message.id,
+            session.id,
+            message.role,
+            message.content,
+            message.timestamp,
+            message.modelId || null
+          );
+          messageCount++;
+
+          // 迁移工具执行记录
+          for (const toolExec of message.toolExecutions || []) {
+            insertToolExecution.run(
+              toolExec.id || `${message.id}_${toolExec.toolName}_${Date.now()}`,
+              message.id,
+              toolExec.toolName,
+              toolExec.serverId || null,
+              toolExec.serverName || null,
+              JSON.stringify(toolExec.params || {}),
+              JSON.stringify(toolExec.result || {}),
+              toolExec.success !== false, // 默认true
+              toolExec.duration || null,
+              toolExec.timestamp || message.timestamp
+            );
+          }
+        }
+      }
+
+      console.log(`✅ 迁移了 ${messageCount} 条消息`);
+      return messageCount;
+    } catch (error) {
+      console.warn('⚠️ 聊天消息迁移失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 迁移模型配置数据
+   */
+  private async migrateModelConfigs(): Promise<number> {
+    try {
+      const configs = await this.localStorageService.get('model-configs', []);
+      
+      const insertConfig = this.databaseService.prepare(`
+        INSERT OR REPLACE INTO model_configs 
+        (id, name, provider, model, api_key, base_url, is_enabled, status, priority, 
+         available_models, enabled_models, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      let count = 0;
+      for (const config of configs) {
+        insertConfig.run(
+          config.id,
+          config.name,
+          config.provider,
+          config.model,
+          config.apiKey || null,
+          config.baseURL || null,
+          config.isEnabled !== false, // 默认true
+          config.status || 'unknown',
+          config.priority || 0,
+          JSON.stringify(config.availableModels || []),
+          JSON.stringify(config.enabledModels || []),
+          new Date(config.createdAt).getTime(),
+          new Date(config.updatedAt).getTime()
+        );
+        count++;
+      }
+
+      console.log(`✅ 迁移了 ${count} 个模型配置`);
+      return count;
+    } catch (error) {
+      console.warn('⚠️ 模型配置迁移失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 迁移用户偏好数据
+   */
+  private async migrateUserPreferences(): Promise<number> {
+    try {
+      const preferences = await this.localStorageService.get('user-preferences', {});
+      
+      const insertPreference = this.databaseService.prepare(`
+        INSERT OR REPLACE INTO user_preferences (key, value, updated_at) 
+        VALUES (?, ?, ?)
+      `);
+
+      const timestamp = Date.now();
+      let count = 0;
+      
+      for (const [key, value] of Object.entries(preferences)) {
+        insertPreference.run(key, JSON.stringify(value), timestamp);
+        count++;
+      }
+
+      console.log(`✅ 迁移了 ${count} 个用户偏好设置`);
+      return count;
+    } catch (error) {
+      console.warn('⚠️ 用户偏好迁移失败:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * 创建完整数据备份
+   */
+  private async createBackup(): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = path.join(app.getPath('userData'), 'migration-backup');
+    const backupPath = path.join(backupDir, `backup-${timestamp}`);
+
+    await fs.mkdir(backupPath, { recursive: true });
+
+    // 备份所有JSON文件
+    const filesToBackup = [
+      'chat-sessions.json',
+      'model-configs.json',
+      'user-preferences.json'
+    ];
+
+    for (const fileName of filesToBackup) {
+      const sourcePath = path.join(app.getPath('userData'), fileName);
+      const targetPath = path.join(backupPath, fileName);
+      
+      try {
+        await fs.copyFile(sourcePath, targetPath);
+      } catch (error) {
+        console.warn(`备份文件失败 ${fileName}:`, (error as Error).message);
+      }
+    }
+
+    return backupPath;
+  }
+
+  /**
+   * 验证迁移结果
+   */
+  private async validateMigration(result: MigrationResult): Promise<void> {
+    const stats = this.databaseService.getStats();
+    
+    console.log('📊 迁移验证统计:', {
+      数据库会话: stats.sessions_count,
+      数据库消息: stats.messages_count,
+      数据库配置: stats.configs_count,
+      迁移会话: result.migratedSessions,
+      迁移消息: result.migratedMessages,
+      迁移配置: result.migratedConfigs
+    });
+
+    // 基本完整性检查
+    if (result.migratedSessions > 0 && stats.sessions_count === 0) {
+      throw new Error('会话迁移验证失败：数据库中无会话记录');
+    }
+  }
+
+  /**
+   * 回滚迁移（清空所有表）
+   */
+  private rollbackMigration(): void {
+    this.databaseService.transaction(() => {
+      this.databaseService.prepare('DELETE FROM tool_executions').run();
+      this.databaseService.prepare('DELETE FROM chat_messages').run();
+      this.databaseService.prepare('DELETE FROM chat_sessions').run();
+      this.databaseService.prepare('DELETE FROM model_configs').run();
+      this.databaseService.prepare('DELETE FROM user_preferences').run();
+    });
+  }
+
+  /**
+   * 检查是否需要迁移
+   */
+  async shouldMigrate(): Promise<boolean> {
+    const stats = this.databaseService.getStats();
+    const hasJsonData = await this.hasJsonData();
+    
+    // 如果数据库为空且有JSON数据，则需要迁移
+    return stats.sessions_count === 0 && hasJsonData;
+  }
+
+  /**
+   * 检查是否有JSON数据
+   */
+  private async hasJsonData(): Promise<boolean> {
+    try {
+      const sessions = await this.localStorageService.get('chat-sessions', []);
+      const configs = await this.localStorageService.get('model-configs', []);
+      return sessions.length > 0 || configs.length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export interface MigrationResult {
+  success: boolean;
+  migratedSessions: number;
+  migratedMessages: number;
+  migratedConfigs: number;
+  migratedPreferences: number;
+  backupPath: string;
+  errors: string[];
+}

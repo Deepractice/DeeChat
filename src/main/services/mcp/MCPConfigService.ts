@@ -24,6 +24,7 @@ export class MCPConfigService implements IMCPConfigService {
     this.initializeLocalStorage();
   }
 
+
   /**
    * 初始化本地存储和静默更新
    */
@@ -386,22 +387,27 @@ export class MCPConfigService implements IMCPConfigService {
     const now = new Date();
     
     // 🔥 动态获取PromptX工作目录和脚本路径 - 跨平台支持
-    const { app } = require('electron');
     const path = require('path');
     const fs = require('fs');
     
-    // 获取用户数据目录（跨平台）
-    const userDataPath = app.getPath('userData');
-    const promptxWorkspace = path.join(userDataPath, 'promptx-workspace');
-    
-    // 确保工作目录存在
-    if (!fs.existsSync(promptxWorkspace)) {
-      fs.mkdirSync(promptxWorkspace, { recursive: true });
-      console.log(`[MCP Config] 📁 创建PromptX工作目录: ${promptxWorkspace}`);
-    }
-    
     // 🔥 动态获取PromptX脚本路径
     const isDev = process.env.NODE_ENV === 'development';
+    
+    // 🔥 使用DeeChat项目根目录作为PromptX工作目录，确保项目上下文正确
+    const deechatProjectPath = isDev 
+      ? path.resolve(__dirname, '../../../..') // 开发环境：从dist/main/main/services/mcp回到项目根目录
+      : process.cwd(); // 生产环境：使用当前工作目录
+    
+    const promptxWorkspace = deechatProjectPath;
+    
+    console.log(`[MCP Config] 🎯 PromptX工作目录设为DeeChat项目根目录: ${promptxWorkspace}`);
+    
+    // 确保.promptx目录存在
+    const promptxConfigDir = path.join(promptxWorkspace, '.promptx');
+    if (!fs.existsSync(promptxConfigDir)) {
+      fs.mkdirSync(promptxConfigDir, { recursive: true });
+      console.log(`[MCP Config] 📁 创建PromptX配置目录: ${promptxConfigDir}`);
+    }
     let promptxScriptPath: string;
     
     if (isDev) {
@@ -413,24 +419,28 @@ export class MCPConfigService implements IMCPConfigService {
       promptxScriptPath = path.join(process.resourcesPath, 'resources/promptx/package/src/bin/promptx.js');
     }
     
-    // 🚀 使用标准MCP配置，底层自动检测并使用沙箱
+    // 🚀 使用标准MCP配置，进程内运行提供最佳性能
     const server = new MCPServerEntity({
       id: 'promptx-builtin',
       name: 'PromptX (内置)',
-      description: 'PromptX AI专业能力增强框架 - 自动沙箱隔离运行，支持零Node环境',
+      description: 'PromptX AI专业能力增强框架 - 进程内运行，基于官方MCP SDK',
       type: 'stdio',
       isEnabled: true,
       command: 'node', // 用户看到的是标准node命令
       args: [promptxScriptPath, 'mcp-server'], // 🔥 动态的PromptX启动参数
-      workingDirectory: promptxWorkspace, // 🔥 动态设置工作目录
-      env: {},
-      timeout: 15000, // 沙箱启动可能需要更多时间
+      workingDirectory: promptxWorkspace, // 🔥 在DeeChat项目根目录运行
+      env: {
+        PROMPTX_PROJECT_PATH: promptxWorkspace, // 🎯 显式指定项目路径
+        PROMPTX_FORCE_PROJECT: 'true', // 🎯 强制使用指定项目路径
+        MCP_MODE: 'deechat-integration' // 🎯 标识DeeChat集成模式
+      },
+      timeout: 10000, // 进程内启动更快
       retryCount: 2,
       createdAt: now,
       updatedAt: now
     });
 
-    console.log(`[MCP Config] ✅ 创建PromptX沙箱服务器配置:`);
+    console.log(`[MCP Config] ✅ 创建PromptX进程内服务器配置:`);
     console.log(`[MCP Config]   - 脚本路径: ${promptxScriptPath}`);
     console.log(`[MCP Config]   - 工作目录: ${promptxWorkspace}`);
     return server;

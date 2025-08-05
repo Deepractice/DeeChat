@@ -1,33 +1,84 @@
 import { ModelConfigEntity, ModelConfigData } from '../../../shared/entities/ModelConfigEntity'
-import { LocalStorageService } from '../core/LocalStorageService'
+import { IModelConfigService } from '../../../shared/interfaces/IModelProvider'
+import { ServiceManager } from '../../core/ServiceManager'
+import { SqliteModelConfigRepository } from '../../repositories/SqliteModelConfigRepository'
 
 /**
- * 简化的模型管理服务 - 直接使用LocalStorageService
- * 用于替代复杂的Repository模式，提供基础的CRUD操作
+ * 模型管理服务 - 使用SQLite数据库存储
+ * 
+ * 重构要点：
+ * 1. 从LocalStorageService迁移到SQLite数据库
+ * 2. 通过ServiceManager获取数据库服务
+ * 3. 使用仓储模式进行数据操作
+ * 4. 保持原有API接口不变，确保兼容性
  */
-export class ModelService {
-  private storageService: LocalStorageService
+export class ModelService implements IModelConfigService {
+  private repository: SqliteModelConfigRepository | null = null
+  private initialized = false
   private configsCache: ModelConfigEntity[] | null = null
 
   constructor() {
-    this.storageService = new LocalStorageService()
+    console.log('🔧 [ModelService] 使用SQLite数据库存储初始化')
+  }
+
+  /**
+   * 延迟初始化数据库连接
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized && this.repository) {
+      return
+    }
+
+    try {
+      // 获取ServiceManager实例
+      const serviceManager = ServiceManager.getInstance()
+      
+      // 确保ServiceManager已初始化
+      if (!serviceManager.getAllServiceStatuses().some(s => s.name === 'infrastructure' && s.status === 'ready')) {
+        console.log('🔄 [ModelService] 等待数据库服务初始化...')
+        await serviceManager.initialize()
+      }
+
+      // 获取数据库管理器
+      const databaseManager = serviceManager.getDatabaseManager()
+      const databaseService = databaseManager.getDatabaseService()
+
+      // 创建仓储实例
+      this.repository = new SqliteModelConfigRepository(databaseService)
+      await this.repository.initialize()
+
+      this.initialized = true
+      console.log('✅ [ModelService] SQLite数据库连接初始化完成')
+    } catch (error) {
+      console.error('❌ [ModelService] 数据库初始化失败:', error)
+      throw error
+    }
   }
 
   /**
    * 获取所有模型配置
    */
   async getAllConfigs(): Promise<ModelConfigEntity[]> {
-    if (this.configsCache) {
-      return this.configsCache
-    }
-
     try {
-      const configsData = await this.storageService.get<ModelConfigData[]>('model-configs', [])
-      // console.log('加载配置数据:', JSON.stringify(configsData, null, 2))
-      this.configsCache = configsData.map((data: ModelConfigData) => new ModelConfigEntity(data))
-      return this.configsCache || []
+      await this.ensureInitialized()
+      
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      // 先检查缓存
+      if (this.configsCache) {
+        return this.configsCache
+      }
+
+      // 从SQLite获取所有配置
+      const configs = await this.repository.findAll()
+      
+      // 缓存结果
+      this.configsCache = configs
+      return configs
     } catch (error) {
-      console.error('获取模型配置失败:', error)
+      console.error('❌ [ModelService] 获取模型配置失败:', error)
       return []
     }
   }
@@ -36,8 +87,18 @@ export class ModelService {
    * 根据ID获取模型配置
    */
   async getConfigById(id: string): Promise<ModelConfigEntity | null> {
-    const configs = await this.getAllConfigs()
-    return configs.find(config => config.id === id) || null
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      return await this.repository.findById(id)
+    } catch (error) {
+      console.error('❌ [ModelService] 根据ID获取配置失败:', error)
+      return null
+    }
   }
 
   /**
@@ -45,19 +106,21 @@ export class ModelService {
    */
   async saveConfig(config: ModelConfigEntity): Promise<void> {
     try {
-      const configs = await this.getAllConfigs()
-      const existingIndex = configs.findIndex(c => c.id === config.id)
+      await this.ensureInitialized()
       
-      if (existingIndex >= 0) {
-        configs[existingIndex] = config
-      } else {
-        configs.push(config)
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
       }
 
-      await this.saveAllConfigs(configs)
-      this.configsCache = configs
+      // 保存到SQLite
+      await this.repository.save(config)
+      
+      // 清空缓存以强制重新加载
+      this.configsCache = null
+      
+      console.log(`✅ [ModelService] 模型配置保存成功: ${config.name}`)
     } catch (error) {
-      console.error('保存模型配置失败:', error)
+      console.error('❌ [ModelService] 保存模型配置失败:', error)
       throw error
     }
   }
@@ -74,13 +137,22 @@ export class ModelService {
    */
   async deleteConfig(id: string): Promise<void> {
     try {
-      const configs = await this.getAllConfigs()
-      const filteredConfigs = configs.filter(config => config.id !== id)
+      await this.ensureInitialized()
       
-      await this.saveAllConfigs(filteredConfigs)
-      this.configsCache = filteredConfigs
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      // 从SQLite删除配置
+      const deleted = await this.repository.delete(id)
+      
+      if (deleted) {
+        // 清空缓存以强制重新加载
+        this.configsCache = null
+        console.log(`✅ [ModelService] 模型配置删除成功: ${id}`)
+      }
     } catch (error) {
-      console.error('删除模型配置失败:', error)
+      console.error('❌ [ModelService] 删除模型配置失败:', error)
       throw error
     }
   }
@@ -103,16 +175,36 @@ export class ModelService {
    * 获取启用的模型配置
    */
   async getEnabledConfigs(): Promise<ModelConfigEntity[]> {
-    const configs = await this.getAllConfigs()
-    return configs.filter(config => config.isEnabled)
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      return await this.repository.findEnabled()
+    } catch (error) {
+      console.error('❌ [ModelService] 获取启用配置失败:', error)
+      return []
+    }
   }
 
   /**
    * 获取可用的模型配置
    */
   async getAvailableConfigs(): Promise<ModelConfigEntity[]> {
-    const configs = await this.getAllConfigs()
-    return configs.filter(config => config.isEnabled && config.status === 'available')
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      return await this.repository.findAvailable()
+    } catch (error) {
+      console.error('❌ [ModelService] 获取可用配置失败:', error)
+      return []
+    }
   }
 
   /**
@@ -151,11 +243,24 @@ export class ModelService {
   }
 
   /**
-   * 保存所有配置到存储
+   * 获取模型配置统计信息
    */
-  private async saveAllConfigs(configs: ModelConfigEntity[]): Promise<void> {
-    const configsData = configs.map(config => config.toData())
-    // console.log('保存配置数据:', JSON.stringify(configsData, null, 2))
-    await this.storageService.set('model-configs', configsData)
+  async getModelStats() {
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.repository) {
+        throw new Error('数据库仓储未初始化')
+      }
+
+      return await this.repository.getStats()
+    } catch (error) {
+      console.error('❌ [ModelService] 获取模型统计失败:', error)
+      return {
+        total: 0,
+        enabled: 0,
+        available: 0
+      }
+    }
   }
 }

@@ -1,6 +1,6 @@
 /**
- * 简化版MCP客户端管理器
- * 参考Cherry Studio设计，使用官方MCP SDK
+ * MCP客户端管理器
+ * 基于官方MCP SDK的标准化客户端管理实现
  */
 
 import log from 'electron-log'
@@ -18,23 +18,20 @@ import {
   MCPEvent,
   MCPEventType
 } from '../../../shared/interfaces/IMCPProvider'
-import { MCPSandboxManager } from '../runtime/MCPSandboxManager'
 import { InProcessMCPServer } from './InProcessMCPServer'
 
 /**
- * 简化版MCP客户端管理器
- * 借鉴Cherry Studio的简洁设计模式
+ * MCP客户端管理器
+ * 支持多种传输协议的统一客户端管理
  */
 export class SimpleMCPClientManager {
   private clients: Map<string, Client> = new Map()
   private pendingClients: Map<string, Promise<Client>> = new Map()
   private eventListeners: ((event: MCPEvent) => void)[] = []
-  private sandboxManager: MCPSandboxManager
   private inProcessServers: Map<string, InProcessMCPServer> = new Map()
 
   constructor() {
-    this.sandboxManager = MCPSandboxManager.getInstance()
-    log.info('[Simple MCP] 🚀 智能客户端管理器初始化完成 (进程内 > Electron内置 > 沙箱)')
+    log.info('[Simple MCP] 🚀 智能客户端管理器初始化完成 (进程内 > Electron内置)')
   }
 
   /**
@@ -209,7 +206,7 @@ export class SimpleMCPClientManager {
 
   /**
    * 创建传输层（支持5种协议）
-   * 🔥 简单直接的switch模式，学习Cherry Studio
+   * 🔥 标准传输协议适配，支持官方MCP SDK所有传输方式
    */
   private async createTransport(server: MCPServerEntity) {
     switch (server.type) {
@@ -257,45 +254,13 @@ export class SimpleMCPClientManager {
   }
 
   /**
-   * 创建Stdio传输（智能沙箱检测）
+   * 创建Stdio传输（Electron内置Node.js优化）
    */
   private async createStdioTransport(server: MCPServerEntity) {
     if (!server.command) {
       throw new Error('Stdio服务器缺少命令配置')
     }
 
-    // 🔥 智能沙箱检测（保留原有逻辑）
-    const shouldUseSandbox = this.shouldUseSandbox(server)
-    
-    log.info(`[Simple MCP] 📊 沙箱检测结果: ${server.name} -> ${shouldUseSandbox ? '启用沙箱' : '标准启动'}`)
-    
-    if (shouldUseSandbox) {
-      log.info(`[Simple MCP] 🎯 使用沙箱启动: ${server.name}`)
-      
-      try {
-        // 通过沙箱启动
-        const childProcess = await this.sandboxManager.startMCPServer(
-          server,
-          ['dpml-prompt@latest'], // PromptX依赖
-          { timeout: 30000 }
-        )
-        
-        log.info(`[Simple MCP] ✅ 沙箱进程创建成功:`, {
-          spawnfile: childProcess.spawnfile,
-          spawnargs: childProcess.spawnargs?.slice(0, 3) // 只显示前3个参数
-        })
-        
-        return new StdioClientTransport({
-          command: childProcess.spawnfile || server.command,
-          args: childProcess.spawnargs || server.args || [],
-          env: process.env as Record<string, string>
-        })
-      } catch (sandboxError) {
-        log.error(`[Simple MCP] ❌ 沙箱启动失败，回退到标准启动: ${server.name}`, sandboxError)
-        // 沙箱失败时回退到标准启动
-      }
-    }
-    
     // 🔥 优化：直接使用Electron内置Node.js运行时
     let actualCommand = server.command
     let actualArgs = server.args || []
@@ -331,15 +296,10 @@ export class SimpleMCPClientManager {
   }
 
   /**
-   * 🔥 智能执行模式检测：进程内 > Electron内置 > 沙箱
+   * 🔥 智能执行模式检测：进程内 > Electron内置
    */
-  private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' | 'sandbox' {
+  private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' {
     if (!server.command) return 'builtin'
-
-    // 明确的沙箱协议
-    if (server.command.startsWith('sandbox://')) {
-      return 'sandbox'
-    }
 
     const command = server.command
     const args = server.args || []
@@ -356,35 +316,9 @@ export class SimpleMCPClientManager {
       return 'inprocess'
     }
     
-    // 🚀 其他Node.js脚本用Electron内置运行时
-    const isNodeScript = (
-      command === 'node' || 
-      command.endsWith('node') ||
-      command.endsWith('node.exe')
-    )
-    
-    if (isNodeScript) {
-      log.info(`[Simple MCP] ⚡ Node.js脚本 -> Electron内置运行时: ${server.name}`)
-      return 'builtin'
-    }
-    
-    // 🔥 需要包管理的情况使用沙箱
-    const needsPackageManagement = (
-      args.includes('npx') ||
-      args.includes('npm') ||
-      args.some(arg => arg.includes('@'))
-    )
-    
-    const mode = needsPackageManagement ? 'sandbox' : 'builtin'
-    log.info(`[Simple MCP] 🎯 其他情况 -> ${mode}: ${server.name}`)
-    return mode
-  }
-
-  /**
-   * 向后兼容的沙箱检测方法
-   */
-  private shouldUseSandbox(server: MCPServerEntity): boolean {
-    return this.getExecutionMode(server) === 'sandbox'
+    // 🚀 其他所有脚本都用Electron内置运行时
+    log.info(`[Simple MCP] ⚡ 标准服务器 -> Electron内置运行时: ${server.name}`)
+    return 'builtin'
   }
 
   /**

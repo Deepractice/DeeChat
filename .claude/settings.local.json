@@ -115,7 +115,16 @@
       "Bash(git reset:*)",
       "Bash(NODE_ENV=development timeout 15s npm run dev)",
       "Bash(NODE_ENV=development gtimeout 15s npm run dev)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(echo:*)",
+      "Bash(/Users/macmima1234/Desktop/DeeChat/resources/promptx/package/src/bin/promptx.js init \"/Users/macmima1234/Library/Application Support/Electron/promptx-workspace\")",
+      "Bash(NODE_ENV=development timeout 10s npm run dev)",
+      "Bash(NODE_ENV=development gtimeout 10s npm run dev)",
+      "Bash(BACKUP_DIR=\"/Users/macmima1234/Library/Application Support/deechat/json-backup-$(date +%Y%m%d-%H%M%S)\")",
+      "Bash(mv:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(pip3 install:*)",
+      "Bash(\"/Users/macmima1234/Desktop/DeeChat/release/mac/DeeChat.app/Contents/MacOS/DeeChat\")"
     ],
     "deny": []
   }

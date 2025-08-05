@@ -166,130 +166,53 @@ if (!gotTheLock) {
   }
 
   /**
-   * 懒加载MCP服务（支持智能预加载）
+   * 确保MCP服务已初始化（简化版本）
+   * 
+   * 注意：ServiceManager已在启动时初始化，这里只是确认MCP服务状态
    */
   async function ensureMCPServices(): Promise<void> {
     const callId = Math.random().toString(36).substr(2, 8)
     console.log(`🔥 [TRACE-${callId}] ensureMCPServices被调用`)
-    console.log(`🔥 [TRACE-${callId}] 当前状态: _initializing=${ensureMCPServices._initializing}, serviceManager=${!!serviceManager}`)
     
-    // 🔒 防止并发初始化导致多进程
-    if (ensureMCPServices._initializing) {
-      console.log(`⏳ [TRACE-${callId}] MCP服务正在初始化中，等待完成...`)
-      return new Promise((resolve, reject) => {
-        const checkInterval = setInterval(() => {
-          console.log(`🔄 [TRACE-${callId}] 等待初始化完成，当前状态: _initializing=${ensureMCPServices._initializing}`)
-          if (!ensureMCPServices._initializing) {
-            clearInterval(checkInterval)
-            if (serviceManager) {
-              console.log(`✅ [TRACE-${callId}] 等待成功，初始化已完成`)
-              resolve()
-            } else {
-              console.log(`❌ [TRACE-${callId}] 等待失败，serviceManager为空`)
-              reject(new Error('MCP服务初始化失败'))
-            }
-          }
-        }, 100)
+    if (!serviceManager) {
+      console.log(`❌ [TRACE-${callId}] ServiceManager未初始化`)
+      throw new Error('ServiceManager未初始化')
+    }
+
+    // 检查MCP服务状态
+    const mcpStatus = serviceManager.getServiceStatus('mcp')
+    console.log(`🔍 [TRACE-${callId}] MCP状态检查结果:`, mcpStatus)
+    
+    if (mcpStatus && mcpStatus.status === 'ready') {
+      console.log(`✅ [TRACE-${callId}] MCP服务已就绪`)
+      return
+    }
+
+    // 如果MCP服务未就绪，等待一段时间
+    console.log(`⏳ [TRACE-${callId}] MCP服务未就绪，等待初始化完成...`)
+    
+    return new Promise((resolve, reject) => {
+      let attempts = 0
+      const maxAttempts = 100 // 10秒超时
+      
+      const checkInterval = setInterval(() => {
+        attempts++
+        const status = serviceManager?.getServiceStatus('mcp')
         
-        // 30秒超时保护
-        setTimeout(() => {
+        if (status && status.status === 'ready') {
           clearInterval(checkInterval)
-          console.log(`⏰ [TRACE-${callId}] 等待超时`)
+          console.log(`✅ [TRACE-${callId}] MCP服务已就绪`)
+          resolve()
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval)
+          console.log(`⏰ [TRACE-${callId}] 等待MCP服务超时`)
           reject(new Error('MCP服务初始化超时'))
-        }, 30000)
-      })
-    }
-
-    if (serviceManager) {
-      console.log(`🔍 [TRACE-${callId}] serviceManager已存在，检查MCP服务状态...`)
-      // 检查服务管理器是否真正初始化完成
-      const mcpStatus = serviceManager.getServiceStatus('mcp')
-      console.log(`🔍 [TRACE-${callId}] MCP状态检查结果:`, mcpStatus)
-      if (mcpStatus && mcpStatus.status === 'ready') {
-        console.log(`✅ [TRACE-${callId}] MCP服务已就绪，跳过重复加载`)
-        return
-      } else {
-        console.log(`🔄 [TRACE-${callId}] MCP服务未完全就绪，继续初始化...`)
-      }
-    } else {
-      console.log(`🆕 [TRACE-${callId}] serviceManager不存在，需要创建`)
-    }
-    
-    console.log(`🔒 [TRACE-${callId}] 设置初始化锁`)
-    ensureMCPServices._initializing = true
-
-    console.log(`🔧 [TRACE-${callId}] 开始懒加载MCP服务...`)
-
-    try {
-      // 获取或创建服务管理器实例
-      if (!serviceManager) {
-        console.log(`🏭 [TRACE-${callId}] 创建ServiceManager实例`)
-        serviceManager = ServiceManager.getInstance()
-        
-        // 监听服务状态变化
-        serviceManager.on('service-status-change', (status) => {
-          console.log(`📊 [主进程] 服务状态变化: ${status.name} - ${status.status}`)
-          
-          // 向渲染进程发送状态更新
-          if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('service-status-update', status)
-          }
-        })
-
-        // 监听进程事件
-        serviceManager.on('process-event', (event) => {
-          console.log(`🔧 [主进程] 进程事件: ${event.type} - ${event.processId}`)
-        })
-
-        // 监听MCP事件
-        serviceManager.on('mcp-event', (event) => {
-          console.log(`🔌 [主进程] MCP事件: ${event.type} - ${event.serverId}`)
-          
-          // 🔥 当PromptX连接成功时，通知前端可以使用PromptX功能
-          if (event.type === 'connected' && event.serverId?.includes('promptx')) {
-            if (mainWindow && mainWindow.webContents) {
-              mainWindow.webContents.send('promptx-ready', { 
-                status: 'ready',
-                message: 'PromptX服务已就绪，可以立即使用专业角色功能' 
-              })
-            }
-          }
-        })
-      } else {
-        console.log(`♻️ [TRACE-${callId}] serviceManager已存在，跳过创建`)
-      }
-
-      // 🔥 关键：初始化MCP服务
-      console.log(`🚀 [TRACE-${callId}] 开始初始化ServiceManager...`)
-      await serviceManager.initialize()
-
-      console.log(`✅ [TRACE-${callId}] MCP服务懒加载完成`)
-      console.log(`🔓 [TRACE-${callId}] 释放初始化锁`)
-      ensureMCPServices._initializing = false
-
-    } catch (error) {
-      console.error(`❌ [TRACE-${callId}] MCP服务初始化失败:`, error)
-      console.log(`🔓 [TRACE-${callId}] 异常释放初始化锁`)
-      ensureMCPServices._initializing = false
-      
-      // 🔥 重置serviceManager状态，允许重试
-      console.log(`🔄 [TRACE-${callId}] 重置serviceManager为null`)
-      serviceManager = null
-      
-      // 向渲染进程发送错误状态
-      if (mainWindow && mainWindow.webContents) {
-        mainWindow.webContents.send('service-init-error', {
-          error: error instanceof Error ? error.message : '未知错误',
-          retry: true // 告诉前端可以重试
-        })
-      }
-      
-      throw error
-    }
+        } else {
+          console.log(`🔄 [TRACE-${callId}] 等待MCP服务就绪... (${attempts}/${maxAttempts})`)
+        }
+      }, 100)
+    })
   }
-
-  // 🔒 添加初始化标志
-  ensureMCPServices._initializing = false
 
 /**
  * 初始化PromptX工作区
@@ -599,7 +522,7 @@ function registerIPCHandlers(): void {
     }
   })
 
-  // 🔥 采用Cherry Studio的简单方式 - 按需获取工具，无需复杂初始化
+  // 🔥 采用官方SDK标准方式 - 按需获取工具，无需复杂初始化
   ipcMain.handle('mcp:getAllTools', async () => {
     try {
       console.log('📡 [主进程] 收到前端getAllTools请求，开始处理...')
@@ -1040,14 +963,63 @@ app.whenReady().then(async () => {
   console.log(`🔧 [主进程] Node版本: ${process.version}`)
   console.log(`🔧 [主进程] 平台: ${process.platform}`)
 
-  // 0. 初始化核心服务实例（现在app已准备就绪）
-  console.log('🔧 [主进程] 初始化核心服务实例...')
-  localStorageService = new LocalStorageService()
-  configService = new ConfigService()
-  chatService = new ChatService()
-  langChainService = new LLMService()
-  modelManagementService = new ModelService()
-  console.log('✅ [主进程] 核心服务实例创建完成')
+  // 0. 初始化ServiceManager和核心服务（现在app已准备就绪）
+  console.log('🔧 [主进程] 通过ServiceManager初始化核心服务...')
+  
+  try {
+    // 创建ServiceManager并初始化基础设施
+    serviceManager = ServiceManager.getInstance()
+    
+    // 注册ServiceManager事件监听器
+    serviceManager.on('service-status-change', (status) => {
+      console.log(`📊 [主进程] 服务状态变化: ${status.name} - ${status.status}`)
+      
+      // 向渲染进程发送状态更新
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('service-status-update', status)
+      }
+    })
+
+    serviceManager.on('process-event', (event) => {
+      console.log(`🔧 [主进程] 进程事件: ${event.type} - ${event.processId}`)
+    })
+
+    serviceManager.on('mcp-event', (event) => {
+      console.log(`🔌 [主进程] MCP事件: ${event.type} - ${event.serverId}`)
+      
+      // 🔥 当PromptX连接成功时，通知前端可以使用PromptX功能
+      if (event.type === 'connected' && event.serverId?.includes('promptx')) {
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('promptx-ready', { 
+            status: 'ready',
+            message: 'PromptX服务已就绪，可以立即使用专业角色功能' 
+          })
+        }
+      }
+    })
+    
+    // 初始化ServiceManager
+    await serviceManager.initialize()
+    
+    // ServiceManager已初始化完成
+    
+    // 创建服务实例（它们内部会连接到SQLite数据库）
+    localStorageService = new LocalStorageService() // 这个服务将被逐步淘汰
+    configService = new ConfigService()
+    chatService = new ChatService()
+    langChainService = new LLMService()
+    modelManagementService = new ModelService()
+    
+    console.log('✅ [主进程] 核心服务实例创建完成（已连接SQLite数据库）')
+  } catch (error) {
+    console.error('❌ [主进程] 核心服务初始化失败:', error)
+    // 发送错误到渲染进程  
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('service-init-error', {
+        error: error instanceof Error ? error.message : '未知错误'
+      })
+    }
+  }
 
   // 1. 注册IPC处理器
   registerIPCHandlers()

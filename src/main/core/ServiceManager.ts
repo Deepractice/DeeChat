@@ -13,6 +13,7 @@ import { EventEmitter } from 'events'
 import { ProcessPoolManager } from './ProcessPoolManager'
 import { MCPServiceCoordinator } from './MCPServiceCoordinator'
 import { SystemRoleManager } from './SystemRoleManager'
+import { QuickDatabaseManager } from '../services/core/QuickDatabaseManager'
 
 export interface ServiceStatus {
   name: string
@@ -28,6 +29,7 @@ export class ServiceManager extends EventEmitter {
   private isShuttingDown = false
 
   // 核心服务组件
+  private databaseManager: QuickDatabaseManager
   private processPool: ProcessPoolManager
   private mcpCoordinator: MCPServiceCoordinator
   private systemRoleManager: SystemRoleManager
@@ -39,6 +41,7 @@ export class ServiceManager extends EventEmitter {
     super()
     
     // 初始化核心组件
+    this.databaseManager = new QuickDatabaseManager()
     this.processPool = new ProcessPoolManager()
     this.mcpCoordinator = new MCPServiceCoordinator(this.processPool)
     this.systemRoleManager = new SystemRoleManager()
@@ -193,6 +196,23 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
+   * 获取数据库管理器
+   */
+  public getDatabaseManager(): QuickDatabaseManager {
+    if (!this.isInitialized) {
+      throw new Error('ServiceManager未初始化，无法获取数据库管理器')
+    }
+    return this.databaseManager
+  }
+
+  /**
+   * 检查ServiceManager是否已初始化
+   */
+  public isReady(): boolean {
+    return this.isInitialized
+  }
+
+  /**
    * Phase 1: 基础设施初始化
    */
   private async initializeInfrastructure(): Promise<void> {
@@ -218,6 +238,11 @@ export class ServiceManager extends EventEmitter {
           console.log(`📁 [ServiceManager] 创建目录: ${dir}`)
         }
       }
+
+      // 🗄️ 数据库初始化和迁移
+      console.log(`🗄️ [ServiceManager] 开始数据库初始化...`)
+      await this.databaseManager.initialize()
+      console.log(`✅ [ServiceManager] 数据库初始化完成`)
 
       // 基础设施初始化完成（文件服务已在主进程中独立初始化）
       console.log(`📁 [ServiceManager] 基础设施初始化完成`)
@@ -319,6 +344,11 @@ export class ServiceManager extends EventEmitter {
   private async shutdownInfrastructure(): Promise<void> {
     this.updateServiceStatus('infrastructure', 'stopping', '关闭基础设施...')
     try {
+      // 关闭数据库连接
+      console.log(`🗄️ [ServiceManager] 关闭数据库连接...`)
+      this.databaseManager.close()
+      console.log(`✅ [ServiceManager] 数据库连接已关闭`)
+      
       // 清理临时文件等
       this.serviceStatuses.delete('infrastructure')
     } catch (error) {

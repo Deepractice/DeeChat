@@ -1,0 +1,139 @@
+import { DatabaseService } from './DatabaseService';
+import { SimplifiedMigrationService } from './SimplifiedMigrationService';
+import { SqliteChatSessionRepository } from '../../repositories/SqliteChatSessionRepository';
+import { SqliteModelConfigRepository } from '../../repositories/SqliteModelConfigRepository';
+
+/**
+ * 数据库迁移管理器 - 奥卡姆剃刀实现
+ * 
+ * 设计原则：
+ * 1. 自动检测迁移需求
+ * 2. 零停机热切换
+ * 3. 完整的回滚机制
+ * 4. 渐进式替换策略
+ */
+export class DatabaseMigrationManager {
+  private databaseService: DatabaseService;
+  private migrationService: SimplifiedMigrationService;
+  private sqliteChatRepository: SqliteChatSessionRepository;
+  private sqliteConfigRepository: SqliteModelConfigRepository;
+  
+  private migrationCompleted = false;
+
+  constructor() {
+    this.databaseService = new DatabaseService();
+    this.migrationService = new SimplifiedMigrationService(this.databaseService);
+    this.sqliteChatRepository = new SqliteChatSessionRepository(this.databaseService);
+    this.sqliteConfigRepository = new SqliteModelConfigRepository(this.databaseService);
+  }
+
+  /**
+   * 初始化并自动执行迁移（如果需要）
+   */
+  async initialize(): Promise<void> {
+    console.log('🔄 DatabaseMigrationManager初始化开始');
+
+    try {
+      // 检查是否需要迁移
+      const shouldMigrate = await this.migrationService.shouldMigrate();
+      
+      if (shouldMigrate) {
+        console.log('🎯 检测到需要迁移，开始自动迁移...');
+        await this.performMigration();
+      } else {
+        console.log('✅ 数据库已是最新状态，无需迁移');
+        this.migrationCompleted = true;
+      }
+
+      // 初始化SQLite仓储
+      await this.sqliteChatRepository.initialize();
+      await this.sqliteConfigRepository.initialize();
+
+      console.log('✅ DatabaseMigrationManager初始化完成');
+    } catch (error) {
+      console.error('❌ DatabaseMigrationManager初始化失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行完整迁移流程
+   */
+  private async performMigration(): Promise<void> {
+    const result = await this.migrationService.migrateToSQLite();
+    
+    if (result.success) {
+      this.migrationCompleted = true;
+      console.log('🎉 迁移成功完成！', {
+        sessions: result.migratedSessions,
+        messages: result.migratedMessages,
+        configs: result.migratedConfigs,
+        preferences: result.migratedPreferences,
+        backup: result.backupPath
+      });
+    } else {
+      console.error('❌ 迁移失败:', result.errors);
+      throw new Error(`迁移失败: ${result.errors.join(', ')}`);
+    }
+  }
+
+  /**
+   * 获取聊天会话仓储（智能路由）
+   */
+  getChatSessionRepository() {
+    if (this.migrationCompleted) {
+      return this.sqliteChatRepository;
+    } else {
+      // 降级到原有实现
+      throw new Error('迁移未完成，无法提供SQLite仓储');
+    }
+  }
+
+  /**
+   * 获取模型配置仓储（智能路由）
+   */
+  getModelConfigRepository() {
+    if (this.migrationCompleted) {
+      return this.sqliteConfigRepository;
+    } else {
+      // 降级到原有实现
+      throw new Error('迁移未完成，无法提供SQLite仓储');
+    }
+  }
+
+  /**
+   * 获取数据库统计信息
+   */
+  getDatabaseStats() {
+    return this.databaseService.getStats();
+  }
+
+  /**
+   * 检查数据库健康状态
+   */
+  healthCheck(): boolean {
+    return this.databaseService.healthCheck();
+  }
+
+  /**
+   * 安全关闭数据库
+   */
+  close(): void {
+    this.databaseService.close();
+  }
+
+  /**
+   * 获取迁移状态
+   */
+  isMigrationCompleted(): boolean {
+    return this.migrationCompleted;
+  }
+
+  /**
+   * 手动触发迁移（用于测试或修复）
+   */
+  async forceMigration(): Promise<void> {
+    console.log('🔧 手动触发迁移...');
+    await this.performMigration();
+  }
+}

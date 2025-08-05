@@ -16,7 +16,7 @@ export class PromptXLocalService implements IPromptXService {
     if (process.env.NODE_ENV === 'development') {
       this.promptxPath = path.join(__dirname, '../../../../resources/promptx/package');
     } else {
-      this.promptxPath = path.join(process.resourcesPath, 'promptx/package');
+      this.promptxPath = path.join(process.resourcesPath, 'resources/promptx/package');
     }
     // 延迟初始化，等待首次使用时再初始化
   }

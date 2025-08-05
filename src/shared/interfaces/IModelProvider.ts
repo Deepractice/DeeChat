@@ -101,3 +101,18 @@ export interface ModelConfigTemplate {
   customEndpoint?: string
   customHeaders?: Record<string, string>
 }
+
+// 模型配置服务接口
+export interface IModelConfigService {
+  // 获取所有配置
+  getAllConfigs(): Promise<ModelConfigEntity[]>
+  
+  // 根据ID获取配置
+  getConfigById(id: string): Promise<ModelConfigEntity | null>
+  
+  // 保存配置
+  saveConfig(config: ModelConfigEntity): Promise<void>
+  
+  // 删除配置
+  deleteConfig(id: string): Promise<void>
+}

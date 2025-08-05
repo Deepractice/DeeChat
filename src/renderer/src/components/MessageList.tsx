@@ -3,16 +3,17 @@ import { Avatar, Card, Typography, Space, Tag, Spin } from 'antd'
 import { UserOutlined, RobotOutlined } from '@ant-design/icons'
 import { ChatMessage } from '../../../shared/types'
 import TypewriterText from './TypewriterText'
-import ToolExecutionCard from './ToolExecutionCard'
+import ConversationalToolCall from './ConversationalToolCall'
 
 const { Text, Paragraph } = Typography
 
 interface MessageListProps {
   messages: ChatMessage[]
   isLoading: boolean
+  currentToolExecution?: string // 当前正在执行的工具名称
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, isLoading, currentToolExecution }) => {
   const [loadingText, setLoadingText] = useState('AI正在思考中')
   const [dotCount, setDotCount] = useState(0)
   const [lastMessageId, setLastMessageId] = useState<string | null>(null)
@@ -21,12 +22,37 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
   useEffect(() => {
     if (!isLoading) return
 
-    const loadingTexts = [
-      'AI正在思考中',
-      '正在分析您的问题',
-      '正在生成回复',
-      '即将完成回复'
-    ]
+    const getLoadingTexts = () => {
+      if (currentToolExecution) {
+        const toolActionMap: Record<string, string> = {
+          'context7_resolve-library-id': '正在查找相关资源库',
+          'context7_get-library-docs': '正在获取技术文档', 
+          'promptx_welcome': '正在获取可用角色',
+          'promptx_action': '正在激活专业角色',
+          'promptx_remember': '正在记忆重要信息',
+          'promptx_recall': '正在检索相关记忆',
+          'web-search': '正在搜索网络信息',
+          'file-read': '正在读取文件内容',
+          'code-execution': '正在执行代码'
+        }
+        const toolAction = toolActionMap[currentToolExecution] || `正在使用 ${currentToolExecution} 工具`
+        return [
+          toolAction,
+          '正在处理工具响应',
+          '即将完成操作',
+          '正在整理结果'
+        ]
+      }
+      
+      return [
+        'AI正在思考中',
+        '正在分析您的问题', 
+        '正在生成回复',
+        '即将完成回复'
+      ]
+    }
+
+    const loadingTexts = getLoadingTexts()
 
     const textInterval = setInterval(() => {
       setLoadingText(prev => {
@@ -43,7 +69,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
       clearInterval(textInterval)
       clearInterval(dotInterval)
     }
-  }, [isLoading])
+  }, [isLoading, currentToolExecution])
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('zh-CN', {
@@ -123,9 +149,12 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
                 )}
               </Paragraph>
 
-              {/* 工具执行卡片 - 只在AI消息中显示 */}
+              {/* 对话式工具调用显示 - 只在AI消息中显示 */}
               {!isUser && message.toolExecutions && message.toolExecutions.length > 0 && (
-                <ToolExecutionCard toolExecutions={message.toolExecutions} />
+                <ConversationalToolCall 
+                  toolExecutions={message.toolExecutions}
+                  isExecuting={false}
+                />
               )}
 
               <div
@@ -209,11 +238,29 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
                 }
               }}
             >
-              <Space>
-                <Spin size="small" />
-                <Text type="secondary">
-                  {loadingText}{'·'.repeat(dotCount)}
-                </Text>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space>
+                  <Spin size="small" />
+                  <Text type="secondary">
+                    {loadingText}{'·'.repeat(dotCount)}
+                  </Text>
+                </Space>
+                {currentToolExecution && (
+                  <div style={{ 
+                    marginTop: '8px', 
+                    padding: '8px 12px',
+                    background: 'linear-gradient(135deg, #f6f8ff 0%, #e8f4ff 100%)',
+                    borderRadius: '8px',
+                    borderLeft: '3px solid #1890ff'
+                  }}>
+                    <Space>
+                      <RobotOutlined spin style={{ color: '#1890ff' }} />
+                      <Text style={{ color: '#1890ff', fontSize: '12px' }}>
+                        使用 {currentToolExecution} 工具中...
+                      </Text>
+                    </Space>
+                  </div>
+                )}
               </Space>
 
               {/* 打字机效果的光标 */}

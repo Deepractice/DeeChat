@@ -1,6 +1,6 @@
 /**
- * MCP集成服务 - 简化重构版
- * 参考Cherry Studio设计，使用官方MCP SDK
+ * MCP集成服务
+ * 基于官方MCP SDK的标准集成实现，提供统一的MCP服务接口
  */
 
 import log from 'electron-log'
@@ -437,7 +437,7 @@ export class MCPIntegrationService implements IMCPProvider {
   }
 
   /**
-   * 获取所有工具 - 采用Cherry Studio的简单方式
+   * 获取所有工具 - 官方SDK标准实现
    */
   async getAllTools(): Promise<MCPToolEntity[]> {
     console.log('[MCP Integration] 🔍 开始获取所有工具...')
