@@ -22,9 +22,10 @@ export class LLMService {
   // mcpToolService功能已整合到mcpService中
 
   constructor() {
-    this.langChainService = new LangChainLLMService()
     this.modelManagementService = new ModelService()
     this.mcpService = MCPIntegrationService.getInstance()
+    // 将MCP服务注入到LangChainLLMService
+    this.langChainService = new LangChainLLMService(undefined, this.modelManagementService, this.mcpService)
     // mcpToolService功能已整合到mcpService中
   }
 
@@ -774,7 +775,7 @@ export class LLMService {
   }
 
   /**
-   * 使用MCP工具增强的消息发送
+   * 使用MCP工具增强的消息发送（使用LangChain标准工具调用）
    * @param request LLM请求对象
    * @param configId 模型配置ID
    * @param enableMCPTools 是否启用MCP工具
@@ -787,154 +788,161 @@ export class LLMService {
     chatHistory?: ChatMessage[]
   ): Promise<LLMResponse> {
     try {
+      // 🤖 静默确保系统角色激活
+      await this.ensureSystemRoleActive()
+
       if (!enableMCPTools) {
         // 不使用MCP工具，直接调用原有方法
         return await this.sendMessage(request, configId, chatHistory)
       }
 
-      // 获取可用的MCP工具
-      const mcpTools = await this.getMCPTools()
-      console.log(`[LangChain Integration] 获取到 ${mcpTools.length} 个MCP工具`)
+      log.info(`🔧 [LangChain标准工具调用] 启用MCP工具集成，配置ID: ${configId}`)
 
-      if (mcpTools.length === 0) {
-        // 没有可用工具，使用普通模式
-        return await this.sendMessage(request, configId, chatHistory)
-      }
+      // 🎯 复用sendMessage的智能配置逻辑，支持模型名称和配置ID
+      log.info(`🔍 [模型解析] 输入配置ID/模型名: ${configId}`)
+      
+      let config: ModelConfigEntity | null = null
 
-      // 构建工具描述的系统提示词
-      const toolDescriptions = mcpTools.map(tool => {
-        return `- ${tool.name}: ${tool.description}`
-      }).join('\n')
-
-      const systemPrompt = `你是一个智能助手，可以使用以下工具来帮助用户：
-
-可用工具：
-${toolDescriptions}
-
-使用工具的格式：
-当你需要使用工具时，请按以下格式回复：
-[TOOL_CALL]
-工具名称: tool_name
-参数: {"param1": "value1", "param2": "value2"}
-[/TOOL_CALL]
-
-如果不需要使用工具，请直接回复用户的问题。
-
-${request.systemPrompt || ''}`
-
-      // 使用增强的系统提示词发送消息
-      const enhancedRequest = {
-        ...request,
-        systemPrompt
-      }
-
-      const response = await this.sendMessage(enhancedRequest, configId, chatHistory)
-
-      // 检查响应中是否包含工具调用
-      const toolCallMatch = response.content.match(/\[TOOL_CALL\]([\s\S]*?)\[\/TOOL_CALL\]/g)
-
-      // 初始化工具调用记录数组
-      const toolExecutions: Array<{
-        id: string
-        toolName: string
-        serverId?: string
-        serverName?: string
-        params: any
-        result?: any
-        success?: boolean
-        error?: string
-        duration?: number
-        timestamp: number
-      }> = []
-
-      if (toolCallMatch) {
-        console.log(`[LangChain Integration] 检测到 ${toolCallMatch.length} 个工具调用`)
-
-        // 处理工具调用
-        let finalContent = response.content
-
-        for (const toolCall of toolCallMatch) {
-          const executionId = `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-          const startTime = Date.now()
-
-          try {
-            // 解析工具调用
-            const toolNameMatch = toolCall.match(/工具名称:\s*([^\n]+)/)
-            const paramsMatch = toolCall.match(/参数:\s*({[\s\S]*?})/)
-
-            if (toolNameMatch && paramsMatch) {
-              const toolName = toolNameMatch[1].trim()
-              const params = JSON.parse(paramsMatch[1])
-
-              console.log(`[LangChain Integration] 调用工具: ${toolName}`, params)
-
-              // 查找对应的MCP工具
-              const mcpTool = mcpTools.find(tool => tool.name.includes(toolName))
-              if (mcpTool) {
-                // 使用MCP服务调用工具
-                const toolCallRequest = {
-                  serverId: mcpTool.serverId,
-                  toolName: mcpTool.name,
-                  arguments: params
-                }
-                const toolResponse = await this.mcpService.callTool(toolCallRequest)
-                const duration = Date.now() - startTime
-                console.log(`[LangChain Integration] 工具执行结果:`, toolResponse)
-
-                // 记录工具执行信息
-                toolExecutions.push({
-                  id: executionId,
-                  toolName,
-                  serverId: mcpTool.serverId,
-                  serverName: mcpTool.serverName,
-                  params,
-                  result: toolResponse.result || toolResponse,
-                  success: toolResponse.success !== false,
-                  error: toolResponse.error,
-                  duration,
-                  timestamp: startTime
-                })
-
-                // 从AI回复中移除工具调用标记，保持回复内容的纯净
-                finalContent = finalContent.replace(toolCall, '')
-              }
+      try {
+        // 首先尝试作为配置ID查找
+        config = await this.modelManagementService.getConfigById(configId)
+        
+        if (!config) {
+          // 如果没找到，复用sendMessage的智能配置逻辑
+          log.info(`🔧 [智能配置] 配置ID不存在，尝试作为模型名称: ${configId}`)
+          
+          const allConfigs = await this.modelManagementService.getAllConfigs()
+          const enabledConfigs = allConfigs.filter(c => c.isEnabled)
+          
+          // 查找支持该模型的配置
+          const foundConfig = enabledConfigs.find(c => {
+            if (c.model === configId) return true
+            if (c.enabledModels && c.enabledModels.includes(configId)) return true
+            return false
+          })
+          
+          if (foundConfig) {
+            // 🔧 重要修复：使用找到的配置，但替换model为用户实际选择的模型
+            config = Object.assign(foundConfig, { model: configId })
+            // 直接修改现有对象的model字段，避免复杂的类型转换
+            log.info(`✅ [智能配置] 找到支持模型的配置: ${foundConfig.name}，使用模型: ${configId}`)
+          } else {
+            // 使用内置ChatAnywhere配置，复用sendMessage逻辑
+            log.info(`🔧 [内置配置] 使用ChatAnywhere默认配置服务模型: ${configId}`)
+            
+            // 🔧 ChatAnywhere使用OpenAI兼容接口，所有模型都应该使用'openai' provider
+            // 即使是Claude模型也通过OpenAI格式调用ChatAnywhere
+            const detectedProvider = 'openai'
+            log.info(`🔍 [模型识别] ${configId} -> provider: ${detectedProvider}`)
+            
+            const DEFAULT_CONFIG = {
+              id: 'chatanywhere-mcp-default',
+              name: 'ChatAnywhere (MCP内置)',
+              provider: 'openai', // 🔧 强制使用'openai' - ChatAnywhere使用OpenAI兼容接口
+              model: configId,
+              apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
+              baseURL: 'https://api.chatanywhere.tech/v1/',
+              isEnabled: true,
+              priority: 10,
+              enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-sonnet-4-20250514'],
+              status: 'available' as const,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
             }
-          } catch (error) {
-            const duration = Date.now() - startTime
-            console.error(`[LangChain Integration] 工具调用失败:`, error)
-
-            // 记录工具执行错误
-            const failedToolName = toolCallMatch[0]?.match(/工具名称:\s*([^\n]+)/)?.[1]?.trim() || 'unknown'
-            toolExecutions.push({
-              id: executionId,
-              toolName: failedToolName,
-              serverId: 'unknown',
-              serverName: 'unknown',
-              params: {},
-              result: null,
-              success: false,
-              error: error instanceof Error ? error.message : '未知错误',
-              duration,
-              timestamp: startTime
-            })
-
-            // 从AI回复中移除工具调用标记
-            finalContent = finalContent.replace(toolCall, '')
+            
+            config = new ModelConfigEntity(DEFAULT_CONFIG)
+            log.info(`✅ [内置配置] 创建默认配置: ${detectedProvider}/${configId}`)
           }
         }
+        
+        if (!config) {
+          throw new Error(`找不到支持模型 ${configId} 的配置`)
+        }
 
-        // 清理多余的空行
-        response.content = finalContent.replace(/\n{3,}/g, '\n\n').trim()
+        if (!config.isEnabled) {
+          throw new Error(`模型配置已禁用: ${config.name}`)
+        }
+      } catch (error) {
+        log.error(`❌ [配置解析] 配置获取失败: ${configId}`, error)
+        throw error
       }
 
-      // 返回增强的响应对象，包含工具执行记录
-      return {
-        ...response,
-        toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined
+      // 处理附件内容（如果有）
+      let enhancedMessage = request.message
+      if (request.attachmentIds && request.attachmentIds.length > 0) {
+        console.log(`🔗 [附件处理] 处理 ${request.attachmentIds.length} 个附件`)
+        
+        const fileService = new FileService()
+        await fileService.initialize()
+        if (fileService) {
+          const attachmentContents: string[] = []
+          
+          for (const attachmentId of request.attachmentIds) {
+            try {
+              const attachmentContent = await fileService.getAttachmentContent(attachmentId)
+              attachmentContents.push(attachmentContent)
+              console.log(`✅ [附件处理] 附件 ${attachmentId} 内容获取成功`)
+            } catch (error) {
+              console.error(`❌ [附件处理] 获取附件 ${attachmentId} 内容失败:`, error)
+              attachmentContents.push(`[附件读取失败: ${attachmentId}]`)
+            }
+          }
+          
+          if (attachmentContents.length > 0) {
+            enhancedMessage = `${request.message}\n\n附件内容:\n${attachmentContents.join('\n\n---\n\n')}`
+            console.log(`🔗 [附件处理] 消息已增强，包含 ${attachmentContents.length} 个附件`)
+          }
+        }
       }
+
+      // 🆕 使用LangChain标准工具调用
+      const langchainResponse = await this.langChainService.sendMessageWithMCPTools(
+        enhancedMessage,
+        config,
+        request.systemPrompt,
+        true // 启用MCP工具
+      )
+
+      log.info(`📊 [LangChain标准工具调用] 响应生成完成，包含工具调用: ${langchainResponse.hasToolCalls}`)
+
+      // 构造标准LLMResponse格式
+      const response: LLMResponse = {
+        content: langchainResponse.content,
+        model: config.model,
+        usage: undefined, // LangChain可能不提供详细的usage信息
+        finishReason: 'stop'
+      }
+
+      // 如果有工具调用，添加工具执行记录
+      if (langchainResponse.hasToolCalls && langchainResponse.toolCalls) {
+        const toolExecutions = langchainResponse.toolCalls.map((toolCall: any, index: number) => ({
+          id: toolCall.id || `tool_${Date.now()}_${index}`,
+          toolName: toolCall.name,
+          serverId: 'langchain-managed', // LangChain管理的工具调用
+          serverName: 'LangChain Standard Tools',
+          params: toolCall.args,
+          result: toolCall.result || '工具执行完成但无结果返回', // 🔧 使用真实的工具执行结果
+          success: true,
+          error: undefined,
+          duration: 0, // LangChain不提供执行时间
+          timestamp: Date.now()
+        }))
+
+        response.toolExecutions = toolExecutions
+        log.info(`📊 [LangChain标准工具调用] 记录了 ${toolExecutions.length} 个工具执行，结果长度: ${toolExecutions.map(t => (t.result as string).length).join(', ')}`)
+      }
+
+      // 更新配置状态为可用
+      if (config.status !== 'available') {
+        config.updateStatus('available')
+        await this.modelManagementService.updateConfig(config)
+      }
+
+      return response
 
     } catch (error) {
-      console.error('MCP工具增强消息发送失败:', error)
+      console.error('❌ [LangChain标准工具调用] MCP工具增强消息发送失败:', error)
+      
       // 降级到普通模式
       return await this.sendMessage(request, configId, chatHistory)
     }

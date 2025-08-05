@@ -34,6 +34,7 @@ export class InProcessMCPServer {
       
       // 🔥 设置环境变量
       process.env.MCP_DEBUG = 'true'
+      process.env.PROMPTX_WORKSPACE = this.workingDirectory
       
       // 🔥 切换到PromptX工作目录
       const originalCwd = process.cwd()
@@ -114,14 +115,26 @@ export class InProcessMCPServer {
       const originalCwd = process.cwd()
       process.chdir(this.workingDirectory)
       
-      // 直接调用PromptX的工具方法
-      const result = await this.promptxServer.callTool(toolName, args)
+      // 🎯 设置环境变量确保PromptX正确识别工作目录
+      const originalPromptXWorkspace = process.env.PROMPTX_WORKSPACE
+      process.env.PROMPTX_WORKSPACE = this.workingDirectory
       
-      // 恢复工作目录
-      process.chdir(originalCwd)
-      
-      log.info(`[InProcess MCP] ✅ 工具调用完成: ${toolName}`)
-      return result
+      try {
+        // 直接调用PromptX的工具方法
+        const result = await this.promptxServer.callTool(toolName, args)
+        
+        log.info(`[InProcess MCP] ✅ 工具调用完成: ${toolName}`)
+        return result
+        
+      } finally {
+        // 恢复环境变量和工作目录
+        if (originalPromptXWorkspace !== undefined) {
+          process.env.PROMPTX_WORKSPACE = originalPromptXWorkspace
+        } else {
+          delete process.env.PROMPTX_WORKSPACE
+        }
+        process.chdir(originalCwd)
+      }
       
     } catch (error) {
       log.error(`[InProcess MCP] ❌ 工具调用失败: ${toolName}`, error)

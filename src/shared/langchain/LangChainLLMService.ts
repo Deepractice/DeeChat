@@ -10,7 +10,35 @@ import { LangChainModelFactory } from './LangChainModelFactory';
 import { ModelConfigEntity } from '../entities/ModelConfigEntity';
 import { systemPromptProvider } from '../services/SystemPromptProvider';
 import { ISystemPromptProvider } from '../interfaces/ISystemPromptProvider';
+import { IModelConfigService } from '../interfaces/IModelProvider';
 import log from 'electron-log';
+
+// MCP工具相关类型定义
+interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema?: any;
+  serverId: string;
+  serverName?: string;
+}
+
+interface MCPToolCallRequest {
+  serverId: string;
+  toolName: string;
+  arguments: any;
+}
+
+interface MCPToolCallResponse {
+  success: boolean;
+  result?: any;
+  error?: string;
+}
+
+// MCP服务接口（注入依赖）
+interface MCPIntegrationServiceInterface {
+  getAllTools(): Promise<MCPTool[]>;
+  callTool(request: MCPToolCallRequest): Promise<MCPToolCallResponse>;
+}
 
 /**
  * LangChain LLM服务
@@ -20,9 +48,17 @@ export class LangChainLLMService {
   private modelCache: Map<string, BaseChatModel> = new Map();
   private configCache: Map<string, ModelConfigEntity> = new Map();
   private promptProvider: ISystemPromptProvider;
+  private configService?: IModelConfigService;
+  private mcpService?: MCPIntegrationServiceInterface;
 
-  constructor(promptProvider?: ISystemPromptProvider) {
+  constructor(
+    promptProvider?: ISystemPromptProvider, 
+    configService?: IModelConfigService,
+    mcpService?: MCPIntegrationServiceInterface
+  ) {
     this.promptProvider = promptProvider || systemPromptProvider;
+    this.configService = configService;
+    this.mcpService = mcpService;
   }
 
   /**
@@ -260,17 +296,30 @@ export class LangChainLLMService {
   }
 
   /**
-   * 获取配置（这里需要实现配置获取逻辑）
+   * 获取配置
    * @param configId 配置ID
    * @returns 配置实体
    */
   private async getConfig(configId: string): Promise<ModelConfigEntity> {
-    if (!this.configCache.has(configId)) {
-      // TODO: 这里需要实现从数据库或配置存储中获取配置的逻辑
-      // 暂时抛出错误，提醒需要实现
-      throw new Error(`配置获取未实现: ${configId}`);
+    // 先检查缓存
+    if (this.configCache.has(configId)) {
+      return this.configCache.get(configId)!;
     }
-    return this.configCache.get(configId)!;
+
+    // 如果没有配置服务，抛出错误
+    if (!this.configService) {
+      throw new Error(`配置服务未注入，无法获取配置: ${configId}`);
+    }
+
+    // 从配置服务获取
+    const config = await this.configService.getConfigById(configId);
+    if (!config) {
+      throw new Error(`配置不存在: ${configId}`);
+    }
+
+    // 缓存配置
+    this.configCache.set(configId, config);
+    return config;
   }
 
   /**
@@ -623,5 +672,187 @@ export class LangChainLLMService {
    */
   getSystemPromptProvider(): ISystemPromptProvider {
     return this.promptProvider;
+  }
+
+  // ==================== MCP工具集成方法 ====================
+
+
+  /**
+   * 使用MCP工具增强的消息发送（标准LangChain方式）
+   * @param message 用户消息
+   * @param config 模型配置
+   * @param systemPrompt 可选的系统提示词
+   * @param enableMCPTools 是否启用MCP工具
+   * @returns 模型响应和工具调用信息
+   */
+  async sendMessageWithMCPTools(
+    message: string,
+    config: ModelConfigEntity,
+    systemPrompt?: string,
+    enableMCPTools: boolean = true
+  ): Promise<{
+    content: string;
+    toolCalls?: any[];
+    hasToolCalls: boolean;
+    error?: boolean;
+  }> {
+    // 如果没有启用MCP工具或没有MCP服务，使用标准方式
+    if (!enableMCPTools || !this.mcpService) {
+      const content = await this.sendMessageWithConfig(message, config, systemPrompt);
+      return {
+        content,
+        hasToolCalls: false
+      };
+    }
+
+    try {
+      // 获取可用的MCP工具
+      const mcpTools = await this.mcpService.getAllTools();
+      log.info(`🔧 [LangChain工具集成] 获取到 ${mcpTools.length} 个MCP工具`);
+
+      if (mcpTools.length === 0) {
+        // 没有可用工具，使用普通模式
+        const content = await this.sendMessageWithConfig(message, config, systemPrompt);
+        return {
+          content,
+          hasToolCalls: false
+        };
+      }
+
+      // 创建模型实例
+      const model = LangChainModelFactory.createChatModel(config);
+      
+      // 构建消息，包含工具信息的系统提示
+      let finalSystemPrompt = this.promptProvider.buildSystemPrompt();
+      
+      // 添加MCP工具信息到系统提示
+      const toolsDescription = mcpTools.map(tool => 
+        `- ${tool.name}: ${tool.description || '无描述'}`
+      ).join('\n');
+      
+      const mcpSystemPrompt = `\n\n可用工具列表:\n${toolsDescription}\n\n🔧 工具调用规则：
+1. 当用户明确要求执行某个工具或命令时，必须立即调用相应工具
+2. 当用户询问可用角色、工具列表等信息时，使用 promptx_welcome 工具
+3. 当用户要求激活角色时，使用 promptx_action 工具
+4. 工具调用格式：[TOOL_CALL:工具名称:参数JSON]
+5. 先执行工具，再基于工具结果回复用户
+
+示例：
+- 用户："帮我执行welcome命令" → 立即输出：[TOOL_CALL:promptx_welcome:{}]
+- 用户："显示可用角色" → 立即输出：[TOOL_CALL:promptx_welcome:{}]
+- 用户："激活architect角色" → 立即输出：[TOOL_CALL:promptx_action:{"role":"architect"}]`;
+      
+      if (systemPrompt) {
+        finalSystemPrompt = finalSystemPrompt ? 
+          `${finalSystemPrompt}\n\n${systemPrompt}${mcpSystemPrompt}` : 
+          `${systemPrompt}${mcpSystemPrompt}`;
+      } else {
+        finalSystemPrompt = finalSystemPrompt ? 
+          `${finalSystemPrompt}${mcpSystemPrompt}` : 
+          mcpSystemPrompt;
+      }
+
+      const messages: BaseMessage[] = [
+        ...(finalSystemPrompt ? [new SystemMessage(finalSystemPrompt)] : []),
+        new HumanMessage(message)
+      ];
+
+      // 调用模型
+      log.info(`🤖 [LangChain工具集成] 调用模型，可用工具数量: ${mcpTools.length}`);
+      const response = await model.invoke(messages);
+      const content = response.content as string;
+
+      // 检查响应中是否包含工具调用
+      const toolCallPattern = /\[TOOL_CALL:([^:]+):([^\]]+)\]/g;
+      const toolCalls: any[] = [];
+      let processedContent = content;
+      let match;
+
+      while ((match = toolCallPattern.exec(content)) !== null) {
+        const [fullMatch, toolName, argsJson] = match;
+        
+        try {
+          const args = JSON.parse(argsJson);
+          const mcpTool = mcpTools.find(t => t.name === toolName);
+          
+          if (mcpTool) {
+            log.info(`🔧 [LangChain工具集成] 检测到工具调用: ${toolName}`);
+            
+            // 执行MCP工具调用
+            const toolResponse = await this.mcpService!.callTool({
+              serverId: mcpTool.serverId,
+              toolName: mcpTool.name,
+              arguments: args
+            });
+
+            const toolResult = toolResponse.success ? 
+              (typeof toolResponse.result === 'string' ? toolResponse.result : JSON.stringify(toolResponse.result)) :
+              `工具执行失败: ${toolResponse.error}`;
+
+            toolCalls.push({
+              id: `tool_${Date.now()}_${toolCalls.length}`,
+              name: toolName,
+              args: args,
+              result: toolResult
+            });
+
+            // 替换工具调用为结果
+            processedContent = processedContent.replace(fullMatch, `[工具执行结果: ${toolResult}]`);
+          }
+        } catch (error) {
+          log.error(`❌ [LangChain工具集成] 工具调用解析失败: ${toolName}`, error);
+          processedContent = processedContent.replace(fullMatch, `[工具调用失败: 参数解析错误]`);
+        }
+      }
+
+      const hasToolCalls = toolCalls.length > 0;
+      log.info(`📊 [LangChain工具集成] 响应包含工具调用: ${hasToolCalls}, 调用数量: ${toolCalls.length}`);
+
+      return {
+        content: processedContent,
+        toolCalls: hasToolCalls ? toolCalls : undefined,
+        hasToolCalls
+      };
+
+    } catch (error) {
+      log.error('❌ [LangChain工具集成] MCP工具增强消息发送失败:', error);
+      
+      // 检查是否是API相关错误，如果是则返回用户友好的错误信息
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('余额') || errorMessage.includes('balance') || 
+          errorMessage.includes('401') || errorMessage.includes('403') ||
+          errorMessage.includes('ApiKey') || errorMessage.includes('api key')) {
+        return {
+          content: `⚠️ **API服务异常**\n\n抱歉，当前AI服务遇到以下问题：\n\n${errorMessage.includes('余额') || errorMessage.includes('balance') ? '💳 **账户余额不足**：API密钥余额已用完，请联系管理员充值或更新密钥。' : '🔑 **API密钥问题**：当前密钥无效或已过期，请检查API配置。'}\n\n🛠️ **临时解决方案**：\n- 请在设置中更新有效的API密钥\n- 或联系管理员处理API配置问题\n- 或切换到其他可用的AI模型\n\n📝 **技术详情（供开发者参考）**：\n\`\`\`\n${errorMessage}\n\`\`\``,
+          hasToolCalls: false,
+          error: true // 标记为错误响应
+        };
+      }
+      
+      // 其他错误降级到普通模式
+      try {
+        const content = await this.sendMessageWithConfig(message, config, systemPrompt);
+        return {
+          content: `⚠️ **MCP工具服务暂时不可用**\n\n${content}\n\n---\n*注：当前以普通模式回复，MCP工具功能暂时关闭。如需使用专业工具，请联系管理员检查服务状态。*`,
+          hasToolCalls: false,
+          error: false
+        };
+      } catch (fallbackError) {
+        log.error('❌ [LangChain降级] 普通模式也失败:', fallbackError);
+        return {
+          content: `❌ **AI服务完全不可用**\n\n抱歉，当前AI服务遇到严重问题，无法正常响应。请联系管理员检查：\n\n1. API密钥配置\n2. 网络连接状态\n3. 服务器状态\n\n**错误详情**：\n\`\`\`\n${String(fallbackError)}\n\`\`\``,
+          hasToolCalls: false,
+          error: true
+        };
+      }
+    }
+  }
+
+  /**
+   * 设置MCP服务（用于后续注入）
+   * @param mcpService MCP集成服务实例
+   */
+  setMCPService(mcpService: MCPIntegrationServiceInterface): void {
+    this.mcpService = mcpService;
   }
 }
