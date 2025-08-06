@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="Creative PromptX Duck Logo 4.svg" alt="DeeChat AI Desktop Assistant" width="120" height="120">
+  <img src="src/renderer/public/logo.png" alt="DeeChat AI Desktop Assistant" width="120" height="120">
   
   # DeeChat
   
