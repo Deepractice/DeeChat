@@ -1,262 +1,158 @@
 <div align="center">
-  <img src="Creative PromptX Duck Logo 4.svg" alt="PromptX Desktop Client" width="120" height="120">
+  <img src="Creative PromptX Duck Logo 4.svg" alt="DeeChat AI Desktop Assistant" width="120" height="120">
   
   # DeeChat
   
-  ### 🚀 Chat is All You Need - 基于 PromptX 的革命性 AI 对话平台
+  ### 🧠 智能桌面AI助手 - 真正理解你的AI伙伴
   
-  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/promptx/desktop-client/releases)
+  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/deepractice/deechat/releases)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/promptx/desktop-client/releases)
-  [![LangChain](https://img.shields.io/badge/powered%20by-LangChain-orange.svg)](https://langchain.com)
+  [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/deepractice/deechat/releases)
   
   [English](README_EN.md) | 简体中文
 </div>
 
 ---
 
-## 🎯 产品介绍
+## ✨ 为什么选择 DeeChat？
 
-**DeeChat** 是基于革命性 AI 上下文工程平台 [PromptX](https://github.com/deepractice/PromptX) 构建的旗舰桌面应用。秉承 "Chat is All You Need" 的核心理念，通过对话式交互让任何 AI 瞬间变身行业专家，真正实现 AI 能力的普及化。
+**DeeChat** 不是普通的AI聊天工具，而是一个**真正理解你**的桌面AI伙伴。
 
-### ✨ 核心特性
+### 🎯 **智能理解**
+- **懂你的情绪**：AI能感知你的心情和需求，提供贴心回应
+- **记住偏好**：跨对话记忆你的习惯，越用越懂你
+- **自动适应**：根据你的使用场景智能调整服务方式
 
-- 🤖 **多模型支持** - 一键切换 OpenAI、Claude、Gemini 等主流 AI 模型
-- 🔌 **MCP 插件生态** - 通过插件扩展 AI 能力，连接真实世界的工具和服务
-- 💬 **流畅对话体验** - 支持流式响应、Markdown 渲染、代码高亮
-- 🎨 **专业界面设计** - 基于 Ant Design 的现代化 UI，支持亮/暗主题
-- 🔒 **企业级安全** - API 密钥加密存储，主进程隔离架构
-- 📦 **跨平台支持** - 支持 macOS、Windows、Linux 三大平台
+### 👤 **永远听你的**
+- **你说了算**：AI永远不会替你做决定，只提供建议让你选择
+- **透明可控**：清楚告诉你AI的想法，让你完全掌控
+- **安全放心**：所有数据本地存储，保护隐私安全
 
-## 🖼️ 界面截图
+### 🔥 **主要功能**
+
+#### 🤖 **支持多种AI模型**
+- 一键切换 OpenAI、Claude、Gemini 等主流AI
+- 自动配置API，使用简单
+- 智能优化，响应更快
+
+#### 🛠️ **强大工具集成**
+- 内置专业工具，开箱即用
+- 安全沙箱执行，放心使用
+- 结果自然展示，体验流畅
+
+#### 💡 **智能体验**
+- 根据使用场景自动调整
+- 聊天、文件、设置等功能无缝切换
+- 智能记忆，越用越好用
+
+#### 🎨 **精美界面**
+- 现代化设计，视觉舒适
+- 流畅动画，操作自然
+- 支持无障碍使用
+
+#### 🔒 **安全可靠**
+- 数据完全本地存储
+- API密钥加密保护
+- 工具调用安全隔离
+
+## 🖼️ 界面展示
 
 <div align="center">
-  <img src="docs/screenshots/main-interface.png" alt="主界面" width="800">
-  <p><em>主界面 - 清晰简洁的对话体验</em></p>
+  <img src="docs/screenshots/main-interface.png" alt="主界面 - 智能对话体验" width="800">
+  <p><em>主界面 - 智能对话体验</em></p>
 </div>
 
 <details>
-<summary>查看更多截图 👇</summary>
+<summary>查看更多界面 👇</summary>
 
 <div align="center">
-  <img src="docs/screenshots/model-management.png" alt="模型管理" width="800">
-  <p><em>模型管理 - 灵活配置多个 AI 模型</em></p>
+  <img src="docs/screenshots/intent-recognition.png" alt="智能意图识别" width="800">
+  <p><em>智能意图识别</em></p>
   
-  <img src="docs/screenshots/mcp-plugins.png" alt="MCP 插件" width="800">
-  <p><em>MCP 插件管理 - 扩展 AI 能力边界</em></p>
+  <img src="docs/screenshots/mcp-tools.png" alt="工具集成" width="800">
+  <p><em>强大工具集成</em></p>
+
+  <img src="docs/screenshots/resources-management.png" alt="资源管理" width="800">
+  <p><em>资源管理中心</em></p>
 </div>
 
 </details>
 
-## 🚀 快速开始
+## 🚀 立即开始使用
 
-### 安装下载
+### 📥 **下载安装**
 
-#### 方式一：直接下载安装包
+| 平台 | 下载 | 系统要求 |
+|------|------|----------|
+| 🍎 **macOS** | [下载 .dmg](https://github.com/deepractice/deechat/releases) | macOS 11+ |
+| 🪟 **Windows** | [下载 .exe](https://github.com/deepractice/deechat/releases) | Windows 10+ |
+| 🐧 **Linux** | [下载 AppImage](https://github.com/deepractice/deechat/releases) | Ubuntu 20.04+ |
 
-| 平台 | 下载链接 | 系统要求 |
-|---------|----------|------------|
-| macOS | [DeeChat-1.0.0.dmg](https://github.com/deepractice/deechat/releases) | macOS 10.15+ |
-| Windows | [DeeChat-1.0.0.exe](https://github.com/deepractice/deechat/releases) | Windows 10+ |
-| Linux | [DeeChat-1.0.0.AppImage](https://github.com/deepractice/deechat/releases) | Ubuntu 20.04+ |
+### ⚡ **三步开始**
 
-#### 方式二：从源码构建
+1. **启动应用** - 双击安装包完成安装
+2. **配置AI** - 添加你的API密钥（支持OpenAI、Claude、Gemini等）
+3. **开始聊天** - 体验真正理解你的AI助手
 
-```bash
-# 克隆项目
-git clone https://github.com/deepractice/deechat.git
-cd deechat
+就这么简单！DeeChat会自动为你优化体验。
 
-# 安装依赖
-npm install
+## 💬 常见问题
 
-# 构建应用
-npm run build:all
+### ❓ **支持哪些AI模型？**
+DeeChat支持主流AI模型：
+- **OpenAI**: GPT-3.5、GPT-4系列
+- **Claude**: Claude-3系列 
+- **Gemini**: Gemini Pro系列
+- **其他**: 支持兼容OpenAI API格式的模型
 
-# 安装包将生成在 release 目录
-```
+### ❓ **数据安全吗？**
+完全安全：
+- ✅ 所有对话数据本地存储
+- ✅ API密钥加密保护
+- ✅ 不上传任何用户数据
+- ✅ 工具执行沙箱隔离
 
-### 初次使用
+### ❓ **需要网络吗？**
+需要网络连接AI服务，但：
+- ✅ 应用本地运行
+- ✅ 对话历史本地保存
+- ✅ 离线时可查看历史记录
+- ✅ 未来计划支持本地模型
 
-1. **启动应用** - 双击安装后的应用图标
+### ❓ **如何获得API密钥？**
+各平台API密钥获取：
+- [OpenAI API Key](https://platform.openai.com/api-keys)
+- [Claude API Key](https://console.anthropic.com/)
+- [Gemini API Key](https://makersuite.google.com/app/apikey)
 
-2. **配置 AI 模型** - 点击侧边栏“模型管理”，添加您的 API 密钥
-   - OpenAI: 需要 [OpenAI API Key](https://platform.openai.com/api-keys)
-   - Claude: 需要 [Anthropic API Key](https://console.anthropic.com/)
-   - Gemini: 需要 [Google AI API Key](https://makersuite.google.com/app/apikey)
+### ❓ **遇到问题怎么办？**
+我们提供多种支持：
+- 📖 查看[用户手册](docs/)
+- 🐛 提交[Bug报告](https://github.com/deepractice/deechat/issues)
+- 💬 加入[社区讨论](https://github.com/deepractice/deechat/discussions)
 
-3. **开始对话** - 选择模型，输入消息，开启 AI 之旅
+## 🛠️ 开发者
 
-4. **安装插件**（可选） - 在“插件市场”中浏览并安装 MCP 插件
+如果你是开发者，想要：
+- 📁 查看源代码：`npm install && npm run dev`
+- 🔧 贡献代码：请先阅读[贡献指南](CONTRIBUTING.md)
+- 📚 技术文档：查看[docs/](docs/)目录
 
-## 🏭 技术架构
+## 📄 开源协议
 
-### 核心技术栈
+MIT License - 详见 [LICENSE](LICENSE) 文件
 
-| 技术层 | 技术选型 | 说明 |
-|---------|----------|------|
-| **前端框架** | React 18 + TypeScript 5 | 现代化前端开发体验 |
-| **UI 组件库** | Ant Design 5 | 企业级 UI 组件库 |
-| **桌面框架** | Electron 28 | 跨平台桌面应用解决方案 |
-| **状态管理** | Redux Toolkit | 可预测的状态管理 |
-| **构建工具** | Vite 5 | 极速的开发体验 |
-| **AI 集成** | LangChain | 统一的 LLM 接口层 |
-| **协议支持** | MCP (Model Context Protocol) | AI 工具生态集成 |
+---
 
-### 架构设计
+<div align="center">
+  
+### 🌟 加入DeeChat社区
 
-```mermaid
-graph TB
-    subgraph "渲染进程 (Renderer Process)"
-        A[🎮 React UI] --> B[Redux Store]
-        B --> C[IPC 通信层]
-    end
-    
-    subgraph "主进程 (Main Process)"
-        C --> D[🔒 服务层]
-        D --> E[LangChain 核心]
-        D --> F[MCP 客户端]
-        E --> G[AI Providers]
-        F --> H[MCP Tools]
-    end
-    
-    G --> I[🤖 OpenAI]
-    G --> J[🤖 Claude]
-    G --> K[🤖 Gemini]
-```
+[![GitHub Stars](https://img.shields.io/github/stars/deepractice/deechat?style=social)](https://github.com/deepractice/deechat/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/deepractice/deechat?style=social)](https://github.com/deepractice/deechat/network/members)
 
-## 项目结构
+**让AI真正理解人类，从DeeChat开始** 🚀
 
-```
-src/
-├── main/                 # Electron主进程
-│   ├── index.ts         # 主进程入口
-│   └── services/        # 后端服务层
-├── preload/             # 预加载脚本
-├── renderer/            # React渲染进程
-│   ├── src/
-│   │   ├── components/  # UI组件
-│   │   ├── store/       # Redux状态管理
-│   │   └── types/       # 类型定义
-└── shared/              # 共享代码
-    └── types/           # 共享类型定义
-```
+[⬆️ 返回顶部](#deechat)
 
-## 开发指南
-
-### 环境要求
-
-- Node.js >= 18
-- npm >= 8
-
-### 安装依赖
-
-```bash
-npm install
-```
-
-### 开发模式
-
-```bash
-npm run dev
-```
-
-这会同时启动Vite开发服务器和Electron应用。
-
-### 构建应用
-
-```bash
-# 构建渲染进程和主进程
-npm run build
-
-# 构建完整应用包
-npm run build:all
-```
-
-### 代码规范
-
-```bash
-# 检查代码规范
-npm run lint
-
-# 自动修复代码规范问题
-npm run lint:fix
-
-# TypeScript类型检查
-npm run type-check
-```
-
-## 📦 功能特性
-
-### ✅ 已实现功能 (v1.0.0)
-
-#### 💬 对话系统
-- [x] 流式对话响应，实时打字机效果
-- [x] Markdown 渲染支持，代码高亮显示
-- [x] 多会话管理，自动保存历史记录
-- [x] 消息复制、编辑、删除功能
-
-#### 🤖 AI 模型管理
-- [x] 多模型同时配置管理
-- [x] OpenAI (GPT-4/GPT-3.5) 完整支持
-- [x] Claude (Claude 3) 完整支持
-- [x] Google Gemini 完整支持
-- [x] 动态获取最新模型列表
-- [x] 模型状态实时检测
-
-#### 🔌 MCP 插件生态
-- [x] 完整 MCP 协议实现
-- [x] 内置 PromptX 插件集成
-- [x] 插件市场界面
-- [x] 工具调用可视化
-- [x] 插件配置管理
-
-#### 🎨 用户体验
-- [x] 专业的 Ant Design UI
-- [x] 响应式布局设计
-- [x] 丰富的加载动画
-- [x] 完善的错误提示
-- [x] 键盘快捷键支持
-
-### 🚀 计划功能 (v2.0)
-
-#### 近期计划
-- [ ] 本地模型支持 (Ollama)
-- [ ] PromptX 角色系统深度集成
-- [ ] 对话导出功能 (Markdown/PDF)
-- [ ] 高级搜索和过滤
-- [ ] 多语言支持
-
-#### 中期规划
-- [ ] 云同步功能
-- [ ] 团队协作模式
-- [ ] 插件开发 SDK
-- [ ] 自定义主题系统
-- [ ] AI 工作流编排
-
-## 配置说明
-
-应用配置存储在用户数据目录的 `config.json` 文件中：
-
-- **Windows**: `%APPDATA%/deechat/config.json`
-- **macOS**: `~/Library/Application Support/deechat/config.json`
-- **Linux**: `~/.config/deechat/config.json`
-
-## 开发注意事项
-
-1. **安全性**: 所有API调用都在主进程中进行，确保API密钥安全
-2. **类型安全**: 使用TypeScript严格模式，确保类型安全
-3. **错误处理**: 完善的错误处理和用户反馈
-4. **性能**: 使用React.memo和useMemo优化性能
-
-## 贡献指南
-
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
-
-## 许可证
-
-MIT License
+</div>
