@@ -8,8 +8,8 @@ if (!fs.existsSync(buildDir)) {
   fs.mkdirSync(buildDir, { recursive: true });
 }
 
-// SVG文件路径
-const svgPath = path.join(__dirname, '..', 'build', 'icon.svg');
+// PNG源文件路径
+const iconSourcePath = path.join(__dirname, '..', 'build', 'icon-source.png');
 
 // 需要生成的图标尺寸
 const sizes = [
@@ -45,8 +45,8 @@ async function generateIcons() {
       fs.mkdirSync(iconsetDir, { recursive: true });
     }
 
-    // 读取SVG文件
-    const svgBuffer = fs.readFileSync(svgPath);
+    // 读取PNG源文件
+    const sourceBuffer = fs.readFileSync(iconSourcePath);
     
     // 生成各种尺寸的PNG图标
     for (const { size, name } of sizes) {
@@ -58,8 +58,12 @@ async function generateIcons() {
         fs.mkdirSync(outputDir, { recursive: true });
       }
       
-      await sharp(svgBuffer)
-        .resize(size, size)
+      await sharp(sourceBuffer)
+        .resize(size, size, {
+          kernel: sharp.kernel.lanczos3,
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
         .png()
         .toFile(outputPath);
       
