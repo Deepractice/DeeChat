@@ -9,6 +9,8 @@ import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
 import { FileService } from '../FileService.js'
 import { conversationManager } from '../../../shared/services/ConversationManager'
 import { ChatMessage } from '../../../shared/types'
+import { llmPromptIntegration } from '../../../shared/prompts/LLMServiceIntegration'
+import { DeeChatFeature } from '../../../shared/prompts/FeatureContextProvider'
 import log from 'electron-log'
 
 /**
@@ -27,6 +29,21 @@ export class LLMService {
     // 将MCP服务注入到LangChainLLMService
     this.langChainService = new LangChainLLMService(undefined, this.modelManagementService, this.mcpService)
     // mcpToolService功能已整合到mcpService中
+    
+    // 初始化DeeChat专属提示词系统
+    this.initializePromptSystem()
+  }
+
+  /**
+   * 初始化DeeChat专属提示词系统
+   */
+  private async initializePromptSystem(): Promise<void> {
+    try {
+      await llmPromptIntegration.initializeLLMServicePrompts()
+      log.info('✅ [LLM服务] DeeChat提示词系统初始化完成')
+    } catch (error) {
+      log.warn('⚠️ [LLM服务] DeeChat提示词系统初始化失败，将使用基础提示词:', error)
+    }
   }
 
   /**
@@ -34,6 +51,127 @@ export class LLMService {
    */
   getSystemPromptProvider() {
     return this.langChainService.getSystemPromptProvider()
+  }
+
+  // ==================== DeeChat专属提示词上下文管理 ====================
+
+  /**
+   * 设置功能上下文（用于不同UI模块）
+   * @param feature 功能模块
+   * @param data 额外数据
+   */
+  async setFeatureContext(feature: DeeChatFeature, _data?: Record<string, any>): Promise<void> {
+    try {
+      await llmPromptIntegration.setupLLMContext({
+        feature,
+        mcpTools: await this.getAvailableMCPToolNames()
+      })
+      log.info(`🎯 [提示词上下文] 功能上下文设置为: ${feature}`)
+    } catch (error) {
+      log.error('❌ [提示词上下文] 设置功能上下文失败:', error)
+    }
+  }
+
+  /**
+   * 设置PromptX角色
+   * @param role 角色名称
+   * @param description 角色描述
+   * @param capabilities 角色能力
+   */
+  async setPromptXRole(role: string, description?: string, capabilities?: string[]): Promise<void> {
+    try {
+      await llmPromptIntegration.setupLLMContext({
+        promptxRole: role,
+        roleDescription: description,
+        roleCapabilities: capabilities,
+        mcpTools: await this.getAvailableMCPToolNames()
+      })
+      log.info(`🎭 [提示词上下文] PromptX角色设置为: ${role}`)
+    } catch (error) {
+      log.error('❌ [提示词上下文] 设置PromptX角色失败:', error)
+    }
+  }
+
+  /**
+   * 设置聊天模式上下文
+   */
+  async setupChatContext(): Promise<void> {
+    try {
+      await llmPromptIntegration.setupLLMContext({
+        feature: 'chat',
+        mcpTools: await this.getAvailableMCPToolNames()
+      })
+      log.info('💬 [提示词上下文] 聊天模式上下文已设置')
+    } catch (error) {
+      log.error('❌ [提示词上下文] 设置聊天模式上下文失败:', error)
+    }
+  }
+
+  /**
+   * 设置文件管理模式上下文
+   */
+  async setupFileManagerContext(): Promise<void> {
+    try {
+      await llmPromptIntegration.setupLLMContext({
+        feature: 'file-manager',
+        mcpTools: await this.getAvailableMCPToolNames()
+      })
+      log.info('📁 [提示词上下文] 文件管理模式上下文已设置')
+    } catch (error) {
+      log.error('❌ [提示词上下文] 设置文件管理模式上下文失败:', error)
+    }
+  }
+
+  /**
+   * 设置资源管理模式上下文
+   */
+  async setupResourcesContext(): Promise<void> {
+    try {
+      await llmPromptIntegration.setupLLMContext({
+        feature: 'resources',
+        mcpTools: await this.getAvailableMCPToolNames()
+      })
+      log.info('📚 [提示词上下文] 资源管理模式上下文已设置')
+    } catch (error) {
+      log.error('❌ [提示词上下文] 设置资源管理模式上下文失败:', error)
+    }
+  }
+
+  /**
+   * 清理提示词上下文
+   */
+  cleanupPromptContext(): void {
+    try {
+      llmPromptIntegration.cleanupLLMContext()
+      log.info('🧹 [提示词上下文] 上下文已清理')
+    } catch (error) {
+      log.error('❌ [提示词上下文] 清理上下文失败:', error)
+    }
+  }
+
+  /**
+   * 获取当前系统提示词（调试用）
+   */
+  async getCurrentSystemPrompt(): Promise<string> {
+    try {
+      return await llmPromptIntegration.getCurrentLLMSystemPrompt()
+    } catch (error) {
+      log.error('❌ [提示词上下文] 获取系统提示词失败:', error)
+      return this.langChainService.getSystemPromptProvider().buildSystemPrompt()
+    }
+  }
+
+  /**
+   * 获取可用的MCP工具名称列表（内部辅助方法）
+   */
+  private async getAvailableMCPToolNames(): Promise<string[]> {
+    try {
+      const tools = await this.mcpService.getAllTools()
+      return tools.map(tool => tool.name)
+    } catch (error) {
+      log.warn('⚠️ [提示词上下文] 获取MCP工具名称失败:', error)
+      return []
+    }
   }
 
 

@@ -160,13 +160,17 @@ class TimeBasedProvider implements PromptProvider {
 
 ### 3. PromptX集成示例
 
+PromptX集成的核心理念是**指导AI主动调用MCP工具获得专业能力**，而不是直接告诉AI已经具有某种能力。
+
 ```typescript
 class PromptXRoleProvider implements PromptProvider {
   private currentRole?: string;
+  private roleDescription?: string;
   private availableTools: string[] = [];
   
-  setCurrentRole(role: string) {
+  setCurrentRole(role: string, description?: string) {
     this.currentRole = role;
+    this.roleDescription = description;
   }
   
   setAvailableTools(tools: string[]) {
@@ -176,30 +180,99 @@ class PromptXRoleProvider implements PromptProvider {
   getSegments(): PromptSegment[] {
     const segments: PromptSegment[] = [];
     
-    // 当前角色提示
+    // 角色激活指导提示词
     if (this.currentRole) {
       segments.push({
-        id: 'promptx-current-role',
-        content: `You are currently using PromptX role: ${this.currentRole}`,
+        id: 'promptx-role-activation',
+        content: this.buildRoleActivationPrompt(),
         enabled: true,
-        priority: 30
+        priority: 30,
+        condition: () => !!this.currentRole
       });
     }
     
-    // 可用工具提示
-    if (this.availableTools.length > 0) {
+    // 预期工具说明
+    if (this.availableTools.length > 0 && this.currentRole) {
       segments.push({
-        id: 'promptx-tools',
-        content: `Available PromptX tools: ${this.availableTools.join(', ')}`,
+        id: 'promptx-expected-tools',
+        content: this.buildExpectedToolsPrompt(),
         enabled: true,
-        priority: 25
+        priority: 25,
+        condition: () => !!this.currentRole && this.availableTools.length > 0
       });
     }
     
     return segments;
   }
+  
+  private buildRoleActivationPrompt(): string {
+    let prompt = `## PromptX Professional Role Activation Required
+
+**User Selected Role**: ${this.currentRole}`;
+
+    if (this.roleDescription) {
+      prompt += `
+**Role Description**: ${this.roleDescription}`;
+    }
+
+    prompt += `
+
+### Role Activation Instructions
+IMPORTANT: Before responding to the user's message, you MUST activate this professional role:
+
+1. Call the \`mcp__promptx-local__promptx_action\` tool with parameter: "${this.currentRole}"
+2. This will provide you with the specialized knowledge and capabilities for this role
+3. Only after successful activation, respond with the role's professional expertise
+
+### Post-Activation Guidelines
+Once the role is activated, you should:
+- Apply the role's specialized knowledge and perspective to your responses
+- Use professional terminology and best practices relevant to this role
+- Maintain the quality standards expected from this professional domain
+- Leverage role-specific methodologies and frameworks when appropriate`;
+
+    return prompt;
+  }
+  
+  private buildExpectedToolsPrompt(): string {
+    const toolList = this.availableTools.join(', ');
+    
+    return `## Professional Tools Expected
+
+After activating the ${this.currentRole} role, you will gain access to specialized tools: ${toolList}
+
+### Tool Usage Guidelines
+- These tools will become available after successful role activation
+- Use them to provide expert-level assistance within the role's domain
+- Apply tools according to professional standards and best practices
+- Integrate tool results with the role's specialized expertise`;
+  }
 }
 ```
+
+## 重要理念说明
+
+### 提示词系统的作用边界
+
+**提示词系统只负责构建指导AI的文本内容，不会主动调用AI服务或执行任何操作。**
+
+- ✅ **提示词系统做什么**：
+  - 根据当前上下文构建系统提示词文本
+  - 提供动态的、条件化的提示词片段
+  - 指导AI在收到消息时应该如何行动
+
+- ❌ **提示词系统不做什么**：
+  - 不会主动发送AI请求
+  - 不会直接调用MCP工具
+  - 不会执行任何副作用操作
+
+### 实际工作流程
+
+1. **用户操作** → 更新提示词系统状态（如选择角色）
+2. **用户发送消息** → 触发AI对话请求
+3. **系统构建提示词** → 包含当前上下文的指导内容
+4. **发送给AI** → 系统提示词 + 用户消息
+5. **AI执行指导** → 根据提示词调用相应工具或提供专业回应
 
 ## 系统提示词构建流程
 
@@ -246,7 +319,7 @@ await llmService.sendMessage(
 ```typescript
 // 好的命名
 'feature-code-editor'
-'promptx-role-luban'
+'promptx-role-activation'
 'context-timestamp'
 
 // 避免的命名
@@ -255,14 +328,42 @@ await llmService.sendMessage(
 'test'
 ```
 
-### 2. 优先级使用建议
+### 2. PromptX集成最佳实践
+
+#### ✅ 正确的PromptX集成方式
+
+```typescript
+// 指导AI调用工具激活角色
+content: `请使用 mcp__promptx-local__promptx_action 工具激活 "${roleId}" 角色`
+
+// 说明激活后的预期能力
+content: `激活角色后，你将获得以下专业能力：${capabilities.join(', ')}`
+```
+
+#### ❌ 错误的PromptX集成方式
+
+```typescript
+// 直接声明AI已经具有角色能力
+content: `你现在是 ${roleId} 角色` // ❌ 错误！
+
+// 直接声明工具可用
+content: `你可以使用这些工具：${tools.join(', ')}` // ❌ 错误！
+```
+
+#### 核心原则
+
+- **指导而非声明**：告诉AI应该做什么，而不是AI已经是什么
+- **工具驱动**：通过MCP工具获得真正的专业能力
+- **动态激活**：每次对话时都重新激活，确保状态一致
+
+### 3. 优先级使用建议
 
 - 100+: 关键系统信息（时间戳、环境信息）
 - 50-99: 功能上下文
 - 20-49: 角色和工具信息
 - 0-19: 其他辅助信息
 
-### 3. 条件函数注意事项
+### 4. 条件函数注意事项
 
 条件函数应该：
 - 执行快速，避免复杂计算
@@ -281,7 +382,7 @@ condition: () => {
 }
 ```
 
-### 4. Provider生命周期管理
+### 5. Provider生命周期管理
 
 ```typescript
 class ManagedProvider implements PromptProvider {

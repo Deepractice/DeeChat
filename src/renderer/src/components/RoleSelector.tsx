@@ -3,7 +3,7 @@ import { Button, Space, Typography, Avatar, Dropdown, Spin, message, MenuProps }
 import { UserOutlined, DownOutlined, ReloadOutlined, ClearOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { loadAvailableRoles, activateRole, clearCurrentRole, clearRoleError, refreshRoleCache } from '../store/slices/chatSlice'
+import { loadAvailableRoles, activateRole, clearRole, clearRoleError, refreshRoleCache } from '../store/slices/chatSlice'
 import { ParsedRole, getSourceDisplayName } from '../utils/promptxParser'
 
 const { Text } = Typography
@@ -77,10 +77,15 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   }
 
   // 处理清除角色选择
-  const handleClearRole = () => {
-    dispatch(clearCurrentRole())
-    setDropdownVisible(false)
-    message.info('已清除角色选择')
+  const handleClearRole = async () => {
+    try {
+      await dispatch(clearRole()).unwrap()
+      setDropdownVisible(false)
+      message.info('已清除角色选择')
+    } catch (error) {
+      console.error('清除角色失败:', error)
+      // 错误已通过 useEffect 处理
+    }
   }
 
   // 处理刷新角色列表

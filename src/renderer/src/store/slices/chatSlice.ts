@@ -185,15 +185,42 @@ export const activateRole = createAsyncThunk(
       throw new Error(`角色不存在: ${roleId}`)
     }
     
-    // 调用PromptX action命令激活角色
-    const result = await window.electronAPI.promptx.execute('action', [roleId])
-    
-    if (!result.success) {
-      throw new Error(result.error || '角色激活失败')
+    // 🔥 只需要通知DeeChat提示词系统设置PromptX角色
+    // 不需要调用PromptX的action命令，让AI在下次对话时使用新的提示词
+    try {
+      if (window.api?.llm?.setPromptXRole) {
+        await window.api.llm.setPromptXRole(roleId, role.description, role.capabilities || [])
+        console.log('[Redux] DeeChat提示词系统角色已设置:', role.name)
+      }
+    } catch (error) {
+      console.error('[Redux] 设置DeeChat提示词系统角色失败:', error)
+      throw error
     }
     
-    console.log('[Redux] 角色激活成功:', role.name)
+    console.log('[Redux] 角色激活成功，下次对话将使用此角色:', role.name)
     return role
+  }
+)
+
+// 🎭 异步thunk：清除角色
+export const clearRole = createAsyncThunk(
+  'chat/clearRole',
+  async () => {
+    console.log('[Redux] 开始清除角色')
+    
+    // 通知DeeChat提示词系统清除PromptX角色
+    try {
+      if (window.api?.llm?.setPromptXRole) {
+        await window.api.llm.setPromptXRole('', '', [])
+        console.log('[Redux] DeeChat提示词系统角色已清除')
+      }
+    } catch (error) {
+      console.error('[Redux] 清除DeeChat提示词系统角色失败:', error)
+      throw error
+    }
+    
+    console.log('[Redux] 角色清除成功，下次对话将恢复基础AI模式')
+    return null
   }
 )
 
@@ -522,6 +549,23 @@ const chatSlice = createSlice({
       .addCase(activateRole.rejected, (state, action) => {
         state.roles.loading = false
         state.roles.error = action.error.message || '角色激活失败'
+      })
+      // 🎭 角色清除
+      .addCase(clearRole.pending, (state) => {
+        state.roles.loading = true
+        state.roles.error = null
+      })
+      .addCase(clearRole.fulfilled, (state) => {
+        state.roles.loading = false
+        state.roles.currentRole = null
+        // 清除所有角色的激活状态
+        state.roles.availableRoles.forEach(role => {
+          role.isActive = false
+        })
+      })
+      .addCase(clearRole.rejected, (state, action) => {
+        state.roles.loading = false
+        state.roles.error = action.error.message || '清除角色失败'
       })
   },
 })

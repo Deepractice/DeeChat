@@ -123,6 +123,20 @@ config/
 # PromptX specific
 .promptx/
 
+# Claude Code settings
+.claude/
+
+# Development tools and configs
+.cursor/
+.superdesign/
+.windsurfrules
+CLAUDE.md
+
+# Vercel deployment
+.vercel/
+.vercelignore
+vercel.json
+
 # External repositories (for reference only)
 cherry-studio/
 

@@ -8,9 +8,12 @@ import {
 
 import { LangChainModelFactory } from './LangChainModelFactory';
 import { ModelConfigEntity } from '../entities/ModelConfigEntity';
-import { systemPromptProvider } from '../services/SystemPromptProvider';
+import { enhancedSystemPromptProvider } from '../prompts/EnhancedSystemPromptProvider';
+import { llmPromptIntegration } from '../prompts/LLMServiceIntegration';
 import { ISystemPromptProvider } from '../interfaces/ISystemPromptProvider';
 import { IModelConfigService } from '../interfaces/IModelProvider';
+import { DeeChatFeature } from '../prompts/FeatureContextProvider';
+import { ConversationContext } from '../prompts/ConversationContextAnalyzer';
 import log from 'electron-log';
 
 // MCP工具相关类型定义
@@ -50,15 +53,39 @@ export class LangChainLLMService {
   private promptProvider: ISystemPromptProvider;
   private configService?: IModelConfigService;
   private mcpService?: MCPIntegrationServiceInterface;
+  
+  // DeeChat智能对话相关
+  private currentSessionId?: string;
+  private isIntentSystemEnabled: boolean = true;
 
   constructor(
     promptProvider?: ISystemPromptProvider, 
     configService?: IModelConfigService,
     mcpService?: MCPIntegrationServiceInterface
   ) {
-    this.promptProvider = promptProvider || systemPromptProvider;
+    // 使用增强的提示词提供器作为默认值，向后兼容
+    this.promptProvider = promptProvider || enhancedSystemPromptProvider;
     this.configService = configService;
     this.mcpService = mcpService;
+    
+    // 初始化DeeChat提示词系统（异步，不阻塞构造）
+    this.initializeDeeChatPrompts();
+    
+    log.info('🚀 [LangChain服务] 初始化DeeChat智能对话LLM服务');
+  }
+
+  /**
+   * 初始化DeeChat提示词系统
+   */
+  private async initializeDeeChatPrompts(): Promise<void> {
+    try {
+      if (this.promptProvider === enhancedSystemPromptProvider) {
+        await llmPromptIntegration.initializeLLMServicePrompts();
+        log.info('✅ [LangChain] DeeChat提示词系统初始化完成');
+      }
+    } catch (error) {
+      log.warn('⚠️ [LangChain] DeeChat提示词系统初始化失败，将使用基础提示词:', error);
+    }
   }
 
   /**
@@ -73,9 +100,14 @@ export class LangChainLLMService {
     configId: string,
     systemPrompt?: string
   ): Promise<string> {
+    // 确保DeeChat提示词系统已初始化
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      await llmPromptIntegration.initializeLLMServicePrompts();
+    }
+
     const model = await this.getModel(configId);
 
-    // 构建系统提示词
+    // 构建系统提示词（现在会包含DeeChat专属内容）
     let finalSystemPrompt = this.promptProvider.buildSystemPrompt();
     
     // 如果提供了额外的系统提示词，追加到最后
@@ -854,5 +886,272 @@ export class LangChainLLMService {
    */
   setMCPService(mcpService: MCPIntegrationServiceInterface): void {
     this.mcpService = mcpService;
+    
+    // 同步到增强提示词提供器
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      // 这里可以通知工具状态变化，但需要工具列表
+      log.info('🔧 [LangChain服务] MCP服务已更新');
+    }
+  }
+
+  // ==================== DeeChat智能对话方法 ====================
+
+  /**
+   * 🧠 DeeChat智能消息处理
+   * 集成意图识别、上下文分析和用户自主权保护的完整对话系统
+   */
+  async sendIntelligentMessage(
+    userMessage: string,
+    config: ModelConfigEntity,
+    sessionInfo: {
+      sessionId: string;
+      userId?: string;
+      currentFeature: DeeChatFeature;
+      activeRole?: string;
+    },
+    options?: {
+      systemPrompt?: string;
+      enableMCPTools?: boolean;
+      enableIntentAnalysis?: boolean;
+    }
+  ): Promise<{
+    content: string;
+    context: ConversationContext;
+    toolCalls?: any[];
+    hasToolCalls: boolean;
+    shouldRemember: boolean;
+    suggestedActions: string[];
+    error?: boolean;
+    insights?: {
+      intentConfidence: number;
+      emotionalState: string;
+      suggestedNextSteps: string[];
+    };
+  }> {
+    const enableIntentAnalysis = options?.enableIntentAnalysis ?? this.isIntentSystemEnabled;
+    const enableMCPTools = options?.enableMCPTools ?? true;
+
+    try {
+      // 准备会话信息
+      const mcpTools = enableMCPTools && this.mcpService ? 
+        await this.mcpService.getAllTools() : [];
+      
+      const fullSessionInfo = {
+        ...sessionInfo,
+        availableTools: mcpTools.map(tool => tool.name)
+      };
+
+      // 如果启用意图分析，使用增强的提示词系统
+      if (enableIntentAnalysis && this.promptProvider === enhancedSystemPromptProvider) {
+        // 使用DeeChat特有的智能消息处理
+        const analysisResult = await enhancedSystemPromptProvider.processUserMessage(
+          userMessage, 
+          fullSessionInfo
+        );
+
+        // 使用增强的系统提示词发送消息（包含意图分析结果）
+        const response = await this.sendMessageWithMCPTools(
+          userMessage,
+          config,
+          options?.systemPrompt || analysisResult.enhancedPrompt,
+          enableMCPTools
+        );
+
+        // 构建洞察信息
+        const insights = {
+          intentConfidence: analysisResult.context.confidence,
+          emotionalState: this.analyzeEmotionalState(analysisResult.context),
+          suggestedNextSteps: analysisResult.suggestedActions
+        };
+
+        log.info(`🧠 [智能对话] 意图: ${analysisResult.context.detectedIntent}, ` +
+                 `置信度: ${(analysisResult.context.confidence * 100).toFixed(0)}%, ` +
+                 `工具调用: ${response.hasToolCalls ? '是' : '否'}`);
+
+        return {
+          content: response.content,
+          context: analysisResult.context,
+          toolCalls: response.toolCalls,
+          hasToolCalls: response.hasToolCalls,
+          shouldRemember: analysisResult.shouldRemember,
+          suggestedActions: analysisResult.suggestedActions,
+          error: response.error,
+          insights
+        };
+      } else {
+        // 回退到标准模式
+        log.info('📝 [标准对话] 使用基础LLM模式');
+        
+        const response = await this.sendMessageWithMCPTools(
+          userMessage,
+          config,
+          options?.systemPrompt,
+          enableMCPTools
+        );
+
+        // 创建基础上下文
+        const basicContext: ConversationContext = {
+          sessionId: sessionInfo.sessionId,
+          timestamp: new Date(),
+          userMessage,
+          detectedIntent: 'unclear' as any,
+          confidence: 0.5,
+          currentFeature: sessionInfo.currentFeature,
+          activeRole: sessionInfo.activeRole,
+          availableTools: mcpTools.map(tool => tool.name),
+          memoryScore: 1,
+          shouldRemember: false,
+          planNeedsUpdate: false,
+          suggestedActions: ['继续对话'],
+          isCorrection: false,
+          isFrustration: false,
+          requiresTools: response.hasToolCalls
+        };
+
+        return {
+          content: response.content,
+          context: basicContext,
+          toolCalls: response.toolCalls,
+          hasToolCalls: response.hasToolCalls,
+          shouldRemember: false,
+          suggestedActions: ['继续对话'],
+          error: response.error,
+          insights: {
+            intentConfidence: 0.5,
+            emotionalState: '中性',
+            suggestedNextSteps: ['继续对话']
+          }
+        };
+      }
+    } catch (error) {
+      log.error('❌ [智能对话] 处理失败:', error);
+      
+      // 创建错误上下文
+      const errorContext: ConversationContext = {
+        sessionId: sessionInfo.sessionId,
+        timestamp: new Date(),
+        userMessage,
+        detectedIntent: 'unclear' as any,
+        confidence: 0.1,
+        currentFeature: sessionInfo.currentFeature,
+        activeRole: sessionInfo.activeRole,
+        availableTools: [],
+        memoryScore: 1,
+        shouldRemember: false,
+        planNeedsUpdate: false,
+        suggestedActions: ['重试对话', '检查系统状态'],
+        isCorrection: false,
+        isFrustration: false,
+        requiresTools: false
+      };
+
+      return {
+        content: `❌ **对话处理失败**\n\n抱歉，系统遇到了问题：${error instanceof Error ? error.message : String(error)}\n\n请稍后重试或联系技术支持。`,
+        context: errorContext,
+        hasToolCalls: false,
+        shouldRemember: false,
+        suggestedActions: ['重试对话', '检查系统状态'],
+        error: true,
+        insights: {
+          intentConfidence: 0.1,
+          emotionalState: '错误',
+          suggestedNextSteps: ['重试对话', '检查系统状态']
+        }
+      };
+    }
+  }
+
+  /**
+   * 🎭 更新DeeChat会话上下文
+   */
+  updateSessionContext(
+    feature: DeeChatFeature,
+    activeRole?: string,
+    availableTools?: string[]
+  ): void {
+    // 更新增强提示词提供器的状态
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      enhancedSystemPromptProvider.setFeatureContext(feature);
+      
+      if (activeRole) {
+        enhancedSystemPromptProvider.setPromptXRole(activeRole);
+      }
+      
+      if (availableTools) {
+        enhancedSystemPromptProvider.updateMCPToolStatus(availableTools);
+      }
+      
+      log.info(`🎭 [会话上下文] 功能: ${feature}, 角色: ${activeRole || '无'}, 工具: ${availableTools?.length || 0}个`);
+    }
+  }
+
+  /**
+   * 📊 获取智能对话统计
+   */
+  getIntelligentChatStats(): {
+    enabled: boolean;
+    currentSession?: string;
+    systemStats: any;
+    recommendations: string[];
+  } {
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      const stats = enhancedSystemPromptProvider.getDeeChatStats();
+      const insights = enhancedSystemPromptProvider.getConversationInsights();
+      
+      return {
+        enabled: this.isIntentSystemEnabled,
+        currentSession: this.currentSessionId,
+        systemStats: stats,
+        recommendations: insights.recommendations
+      };
+    }
+    
+    return {
+      enabled: false,
+      systemStats: null,
+      recommendations: ['使用enhancedSystemPromptProvider以启用智能对话功能']
+    };
+  }
+
+  /**
+   * 🎛️ 智能系统控制
+   */
+  enableIntelligentChat(): void {
+    this.isIntentSystemEnabled = true;
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      enhancedSystemPromptProvider.enableIntentSystem();
+    }
+    log.info('🧠 [智能对话] 已启用意图识别和上下文分析');
+  }
+
+  disableIntelligentChat(): void {
+    this.isIntentSystemEnabled = false;
+    if (this.promptProvider === enhancedSystemPromptProvider) {
+      enhancedSystemPromptProvider.disableIntentSystem();
+    }
+    log.info('🔇 [智能对话] 已禁用，回到基础LLM模式');
+  }
+
+  isIntelligentChatEnabled(): boolean {
+    return this.isIntentSystemEnabled && this.promptProvider === enhancedSystemPromptProvider;
+  }
+
+  // ==================== 私有辅助方法 ====================
+
+  /**
+   * 分析情感状态
+   */
+  private analyzeEmotionalState(context: ConversationContext): string {
+    if (context.isFrustration) return '挫败';
+    if (context.isCorrection) return '纠正中';
+    
+    switch (context.detectedIntent) {
+      case 'debugging': return '焦虑';
+      case 'casual_chat': return '轻松';
+      case 'tool_activation': return '目标导向';
+      case 'complex': return '压力较大';
+      default: 
+        return context.confidence > 0.7 ? '专注' : '探索中';
+    }
   }
 }

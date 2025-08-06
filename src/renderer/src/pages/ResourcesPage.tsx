@@ -118,6 +118,24 @@ const ResourcesPage: React.FC = () => {
   const [roleTreeData, setRoleTreeData] = useState<TreeNode[]>([]) // 单角色的树形数据
   const { message } = App.useApp()
 
+  // 🎯 DeeChat专属提示词上下文设置
+  useEffect(() => {
+    // 设置资源管理模式上下文
+    const setupResourcesContext = async () => {
+      try {
+        // 通过IPC通知主进程设置资源管理上下文
+        if (window.api?.llm?.setupResourcesContext) {
+          await window.api.llm.setupResourcesContext()
+          console.log('📚 [ResourcesPage] 资源管理上下文已设置')
+        }
+      } catch (error) {
+        console.error('❌ [ResourcesPage] 设置资源管理上下文失败:', error)
+      }
+    }
+
+    setupResourcesContext()
+  }, []) // 只在组件挂载时执行一次
+
   // 加载文件列表
   const loadFiles = async () => {
     setLoading(true)

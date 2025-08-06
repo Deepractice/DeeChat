@@ -238,6 +238,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
     // console.log('🎯 ChatArea状态更新:', { currentSessionId: currentSession?.id, selectedModelId: currentSession?.selectedModelId, selectedModelState: selectedModel?.id, hasSelectedModel: !!selectedModel })
   }, [currentSession, selectedModel])
 
+  // 🎯 DeeChat专属提示词上下文设置
+  useEffect(() => {
+    // 设置聊天模式上下文
+    const setupChatContext = async () => {
+      try {
+        // 通过IPC通知主进程设置聊天上下文
+        if (window.api?.llm?.setupChatContext) {
+          await window.api.llm.setupChatContext()
+          console.log('💬 [ChatArea] 聊天上下文已设置')
+        }
+      } catch (error) {
+        console.error('❌ [ChatArea] 设置聊天上下文失败:', error)
+      }
+    }
+
+    setupChatContext()
+  }, []) // 只在组件挂载时执行一次
+
 
 
 

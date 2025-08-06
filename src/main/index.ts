@@ -721,6 +721,77 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // DeeChat专属提示词系统IPC处理器
+  ipcMain.handle('llm:setupChatContext', async () => {
+    try {
+      await langChainService.setupChatContext()
+      return { success: true }
+    } catch (error) {
+      console.error('设置聊天上下文失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:setupResourcesContext', async () => {
+    try {
+      await langChainService.setupResourcesContext()
+      return { success: true }
+    } catch (error) {
+      console.error('设置资源管理上下文失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:setupFileManagerContext', async () => {
+    try {
+      await langChainService.setupFileManagerContext()
+      return { success: true }
+    } catch (error) {
+      console.error('设置文件管理上下文失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:setFeatureContext', async (_, feature: string, data?: any) => {
+    try {
+      await langChainService.setFeatureContext(feature as any, data)
+      return { success: true }
+    } catch (error) {
+      console.error('设置功能上下文失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:setPromptXRole', async (_, role: string, description?: string, capabilities?: string[]) => {
+    try {
+      await langChainService.setPromptXRole(role, description, capabilities)
+      return { success: true }
+    } catch (error) {
+      console.error('设置PromptX角色失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:getCurrentSystemPrompt', async () => {
+    try {
+      const prompt = await langChainService.getCurrentSystemPrompt()
+      return { success: true, data: prompt }
+    } catch (error) {
+      console.error('获取系统提示词失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('llm:cleanupPromptContext', async () => {
+    try {
+      langChainService.cleanupPromptContext()
+      return { success: true }
+    } catch (error) {
+      console.error('清理提示词上下文失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
   // 配置相关IPC
   ipcMain.handle('config:get', async () => {
     try {
