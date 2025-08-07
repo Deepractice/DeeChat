@@ -10,15 +10,16 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 // 🔥 新增传输协议导入
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
-import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
+import { MCPServerEntity } from '../../../../shared/entities/MCPServerEntity'
+import { MCPToolEntity } from '../../../../shared/entities/MCPToolEntity'
 import {
   MCPToolCallRequest,
   MCPToolCallResponse,
   MCPEvent,
   MCPEventType
-} from '../../../shared/interfaces/IMCPProvider'
-import { InProcessMCPServer } from './InProcessMCPServer'
+} from '../../../../shared/interfaces/IMCPProvider'
+import { InProcessMCPServer } from '../servers/InProcessMCPServer'
+import { FileOperationsMCPServer } from '../servers/FileOperationsMCPServer'
 
 /**
  * MCP客户端管理器
@@ -29,6 +30,7 @@ export class SimpleMCPClientManager {
   private pendingClients: Map<string, Promise<Client>> = new Map()
   private eventListeners: ((event: MCPEvent) => void)[] = []
   private inProcessServers: Map<string, InProcessMCPServer> = new Map()
+  private nativeBuiltinServers: Map<string, FileOperationsMCPServer> = new Map()
 
   constructor() {
     log.info('[Simple MCP] 🚀 智能客户端管理器初始化完成 (进程内 > Electron内置)')
@@ -65,6 +67,42 @@ export class SimpleMCPClientManager {
         inProcessServer = new InProcessMCPServer(server)
         await inProcessServer.start()
         this.inProcessServers.set(serverKey, inProcessServer)
+      }
+      
+      // 返回一个假的客户端对象（避免调用方出错）
+      return {} as Client
+    }
+
+    // 🔧 原生内置模式：DeeChat内置服务器
+    if (executionMode === 'native-builtin') {
+      log.info(`[Simple MCP] 🔧 原生内置模式，创建DeeChat内置服务器: ${server.name}`)
+      
+      const serverKey = this.getServerKey(server)
+      let nativeServer = this.nativeBuiltinServers.get(serverKey)
+      
+      if (!nativeServer) {
+        log.info(`[Simple MCP] 🔧 创建DeeChat内置服务器: ${server.name}`)
+        
+        // 根据服务器ID创建对应的内置服务器
+        if (server.id === 'file-operations-builtin') {
+          // 🔥 支持环境变量配置沙箱模式
+          const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
+          const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
+          
+          nativeServer = new FileOperationsMCPServer({
+            sandboxMode,
+            allowSystemAccess
+          })
+          
+          if (!sandboxMode) {
+            log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
+          }
+        } else {
+          throw new Error(`未知的内置服务器类型: ${server.id}`)
+        }
+        
+        await nativeServer.start()
+        this.nativeBuiltinServers.set(serverKey, nativeServer)
       }
       
       // 返回一个假的客户端对象（避免调用方出错）
@@ -298,7 +336,13 @@ export class SimpleMCPClientManager {
   /**
    * 🔥 智能执行模式检测：进程内 > Electron内置
    */
-  private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' {
+  private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' | 'native-builtin' {
+    // 🔧 检查是否是DeeChat内置服务器
+    if (server.type === 'builtin' || server.command === 'internal') {
+      log.info(`[Simple MCP] 🔧 DeeChat内置服务器 -> 原生内置模式: ${server.name}`)
+      return 'native-builtin'
+    }
+    
     if (!server.command) return 'builtin'
 
     const command = server.command
@@ -339,6 +383,11 @@ export class SimpleMCPClientManager {
       // 🎯 PromptX优先使用进程内调用（单进程，零开销）
       if (executionMode === 'inprocess') {
         return await this.callToolInProcess(server, request)
+      }
+
+      // 🔧 DeeChat内置服务器调用
+      if (executionMode === 'native-builtin') {
+        return await this.callToolNativeBuiltin(server, request)
       }
       
       // 🚀 其他情况用客户端调用（自动用Electron内置Node.js）
@@ -391,6 +440,60 @@ export class SimpleMCPClientManager {
   }
 
   /**
+   * DeeChat内置服务器工具调用
+   */
+  private async callToolNativeBuiltin(server: MCPServerEntity, request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
+    const serverKey = this.getServerKey(server)
+    
+    // 获取或创建内置服务器
+    let nativeServer = this.nativeBuiltinServers.get(serverKey)
+    if (!nativeServer) {
+      log.info(`[Simple MCP] 🔧 创建DeeChat内置服务器: ${server.name}`)
+      
+      // 根据服务器ID创建对应的内置服务器
+      if (server.id === 'file-operations-builtin') {
+        // 🔥 支持环境变量配置沙箱模式
+        const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
+        const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
+        
+        nativeServer = new FileOperationsMCPServer({
+          sandboxMode,
+          allowSystemAccess
+        })
+        
+        if (!sandboxMode) {
+          log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
+        }
+      } else {
+        throw new Error(`未知的内置服务器类型: ${server.id}`)
+      }
+      
+      await nativeServer.start()
+      this.nativeBuiltinServers.set(serverKey, nativeServer)
+      
+      // 发送连接成功事件
+      this.emitEvent({
+        type: MCPEventType.SERVER_CONNECTED,
+        serverId: server.id,
+        timestamp: new Date()
+      })
+    }
+    
+    // 直接调用内置服务器工具
+    const startTime = Date.now()
+    const result = await nativeServer.callTool(request.toolName, request.arguments || {})
+    const duration = Date.now() - startTime
+    
+    log.info(`[Simple MCP] ✅ 内置服务器工具调用成功: ${request.toolName} (${duration}ms)`)
+    
+    return {
+      success: true,
+      result: [result], // 包装成数组格式
+      duration
+    }
+  }
+
+  /**
    * 客户端工具调用（其他MCP服务器）
    */
   private async callToolViaClient(server: MCPServerEntity, request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
@@ -431,6 +534,37 @@ export class SimpleMCPClientManager {
         }
         
         tools = await inProcessServer.listTools()
+      } else if (executionMode === 'native-builtin') {
+        // 🔧 DeeChat内置服务器
+        const serverKey = this.getServerKey(server)
+        let nativeServer = this.nativeBuiltinServers.get(serverKey)
+        
+        if (!nativeServer) {
+          log.info(`[Simple MCP] 🔧 为工具发现创建DeeChat内置服务器: ${server.name}`)
+          
+          // 根据服务器ID创建对应的内置服务器
+          if (server.id === 'file-operations-builtin') {
+            // 🔥 支持环境变量配置沙箱模式
+            const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
+            const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
+            
+            nativeServer = new FileOperationsMCPServer({
+              sandboxMode,
+              allowSystemAccess
+            })
+            
+            if (!sandboxMode) {
+              log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
+            }
+          } else {
+            throw new Error(`未知的内置服务器类型: ${server.id}`)
+          }
+          
+          await nativeServer.start()
+          this.nativeBuiltinServers.set(serverKey, nativeServer)
+        }
+        
+        tools = nativeServer.getToolDefinitions()
       } else {
         // 🚀 标准客户端
         const client = await this.initClient(server)

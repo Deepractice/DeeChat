@@ -3,11 +3,11 @@
  * 管理MCP服务器配置的持久化存储
  */
 
-import { MCPServerEntity, MCPServerConfig } from '../../../shared/entities/MCPServerEntity';
-import { IMCPConfigService } from '../../../shared/interfaces/IMCPProvider';
-import { LocalStorageService } from '../core/LocalStorageService';
-import { PromptXLocalStorage } from './PromptXLocalStorage';
-import { PromptXBuildStorage } from './PromptXBuildStorage';
+import { MCPServerEntity, MCPServerConfig } from '../../../../shared/entities/MCPServerEntity';
+import { IMCPConfigService } from '../../../../shared/interfaces/IMCPProvider';
+import { LocalStorageService } from '../../core/LocalStorageService';
+import { PromptXLocalStorage } from './storage/PromptXLocalStorage';
+import { PromptXBuildStorage } from './storage/PromptXBuildStorage';
 
 export class MCPConfigService implements IMCPConfigService {
   private storageService: LocalStorageService;
@@ -115,10 +115,12 @@ export class MCPConfigService implements IMCPConfigService {
         }
       });
 
-      // 🔥 只在真正首次运行时初始化PromptX配置
-      if (!MCPConfigService._promptxInitialized) {
+      // 🔥 只在真正首次运行时初始化内置服务器配置
+      if (!MCPConfigService._builtinServersInitialized) {
         const promptxExists = servers.some(s => s.id === 'promptx-builtin');
+        const fileOpsExists = servers.some(s => s.id === 'file-operations-builtin');
         
+        // 添加PromptX配置
         if (!promptxExists) {
           console.log(`[MCP Config] ➕ 首次运行，添加PromptX默认配置`);
           
@@ -136,9 +138,26 @@ export class MCPConfigService implements IMCPConfigService {
         } else {
           console.log('[MCP Config] PromptX配置已存在，跳过初始化');
         }
+
+        // 🔥 添加文件操作服务器配置
+        if (!fileOpsExists) {
+          console.log(`[MCP Config] ➕ 首次运行，添加文件操作默认配置`);
+          
+          try {
+            const fileOpsServer = this.createDefaultFileOperationsServer();
+            servers.push(fileOpsServer); // 添加到末尾
+            await this.saveAllConfigs(servers);
+            
+            console.log('✅ [MCP Config] 文件操作配置添加成功');
+          } catch (error) {
+            console.error('[MCP Config] 文件操作配置添加失败:', error);
+          }
+        } else {
+          console.log('[MCP Config] 文件操作配置已存在，跳过初始化');
+        }
         
         // 🔥 标记为已初始化，防止后续重复检查
-        MCPConfigService._promptxInitialized = true;
+        MCPConfigService._builtinServersInitialized = true;
       }
 
       return servers;
@@ -148,8 +167,8 @@ export class MCPConfigService implements IMCPConfigService {
     }
   }
 
-  // 🔒 静态标志防止重复初始化PromptX
-  private static _promptxInitialized = false
+  // 🔒 静态标志防止重复初始化内置服务器
+  private static _builtinServersInitialized = false // 🔧 临时重置以添加文件操作配置
 
   /**
    * 获取服务器配置
@@ -443,6 +462,37 @@ export class MCPConfigService implements IMCPConfigService {
     console.log(`[MCP Config] ✅ 创建PromptX进程内服务器配置:`);
     console.log(`[MCP Config]   - 脚本路径: ${promptxScriptPath}`);
     console.log(`[MCP Config]   - 工作目录: ${promptxWorkspace}`);
+    return server;
+  }
+
+  /**
+   * 创建默认的文件操作服务器配置
+   */
+  private createDefaultFileOperationsServer(): MCPServerEntity {
+    const now = new Date();
+    
+    console.log(`[MCP Config] 🔧 创建文件操作内置服务器配置`);
+    
+    // 🚀 使用内置类型配置，直接在进程内运行
+    const server = new MCPServerEntity({
+      id: 'file-operations-builtin',
+      name: '文件操作 (内置)',
+      description: 'DeeChat内置文件操作工具 - 支持文件读写、目录管理、文件搜索等功能',
+      type: 'builtin', // 标识为内置服务器
+      isEnabled: true,
+      command: 'internal', // 内置服务器不需要外部命令
+      args: [],
+      workingDirectory: process.cwd(),
+      env: {
+        FILE_OPS_MODE: 'deechat-builtin' // 标识DeeChat内置模式
+      },
+      timeout: 5000, // 内置服务器启动很快
+      retryCount: 1,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    console.log(`[MCP Config] ✅ 创建文件操作内置服务器配置完成`);
     return server;
   }
 

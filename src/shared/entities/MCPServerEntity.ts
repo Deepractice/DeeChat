@@ -7,7 +7,7 @@ export interface MCPServerConfig {
   id: string;
   name: string;
   description?: string;
-  type: 'stdio' | 'sse' | 'websocket' | 'streamable-http';
+  type: 'stdio' | 'sse' | 'websocket' | 'streamable-http' | 'builtin';
   isEnabled: boolean;
 
   // Stdio配置
@@ -44,7 +44,7 @@ export class MCPServerEntity {
   public readonly id: string;
   public name: string;
   public description?: string;
-  public type: 'stdio' | 'sse' | 'websocket' | 'streamable-http';
+  public type: 'stdio' | 'sse' | 'websocket' | 'streamable-http' | 'builtin';
   public isEnabled: boolean;
 
   // Stdio配置

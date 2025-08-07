@@ -76,7 +76,7 @@ export class MCPServiceCoordinator extends EventEmitter {
 
     try {
       // 🔥 直接委托给MCPIntegrationService，它负责所有服务器的初始化
-      const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('../services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 让MCPIntegrationService处理所有服务器的初始化
@@ -211,7 +211,7 @@ export class MCPServiceCoordinator extends EventEmitter {
 
     try {
       // 🔥 桥接到旧版真实MCP服务
-      const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('../services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 确保MCP服务已初始化
@@ -280,7 +280,7 @@ export class MCPServiceCoordinator extends EventEmitter {
    */
   public async getAllAvailableTools(): Promise<MCPToolEntity[]> {
     try {
-      const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('../services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 确保服务已初始化
@@ -313,7 +313,7 @@ export class MCPServiceCoordinator extends EventEmitter {
 
     try {
       // 🔥 桥接到旧版真实MCP服务
-      const { MCPIntegrationService } = await import('../services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('../services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 使用真实的工具调用

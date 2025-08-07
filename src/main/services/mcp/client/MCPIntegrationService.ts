@@ -4,8 +4,8 @@
  */
 
 import log from 'electron-log'
-import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
-import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
+import { MCPServerEntity } from '../../../../shared/entities/MCPServerEntity'
+import { MCPToolEntity } from '../../../../shared/entities/MCPToolEntity'
 import {
   IMCPProvider,
   MCPConnectionStatus,
@@ -14,7 +14,7 @@ import {
   MCPToolCallResponse,
   MCPEvent,
   MCPEventType
-} from '../../../shared/interfaces/IMCPProvider'
+} from '../../../../shared/interfaces/IMCPProvider'
 import { SimpleMCPClientManager } from './SimpleMCPClientManager'
 import { MCPConfigService } from './MCPConfigService'
 import { MCPCacheService } from './MCPCacheService'

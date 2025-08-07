@@ -14,6 +14,8 @@ import { DeeChatPromptInitializer } from './DeeChatPromptInitializer';
 import { DeeChatFeature } from './FeatureContextProvider';
 import { intentDrivenPromptProvider, SessionState } from './IntentDrivenPromptProvider';
 import { conversationContextAnalyzer, ConversationContext } from './ConversationContextAnalyzer';
+import { UnifiedToolProvider } from './UnifiedToolProvider';
+import { MCPIntegrationService } from '../../main/services/mcp/client/MCPIntegrationService';
 import log from 'electron-log';
 
 /**
@@ -23,10 +25,14 @@ export class EnhancedSystemPromptProvider extends SystemPromptProvider {
   private deeChatInitializer: DeeChatPromptInitializer;
   private autoInitialized: boolean = false;
   private intentSystemEnabled: boolean = true;
+  private unifiedToolProvider: UnifiedToolProvider;
+  private mcpIntegrationService: MCPIntegrationService;
   
   constructor() {
     super();
     this.deeChatInitializer = new DeeChatPromptInitializer(this);
+    this.unifiedToolProvider = new UnifiedToolProvider();
+    this.mcpIntegrationService = MCPIntegrationService.getInstance();
     log.info('🚀 [增强提示词系统] 初始化DeeChat+PromptX集成系统');
   }
 
@@ -53,6 +59,39 @@ export class EnhancedSystemPromptProvider extends SystemPromptProvider {
    * 重写buildSystemPrompt，集成意图驱动系统
    */
   buildSystemPrompt(): string {
+    // 同步版本，不包含动态工具发现
+    return this.buildBasicSystemPrompt();
+  }
+
+  /**
+   * 异步版本的系统提示词构建，包含动态工具发现
+   */
+  async buildSystemPromptWithTools(): Promise<string> {
+    // 获取基础提示词
+    let systemPrompt = this.buildBasicSystemPrompt();
+
+    try {
+      // 🔥 动态工具发现
+      log.info('[增强提示词系统] 开始动态工具发现...');
+      const toolsSection = await this.unifiedToolProvider.getAvailableToolsDescription(this.mcpIntegrationService);
+      
+      // 将工具描述添加到系统提示词中
+      systemPrompt += `\n\n${toolsSection}`;
+      
+      log.info('[增强提示词系统] 动态工具发现完成并集成到系统提示词');
+    } catch (error) {
+      log.error('[增强提示词系统] 动态工具发现失败:', error);
+      // 如果工具发现失败，添加一个说明
+      systemPrompt += `\n\n## 工具状态\n\n当前工具发现遇到问题，系统将以基础对话模式运行。`;
+    }
+
+    return systemPrompt;
+  }
+
+  /**
+   * 构建基础系统提示词（不包含工具发现）
+   */
+  private buildBasicSystemPrompt(): string {
     // 确保传统系统初始化
     if (!this.autoInitialized) {
       try {

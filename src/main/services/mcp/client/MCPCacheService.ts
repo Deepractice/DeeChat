@@ -3,8 +3,8 @@
  * 提供工具缓存、连接池管理等性能优化功能
  */
 
-import { MCPToolEntity } from '../../../shared/entities/MCPToolEntity'
-import { MCPToolCallResponse } from '../../../shared/interfaces/IMCPProvider'
+import { MCPToolEntity } from '../../../../shared/entities/MCPToolEntity'
+import { MCPToolCallResponse } from '../../../../shared/interfaces/IMCPProvider'
 
 interface CacheEntry<T> {
   data: T;

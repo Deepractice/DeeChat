@@ -21,8 +21,12 @@ export {
   createDynamicMCPStatusSegment,
   MCP_TOOL_USAGE_PROMPT,
   PROMPTX_INTEGRATION_PROMPT,
-  CONTEXT7_INTEGRATION_PROMPT
+  FILE_OPERATIONS_INTEGRATION_PROMPT
 } from './MCPToolPrompts';
+export { 
+  createFileOperationScenarioSegment,
+  FILE_OPERATION_SCENARIOS_PROMPT
+} from './FileOperationScenarios';
 
 // 类型定义重新导出
 export type { PromptSegment, PromptProvider, ISystemPromptProvider } from '../interfaces/ISystemPromptProvider';

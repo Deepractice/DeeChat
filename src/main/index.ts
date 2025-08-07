@@ -511,7 +511,7 @@ function registerIPCHandlers(): void {
 
     try {
       // 从MCPConfigService获取服务器配置，而不是从coordinator获取连接状态
-      const { MCPConfigService } = await import('./services/mcp/MCPConfigService')
+      const { MCPConfigService } = await import('./services/mcp/client/MCPConfigService')
       const configService = new MCPConfigService()
       const servers = await configService.getAllServerConfigs()
       const serverData = servers.map(server => server.toData())
@@ -528,7 +528,7 @@ function registerIPCHandlers(): void {
       console.log('📡 [主进程] 收到前端getAllTools请求，开始处理...')
       
       // 直接获取MCPIntegrationService实例（按需初始化）
-      const { MCPIntegrationService } = await import('./services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 确保服务初始化（仅在需要时）
@@ -578,7 +578,7 @@ function registerIPCHandlers(): void {
 
     try {
       // 桥接到真实MCP服务
-      const { MCPIntegrationService } = await import('./services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       await mcpService.updateServer(serverId, updates)
       return { success: true }
@@ -611,7 +611,7 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const { MCPIntegrationService } = await import('./services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       
       // 创建服务器实体
@@ -641,7 +641,7 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const { MCPIntegrationService } = await import('./services/mcp/MCPIntegrationService')
+      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
       const mcpService = MCPIntegrationService.getInstance()
       await mcpService.removeServer(serverId)
       return { success: true }

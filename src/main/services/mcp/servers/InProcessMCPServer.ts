@@ -4,7 +4,7 @@
  */
 
 import log from 'electron-log'
-import { MCPServerEntity } from '../../../shared/entities/MCPServerEntity'
+import { MCPServerEntity } from '../../../../shared/entities/MCPServerEntity'
 import * as path from 'path'
 import { app } from 'electron'
 

@@ -4,8 +4,8 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-08-05T02:39:37.907Z",
-    "updatedAt": "2025-08-05T02:39:37.916Z",
+    "createdAt": "2025-08-07T07:16:21.833Z",
+    "updatedAt": "2025-08-07T07:16:21.852Z",
     "resourceCount": 6
   },
   "resources": [
@@ -17,9 +17,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/deechat-architect/deechat-architect.role.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.912Z",
-        "updatedAt": "2025-08-05T02:39:37.912Z",
-        "scannedAt": "2025-08-05T02:39:37.912Z",
+        "createdAt": "2025-08-07T07:16:21.844Z",
+        "updatedAt": "2025-08-07T07:16:21.844Z",
+        "scannedAt": "2025-08-07T07:16:21.844Z",
         "path": "role/deechat-architect/deechat-architect.role.md"
       }
     },
@@ -31,9 +31,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/deechat-architect/execution/code-development-protocol.execution.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.913Z",
-        "updatedAt": "2025-08-05T02:39:37.913Z",
-        "scannedAt": "2025-08-05T02:39:37.913Z",
+        "createdAt": "2025-08-07T07:16:21.847Z",
+        "updatedAt": "2025-08-07T07:16:21.847Z",
+        "scannedAt": "2025-08-07T07:16:21.847Z",
         "path": "role/deechat-architect/execution/code-development-protocol.execution.md"
       }
     },
@@ -45,9 +45,9 @@
       "description": "执行模式，定义具体的行为模式",
       "reference": "@project://.promptx/resource/role/deechat-architect/execution/deechat-development.execution.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.914Z",
-        "updatedAt": "2025-08-05T02:39:37.914Z",
-        "scannedAt": "2025-08-05T02:39:37.914Z",
+        "createdAt": "2025-08-07T07:16:21.848Z",
+        "updatedAt": "2025-08-07T07:16:21.848Z",
+        "scannedAt": "2025-08-07T07:16:21.848Z",
         "path": "role/deechat-architect/execution/deechat-development.execution.md"
       }
     },
@@ -59,9 +59,9 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/deechat-architect/thought/deechat-architecture.thought.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.914Z",
-        "updatedAt": "2025-08-05T02:39:37.914Z",
-        "scannedAt": "2025-08-05T02:39:37.914Z",
+        "createdAt": "2025-08-07T07:16:21.848Z",
+        "updatedAt": "2025-08-07T07:16:21.848Z",
+        "scannedAt": "2025-08-07T07:16:21.848Z",
         "path": "role/deechat-architect/thought/deechat-architecture.thought.md"
       }
     },
@@ -73,9 +73,9 @@
       "description": "思维模式，指导AI的思考方式",
       "reference": "@project://.promptx/resource/role/deechat-architect/thought/occams-razor-thinking.thought.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.915Z",
-        "updatedAt": "2025-08-05T02:39:37.915Z",
-        "scannedAt": "2025-08-05T02:39:37.915Z",
+        "createdAt": "2025-08-07T07:16:21.849Z",
+        "updatedAt": "2025-08-07T07:16:21.849Z",
+        "scannedAt": "2025-08-07T07:16:21.849Z",
         "path": "role/deechat-architect/thought/occams-razor-thinking.thought.md"
       }
     },
@@ -87,9 +87,9 @@
       "description": "专业角色，提供特定领域的专业能力",
       "reference": "@project://.promptx/resource/role/resource-gateway/resource-gateway.role.md",
       "metadata": {
-        "createdAt": "2025-08-05T02:39:37.916Z",
-        "updatedAt": "2025-08-05T02:39:37.916Z",
-        "scannedAt": "2025-08-05T02:39:37.916Z",
+        "createdAt": "2025-08-07T07:16:21.851Z",
+        "updatedAt": "2025-08-07T07:16:21.851Z",
+        "scannedAt": "2025-08-07T07:16:21.851Z",
         "path": "role/resource-gateway/resource-gateway.role.md"
       }
     }

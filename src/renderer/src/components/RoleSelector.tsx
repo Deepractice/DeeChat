@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Space, Typography, Avatar, Dropdown, Spin, message, MenuProps } from 'antd'
+import { Button, Space, Typography, Avatar, Dropdown, Spin, App, MenuProps } from 'antd'
 import { UserOutlined, DownOutlined, ReloadOutlined, ClearOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
@@ -19,6 +19,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   style,
   size = 'small'
 }) => {
+  const { message } = App.useApp()
   const dispatch = useDispatch<AppDispatch>()
   const { roles } = useSelector((state: RootState) => state.chat)
   const [dropdownVisible, setDropdownVisible] = useState(false)

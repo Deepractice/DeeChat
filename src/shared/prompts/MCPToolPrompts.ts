@@ -4,6 +4,7 @@
  */
 
 import { PromptSegment } from '../interfaces/ISystemPromptProvider';
+import { createFileOperationScenarioSegment } from './FileOperationScenarios';
 
 /**
  * MCP工具调用基础指导
@@ -26,9 +27,9 @@ You have access to powerful tools through the Model Context Protocol (MCP). Thes
 
 ### Available Tool Categories
 - **PromptX Tools**: Professional role activation, memory management, specialized expertise
-- **Context7 Tools**: Technical documentation and library information
-- **File Management**: Local file operations and content analysis
-- **System Integration**: Desktop application and system interactions
+- **File Operations Tools**: File system operations, directory management, file search and manipulation
+
+**Important**: Only use tools that are explicitly available in the current session. File operations are now available through the built-in file management system.
 
 ### Error Handling
 - When tools fail, continue the conversation with available information
@@ -63,32 +64,53 @@ You have access to the PromptX professional role system that enables specialized
 - Provide expert-level guidance within role capabilities`;
 
 /**
- * Context7工具集成指导
+ * 文件操作工具集成指导
  */
-export const CONTEXT7_INTEGRATION_PROMPT = `## Context7 Technical Documentation
+export const FILE_OPERATIONS_INTEGRATION_PROMPT = `## File Operations Capabilities
 
-You have access to up-to-date technical documentation through Context7:
+You have access to comprehensive file system operations through built-in file management tools:
 
-### Documentation Access
-- Use Context7 to get current information about libraries, frameworks, and APIs
-- Always prefer official documentation over potentially outdated training data
-- Verify technical details with live documentation when accuracy is critical
+### Core File Operations
+- **read_file**: Read text files and binary files (with base64 encoding support)
+- **write_file**: Create new files or overwrite existing ones with content
+- **list_directory**: Browse directory contents with optional recursive listing
+- **get_file_info**: Get detailed metadata about files and directories
 
-### Implementation Guidance
-- Reference current best practices and API changes
-- Provide code examples that match current library versions
-- Include relevant links and resources when available
+### Directory Management
+- **create_directory**: Create new directories with recursive path creation
+- **move_file**: Move or rename files and directories
+- **copy_file**: Copy files and directories with recursive support
+- **delete_file**: Remove files or directories (use with caution)
 
-### Technical Accuracy
-- Cross-reference technical claims with current documentation
-- Update recommendations based on latest software versions
-- Acknowledge when information might be outdated and needs verification`;
+### File Search and Discovery
+- **search_files**: Find files by name patterns (glob support) and content search
+- Search supports recursive directory traversal and content matching
+
+### Usage Guidelines
+- **Security**: All file operations are restricted to safe directories for user protection
+- **Efficiency**: Use appropriate tools - don't read entire files when you just need metadata
+- **User Intent**: Consider what the user actually needs before performing operations
+- **Error Handling**: File operations may fail due to permissions or missing files
+
+### Best Practices
+- When users ask about files, start with get_file_info or list_directory to understand structure
+- For code analysis, read specific files rather than searching blindly
+- When creating files, ensure directory structure exists first
+- Always inform users about significant file operations (especially deletions)
+- Use search_files to locate files when paths are unknown
+
+### Common Workflows
+- **Project Analysis**: list_directory → read key files → provide insights
+- **File Management**: get_file_info → copy/move/delete as needed
+- **Content Creation**: create_directory → write_file for new content
+- **Code Review**: search_files for patterns → read_file for specific analysis`;
+
 
 /**
  * 创建MCP工具相关的提示词片段
  */
 export function createMCPToolSegments(): PromptSegment[] {
-  return [
+  const segments = [
     {
       id: 'mcp-tool-usage',
       content: MCP_TOOL_USAGE_PROMPT,
@@ -96,6 +118,19 @@ export function createMCPToolSegments(): PromptSegment[] {
       priority: 800,
       condition: () => true // 总是启用MCP工具指导
     },
+    {
+      id: 'file-operations-integration',
+      content: FILE_OPERATIONS_INTEGRATION_PROMPT,
+      enabled: true,
+      priority: 760, // 高优先级，因为文件操作很频繁
+      condition: () => {
+        // 检查是否有文件操作工具可用
+        // 这里可以添加动态检测逻辑
+        return true; // 文件操作工具是内置的，总是可用
+      }
+    },
+    // 添加文件操作使用场景指导
+    createFileOperationScenarioSegment(),
     {
       id: 'promptx-integration',
       content: PROMPTX_INTEGRATION_PROMPT,
@@ -106,19 +141,10 @@ export function createMCPToolSegments(): PromptSegment[] {
         // 这里可以添加动态检测逻辑
         return true;
       }
-    },
-    {
-      id: 'context7-integration',
-      content: CONTEXT7_INTEGRATION_PROMPT,
-      enabled: true,
-      priority: 720,
-      condition: () => {
-        // 检查是否有Context7工具可用
-        // 这里可以添加动态检测逻辑
-        return true;
-      }
     }
   ];
+  
+  return segments;
 }
 
 /**
