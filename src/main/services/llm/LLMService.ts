@@ -5,12 +5,9 @@ import { LLMRequest, LLMResponse } from '../../../shared/interfaces/IModelProvid
 import { ModelService } from '../model/ModelService'
 import { MCPIntegrationService } from '../mcp/index.js'
 // MCPToolService已删除，功能直接集成到MCPIntegrationService中
-import { silentSystemRoleManager } from '../core/SilentSystemRoleManager.js'
 import { FileService } from '../FileService.js'
-import { conversationManager } from '../../../shared/services/ConversationManager'
+// 移除ConversationManager依赖 - 统一使用SmartLayeredPromptSystem
 import { ChatMessage } from '../../../shared/types'
-import { llmPromptIntegration } from '../../../shared/prompts/LLMServiceIntegration'
-import { DeeChatFeature } from '../../../shared/prompts/FeatureContextProvider'
 import log from 'electron-log'
 
 /**
@@ -27,7 +24,7 @@ export class LLMService {
     this.modelManagementService = new ModelService()
     this.mcpService = MCPIntegrationService.getInstance()
     // 将MCP服务注入到LangChainLLMService
-    this.langChainService = new LangChainLLMService(undefined, this.modelManagementService, this.mcpService)
+    this.langChainService = new LangChainLLMService(undefined, this.mcpService, undefined)
     // mcpToolService功能已整合到mcpService中
     
     // 初始化DeeChat专属提示词系统
@@ -35,144 +32,24 @@ export class LLMService {
   }
 
   /**
-   * 初始化DeeChat专属提示词系统
+   * 初始化智能分层提示词系统
    */
   private async initializePromptSystem(): Promise<void> {
-    try {
-      await llmPromptIntegration.initializeLLMServicePrompts()
-      log.info('✅ [LLM服务] DeeChat提示词系统初始化完成')
-    } catch (error) {
-      log.warn('⚠️ [LLM服务] DeeChat提示词系统初始化失败，将使用基础提示词:', error)
-    }
+    // 智能分层提示词系统已在LangChainLLMService构造函数中初始化
+    log.info('✅ [LLM服务] 智能分层提示词系统已就绪')
   }
 
-  /**
-   * 获取LangChain服务的系统提示词提供器
-   */
-  getSystemPromptProvider() {
-    return this.langChainService.getSystemPromptProvider()
-  }
 
-  // ==================== DeeChat专属提示词上下文管理 ====================
-
-  /**
-   * 设置功能上下文（用于不同UI模块）
-   * @param feature 功能模块
-   * @param data 额外数据
-   */
-  async setFeatureContext(feature: DeeChatFeature, _data?: Record<string, any>): Promise<void> {
-    try {
-      await llmPromptIntegration.setupLLMContext({
-        feature,
-        mcpTools: await this.getAvailableMCPToolNames()
-      })
-      log.info(`🎯 [提示词上下文] 功能上下文设置为: ${feature}`)
-    } catch (error) {
-      log.error('❌ [提示词上下文] 设置功能上下文失败:', error)
-    }
-  }
-
-  /**
-   * 设置PromptX角色
-   * @param role 角色名称
-   * @param description 角色描述
-   * @param capabilities 角色能力
-   */
-  async setPromptXRole(role: string, description?: string, capabilities?: string[]): Promise<void> {
-    try {
-      await llmPromptIntegration.setupLLMContext({
-        promptxRole: role,
-        roleDescription: description,
-        roleCapabilities: capabilities,
-        mcpTools: await this.getAvailableMCPToolNames()
-      })
-      log.info(`🎭 [提示词上下文] PromptX角色设置为: ${role}`)
-    } catch (error) {
-      log.error('❌ [提示词上下文] 设置PromptX角色失败:', error)
-    }
-  }
-
-  /**
-   * 设置聊天模式上下文
-   */
-  async setupChatContext(): Promise<void> {
-    try {
-      await llmPromptIntegration.setupLLMContext({
-        feature: 'chat',
-        mcpTools: await this.getAvailableMCPToolNames()
-      })
-      log.info('💬 [提示词上下文] 聊天模式上下文已设置')
-    } catch (error) {
-      log.error('❌ [提示词上下文] 设置聊天模式上下文失败:', error)
-    }
-  }
-
-  /**
-   * 设置文件管理模式上下文
-   */
-  async setupFileManagerContext(): Promise<void> {
-    try {
-      await llmPromptIntegration.setupLLMContext({
-        feature: 'file-manager',
-        mcpTools: await this.getAvailableMCPToolNames()
-      })
-      log.info('📁 [提示词上下文] 文件管理模式上下文已设置')
-    } catch (error) {
-      log.error('❌ [提示词上下文] 设置文件管理模式上下文失败:', error)
-    }
-  }
-
-  /**
-   * 设置资源管理模式上下文
-   */
-  async setupResourcesContext(): Promise<void> {
-    try {
-      await llmPromptIntegration.setupLLMContext({
-        feature: 'resources',
-        mcpTools: await this.getAvailableMCPToolNames()
-      })
-      log.info('📚 [提示词上下文] 资源管理模式上下文已设置')
-    } catch (error) {
-      log.error('❌ [提示词上下文] 设置资源管理模式上下文失败:', error)
-    }
-  }
-
-  /**
-   * 清理提示词上下文
-   */
-  cleanupPromptContext(): void {
-    try {
-      llmPromptIntegration.cleanupLLMContext()
-      log.info('🧹 [提示词上下文] 上下文已清理')
-    } catch (error) {
-      log.error('❌ [提示词上下文] 清理上下文失败:', error)
-    }
-  }
+  // ==================== 智能分层提示词系统（自动处理角色和上下文） ====================
 
   /**
    * 获取当前系统提示词（调试用）
+   * 注意：智能分层系统会自动管理提示词，这里返回基础提示词用于调试
    */
   async getCurrentSystemPrompt(): Promise<string> {
-    try {
-      return await llmPromptIntegration.getCurrentLLMSystemPrompt()
-    } catch (error) {
-      log.error('❌ [提示词上下文] 获取系统提示词失败:', error)
-      return this.langChainService.getSystemPromptProvider().buildSystemPrompt()
-    }
+    return 'DeeChat智能AI助手 - 使用智能分层提示词系统，支持角色保持、历史压缩和上下文管理。';
   }
 
-  /**
-   * 获取可用的MCP工具名称列表（内部辅助方法）
-   */
-  private async getAvailableMCPToolNames(): Promise<string[]> {
-    try {
-      const tools = await this.mcpService.getAllTools()
-      return tools.map(tool => tool.name)
-    } catch (error) {
-      log.warn('⚠️ [提示词上下文] 获取MCP工具名称失败:', error)
-      return []
-    }
-  }
 
 
   /**
@@ -182,9 +59,6 @@ export class LLMService {
    */
   async sendMessageWithConfig(request: LLMRequest, config: ModelConfigEntity | ProviderConfigEntity): Promise<LLMResponse> {
     try {
-      // 🤖 静默确保系统角色激活
-      await this.ensureSystemRoleActive()
-
       let modelConfig: ModelConfigEntity;
 
       if (config instanceof ProviderConfigEntity) {
@@ -210,16 +84,22 @@ export class LLMService {
       }
 
       // 直接使用LangChain服务
-      const response = await this.langChainService.sendMessageWithConfig(
+      const langchainResponse = await this.langChainService.sendMessageWithConfig(
         request.message,
         modelConfig,
         request.systemPrompt
       )
 
+      // 检查是否有工具执行信息
+      if (langchainResponse.toolExecutions && langchainResponse.toolExecutions.length > 0) {
+        log.info(`🔧 [工具执行] 检测到 ${langchainResponse.toolExecutions.length} 个工具调用记录`)
+      }
+
       return {
-        content: response,
-        model: modelConfig.model,
-        usage: {
+        content: langchainResponse.content,
+        model: langchainResponse.model,
+        toolExecutions: langchainResponse.toolExecutions, // 🔧 包含工具执行信息
+        usage: langchainResponse.usage || {
           prompt_tokens: 0,
           completion_tokens: 0,
           total_tokens: 0
@@ -239,9 +119,6 @@ export class LLMService {
    * @param chatHistory 可选的聊天历史
    */
   async sendMessage(request: LLMRequest, modelId: string, chatHistory?: ChatMessage[]): Promise<LLMResponse> {
-    // 🤖 静默确保系统角色激活
-    await this.ensureSystemRoleActive()
-
     log.info(`🔍 [模型解析] 输入模型ID: ${modelId}`)
     
     // 新方案：modelId 直接就是模型名称
@@ -347,36 +224,50 @@ export class LLMService {
       // 🆕 使用ConversationManager准备上下文
       let content: string
       let contextInfo: any = undefined
+      let toolExecutions: any[] = [] // 🔧 添加工具执行信息变量
 
       if (chatHistory && chatHistory.length > 0) {
-        log.info(`📚 [消息历史] 包含 ${chatHistory.length} 条历史消息，使用上下文管理`)
+        log.info(`📚 [消息历史] 包含 ${chatHistory.length} 条历史消息，交给SmartLayeredPromptSystem处理`)
         
-        // 使用ConversationManager准备对话上下文
-        const contextResult = await conversationManager.prepareConversationContext(
-          chatHistory,
+        // 🔥 统一使用SmartLayeredPromptSystem处理历史 - 移除重复逻辑
+        // SmartLayeredPromptSystem内部会自动处理历史消息压缩、Token管理等
+        const langchainResponse = await this.langChainService.sendMessage(
           enhancedMessage,
-          config.model,
+          config.id, // 使用配置ID让LangChainLLMService内部处理
+          request.sessionId,
+          request.activeRole,
           request.systemPrompt
         )
-
-        // 使用LangChain的sendConversation方法处理多轮对话
-        content = await this.langChainService.sendConversation(
-          contextResult.messages,
-          config.id || 'temp-config'
-        )
         
-        contextInfo = contextResult.contextInfo
-        log.info(`📊 [上下文管理] Token使用率: ${(contextInfo.tokenStats.utilizationRate * 100).toFixed(1)}%`)
+        content = langchainResponse.content
+        // 🔧 提取工具执行信息
+        if (langchainResponse.toolExecutions && langchainResponse.toolExecutions.length > 0) {
+          toolExecutions = langchainResponse.toolExecutions
+          log.info(`🔧 [工具执行] 检测到 ${toolExecutions.length} 个工具调用记录`)
+        }
+        
+        // 🔥 使用LangChain响应中的上下文信息
+        contextInfo = langchainResponse.contextInfo
+        if (contextInfo && contextInfo.tokenStats) {
+          log.info(`📊 [上下文管理] Token使用率: ${(contextInfo.tokenStats.utilizationRate * 100).toFixed(1)}%`)
+        }
         
       } else {
         log.info(`💬 [单消息模式] 无历史消息，使用标准模式`)
         
         // 使用配置发送单条消息
-        content = await this.langChainService.sendMessageWithConfig(
+        const langchainResponse = await this.langChainService.sendMessageWithConfig(
           enhancedMessage,
           config,
           request.systemPrompt
         )
+        
+        content = langchainResponse.content
+        // 🔧 提取工具执行信息
+        if (langchainResponse.toolExecutions && langchainResponse.toolExecutions.length > 0) {
+          toolExecutions = langchainResponse.toolExecutions
+          log.info(`🔧 [工具执行] 检测到 ${toolExecutions.length} 个工具调用记录`)
+        }
       }
 
       log.info(`🎯 [最终模型使用] Provider: ${config.provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
@@ -385,6 +276,7 @@ export class LLMService {
       const response: LLMResponse = {
         content,
         model: config.model,
+        toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined, // 🔧 包含工具执行信息
         usage: undefined, // LangChain可能不提供详细的usage信息
         finishReason: 'stop',
         ...(contextInfo && { contextInfo }) // 如果有上下文信息，包含在响应中
@@ -426,7 +318,7 @@ export class LLMService {
   async streamMessage(
     request: LLMRequest,
     configId: string,
-    onChunk?: (chunk: string) => void
+    _onChunk?: (chunk: string) => void
   ): Promise<string> {
     try {
       const config = await this.modelManagementService.getConfigById(configId)
@@ -438,18 +330,10 @@ export class LLMService {
         throw new Error(`模型配置已禁用: ${config.name}`)
       }
 
-      // 设置配置到LangChain服务
-      this.langChainService.setConfig(configId, config)
-      
-      // 使用LangChain流式发送消息
-      const fullResponse = await this.langChainService.streamMessage(
-        request.message,
-        configId,
-        request.systemPrompt,
-        onChunk
-      )
+      // 暂时使用普通消息发送，后续可以实现流式功能
+      const fullResponse = await this.sendMessage(request, configId)
 
-      return fullResponse
+      return fullResponse.content
     } catch (error) {
       console.error('LangChain流式调用失败:', error)
       throw error
@@ -467,13 +351,15 @@ export class LLMService {
         throw new Error(`模型配置不存在: ${configId}`)
       }
 
-      // 设置配置到LangChain服务
-      this.langChainService.setConfig(configId, config)
-      
-      // 使用LangChain测试模型
-      const testResult = await this.langChainService.testModel(configId)
+      // 简单的连接测试
+      const testResponse = await this.sendMessageWithConfig({
+        message: "测试连接",
+        temperature: 0.7,
+        maxTokens: 10
+      }, config)
       
       // 更新测试结果
+      const testResult = { success: true, response: testResponse.content, latency: 0 };
       config.updateTestResult(testResult)
       await this.modelManagementService.updateConfig(config)
       
@@ -506,13 +392,12 @@ export class LLMService {
         throw new Error(`模型配置已禁用: ${config.name}`)
       }
 
-      // 设置配置到LangChain服务
-      this.langChainService.setConfig(configId, config)
+      // 批量处理消息
+      const responses = await Promise.all(
+        requests.map(req => this.sendMessage(req, configId))
+      )
       
-      // 使用LangChain批量处理
-      const responses = await this.langChainService.batchMessages(requests, configId)
-      
-      return responses
+      return responses.map(r => r.content)
     } catch (error) {
       console.error('LangChain批量处理失败:', error)
       throw error
@@ -523,8 +408,8 @@ export class LLMService {
    * 清除LangChain缓存
    * @param configId 可选的配置ID，不提供则清除所有缓存
    */
-  clearCache(configId?: string): void {
-    this.langChainService.clearCache(configId)
+  clearCache(): void {
+    this.langChainService.clearCache()
   }
 
   /**
@@ -541,6 +426,9 @@ export class LLMService {
    */
   async sendMessageLegacy(message: string, legacyConfig: any): Promise<any> {
     try {
+      // 🔥 提取角色信息
+      const currentRole = legacyConfig.currentRole
+      
       // 尝试找到匹配的配置
       const allConfigs = await this.modelManagementService.getAllConfigs()
       const matchingConfig = allConfigs.find(config => 
@@ -576,20 +464,32 @@ export class LLMService {
         }
       }
 
-      // 使用LangChain架构
-      const request: LLMRequest = {
+      // 🔥 使用智能分层架构 - 直接调用LangChain服务，传递角色信息
+      const sessionId = 'legacy_session'
+      const activeRole = currentRole ? currentRole.id : undefined
+      
+      const langchainResponse = await this.langChainService.sendMessageWithConfig(
         message,
-        temperature: legacyConfig.temperature,
-        maxTokens: legacyConfig.maxTokens
+        matchingConfig,
+        sessionId,
+        activeRole
+      )
+      
+      // 检查是否有工具执行信息
+      if (langchainResponse.toolExecutions && langchainResponse.toolExecutions.length > 0) {
+        log.info(`🔧 [工具执行] 检测到 ${langchainResponse.toolExecutions.length} 个工具调用记录`)
       }
-
-      const response = await this.sendMessage(request, matchingConfig.id)
       
       // 转换为旧格式
       return {
-        content: response.content,
-        model: response.model,
-        usage: response.usage
+        content: langchainResponse.content,
+        model: langchainResponse.model,
+        toolExecutions: langchainResponse.toolExecutions, // 🔧 包含工具执行信息
+        usage: langchainResponse.usage || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0
+        }
       }
     } catch (error) {
       console.error('LangChain兼容模式调用失败:', error)
@@ -926,9 +826,6 @@ export class LLMService {
     chatHistory?: ChatMessage[]
   ): Promise<LLMResponse> {
     try {
-      // 🤖 静默确保系统角色激活
-      await this.ensureSystemRoleActive()
-
       if (!enableMCPTools) {
         // 不使用MCP工具，直接调用原有方法
         return await this.sendMessage(request, configId, chatHistory)
@@ -1033,41 +930,32 @@ export class LLMService {
         }
       }
 
-      // 🆕 使用LangChain标准工具调用
-      const langchainResponse = await this.langChainService.sendMessageWithMCPTools(
+      // 🆕 使用LangChain的标准工具调用方式
+      const sessionId = request.sessionId || `temp_${Date.now()}`;
+      console.log('🔧 [LLMService] ===== 使用标准工具调用方式 =====');
+      const langchainResponse = await this.langChainService.sendMessageWithConfig(
         enhancedMessage,
-        config,
-        request.systemPrompt,
-        true // 启用MCP工具
+        config, // 传递配置对象
+        sessionId,
+        request.activeRole, // 传递角色信息！
+        request.systemPrompt
       )
 
-      log.info(`📊 [LangChain标准工具调用] 响应生成完成，包含工具调用: ${langchainResponse.hasToolCalls}`)
-
-      // 构造标准LLMResponse格式
-      const response: LLMResponse = {
-        content: langchainResponse.content,
-        model: config.model,
-        usage: undefined, // LangChain可能不提供详细的usage信息
-        finishReason: 'stop'
+      log.info(`📊 [LangChain标准工具调用] 响应生成完成`)
+      
+      // 检查是否有工具执行信息
+      if (langchainResponse.toolExecutions && langchainResponse.toolExecutions.length > 0) {
+        log.info(`🔧 [工具执行] 检测到 ${langchainResponse.toolExecutions.length} 个工具调用记录`)
       }
 
-      // 如果有工具调用，添加工具执行记录
-      if (langchainResponse.hasToolCalls && langchainResponse.toolCalls) {
-        const toolExecutions = langchainResponse.toolCalls.map((toolCall: any, index: number) => ({
-          id: toolCall.id || `tool_${Date.now()}_${index}`,
-          toolName: toolCall.name,
-          serverId: 'langchain-managed', // LangChain管理的工具调用
-          serverName: 'LangChain Standard Tools',
-          params: toolCall.args,
-          result: toolCall.result || '工具执行完成但无结果返回', // 🔧 使用真实的工具执行结果
-          success: true,
-          error: undefined,
-          duration: 0, // LangChain不提供执行时间
-          timestamp: Date.now()
-        }))
-
-        response.toolExecutions = toolExecutions
-        log.info(`📊 [LangChain标准工具调用] 记录了 ${toolExecutions.length} 个工具执行，结果长度: ${toolExecutions.map(t => (t.result as string).length).join(', ')}`)
+      // 直接返回LangChain服务的完整响应（已包含工具执行信息）
+      const response: LLMResponse = {
+        content: langchainResponse.content,
+        model: langchainResponse.model,
+        toolExecutions: langchainResponse.toolExecutions, // 🔧 包含工具执行信息
+        usage: langchainResponse.usage,
+        finishReason: langchainResponse.finishReason,
+        contextInfo: langchainResponse.contextInfo // 🔧 包含上下文信息
       }
 
       // 更新配置状态为可用
@@ -1099,19 +987,4 @@ export class LLMService {
   }
 
 
-  /**
-   * 🤖 静默确保系统角色激活
-   * 每次AI对话前调用，保证系统角色始终可用
-   */
-  private async ensureSystemRoleActive(): Promise<void> {
-    try {
-      const isActive = await silentSystemRoleManager.ensureSystemRoleActive()
-      if (!isActive) {
-        console.warn('⚠️ [LLM服务] 系统角色激活失败，继续正常对话流程')
-      }
-    } catch (error) {
-      console.error('❌ [LLM服务] 确保系统角色激活时出错:', error)
-      // 不抛出错误，避免影响正常对话
-    }
-  }
 }

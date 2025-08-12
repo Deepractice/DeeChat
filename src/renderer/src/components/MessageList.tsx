@@ -3,7 +3,9 @@ import { Avatar, Card, Typography, Space, Tag, Spin } from 'antd'
 import { UserOutlined, RobotOutlined } from '@ant-design/icons'
 import { ChatMessage } from '../../../shared/types'
 import TypewriterText from './TypewriterText'
+import TypewriterRenderer from './TypewriterRenderer'
 import ConversationalToolCall from './ConversationalToolCall'
+import MessageRenderer from './MessageRenderer'
 
 const { Text, Paragraph } = Typography
 
@@ -131,23 +133,25 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading, currentT
             }}
           >
             <div>
-              <Paragraph
-                style={{
-                  margin: 0,
-                  color: isUser ? '#fff' : '#000',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {isLatestAIMessage ? (
-                  <TypewriterText
-                    text={message.content}
-                    speed={30}
-                  />
-                ) : (
-                  message.content
-                )}
-              </Paragraph>
+              {/* 智能内容渲染 - 支持Markdown、Mermaid、代码块 */}
+              {isLatestAIMessage ? (
+                <TypewriterRenderer
+                  text={message.content}
+                  speed={30}
+                  style={{
+                    margin: 0,
+                    color: isUser ? '#fff' : '#000',
+                  }}
+                />
+              ) : (
+                <MessageRenderer 
+                  content={message.content}
+                  style={{
+                    margin: 0,
+                    color: isUser ? '#fff' : '#000',
+                  }}
+                />
+              )}
 
               {/* 对话式工具调用显示 - 只在AI消息中显示 */}
               {!isUser && message.toolExecutions && message.toolExecutions.length > 0 && (

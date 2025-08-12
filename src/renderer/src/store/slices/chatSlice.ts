@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { ChatMessage, ChatSession, EnhancedChatSession } from '../../../../shared/types'
 import { SessionService } from '../../services/SessionService'
-import { ParsedRole, PromptXWelcomeResponse, parsePromptXWelcome, RoleCache } from '../../utils/promptxParser'
+import { ParsedRole, parsePromptXWelcome, RoleCache } from '../../utils/promptxParser'
 
 interface ChatState {
   currentSession: EnhancedChatSession | null  // 🔥 使用增强的会话类型
@@ -38,8 +38,21 @@ const initialState: ChatState = {
 // 异步 thunk：发送消息
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ message, config }: { message: string; config: any }) => {
-    const response = await window.electronAPI.sendMessage(message, config)
+  async ({ message, config }: { message: string; config: any }, { getState }) => {
+    const state = getState() as { chat: ChatState }
+    
+    // 🔥 将当前角色信息传递到后端
+    const roleInfo = state.chat.roles.currentRole ? {
+      id: state.chat.roles.currentRole.id,
+      name: state.chat.roles.currentRole.name,
+      description: state.chat.roles.currentRole.description,
+      source: state.chat.roles.currentRole.source
+    } : null
+    
+    const response = await window.electronAPI.sendMessage(message, {
+      ...config,
+      currentRole: roleInfo
+    })
     return response
   }
 )
@@ -140,43 +153,75 @@ export const switchToSessionWithConfig = createAsyncThunk(
 export const loadAvailableRoles = createAsyncThunk(
   'chat/loadAvailableRoles',
   async (forceRefresh: boolean = false) => {
-    // 检查缓存
-    if (!forceRefresh) {
-      const cached = RoleCache.load()
-      if (cached) {
-        return cached
-      }
-    }
-    
     try {
-      // 调用welcome命令获取角色列表
-      const result = await window.electronAPI.promptx.execute('welcome', [])
+      // 使用RoleDiscoveryService统一管理角色发现
+      const { roleDiscoveryService } = await import('../../services/RoleDiscoveryService');
       
-      if (!result.success) {
-        throw new Error(result.error || '获取角色列表失败')
+      if (forceRefresh) {
+        await roleDiscoveryService.refreshRoles();
+      } else {
+        // 确保服务已初始化
+        await roleDiscoveryService.initializeOnAppStart();
       }
       
-      // 解析响应数据
-      const parsed = parsePromptXWelcome(result.data)
+      // 从服务获取角色列表，已经是ParsedRole[]格式
+      const roles = roleDiscoveryService.getAllRoles();
       
-      // 缓存结果
-      RoleCache.save(parsed)
+      const result = {
+        roles: roles,
+        tools: [],
+        metadata: {
+          totalRoles: roles.length,
+          totalTools: 0,
+          timestamp: new Date().toISOString()
+        }
+      };
       
-      console.log(`[Redux] 角色列表加载成功，共 ${parsed.roles.length} 个角色`)
-      console.log('[Redux] 即将返回的数据:', parsed)
-      return parsed
+      console.log(`[Redux] 通过RoleDiscoveryService加载 ${result.roles.length} 个角色`);
+      return result;
+      
     } catch (error) {
-      console.error('[Redux] loadAvailableRoles 错误:', error)
-      throw error
+      console.error('[Redux] loadAvailableRoles 错误:', error);
+      
+      // 降级方案：使用原有的PromptX API直接调用
+      try {
+        // 检查缓存
+        if (!forceRefresh) {
+          const cached = RoleCache.load()
+          if (cached) {
+            return cached
+          }
+        }
+        
+        // 调用welcome命令获取角色列表
+        const result = await window.electronAPI.promptx.execute('welcome', [])
+        
+        if (!result.success) {
+          throw new Error(result.error || '获取角色列表失败')
+        }
+        
+        // 解析响应数据
+        const parsed = parsePromptXWelcome(result.data)
+        
+        // 缓存结果
+        RoleCache.save(parsed)
+        
+        console.log(`[Redux] 降级方案加载成功，共 ${parsed.roles.length} 个角色`)
+        return parsed
+      } catch (fallbackError) {
+        console.error('[Redux] 降级方案也失败:', fallbackError)
+        throw fallbackError
+      }
     }
   }
 )
 
-// 🎭 异步thunk：激活角色
+
+// 🎭 异步thunk：激活角色（仅更新前端状态，实际激活由LangChain的MCP工具处理）
 export const activateRole = createAsyncThunk(
   'chat/activateRole',
   async (roleId: string, { getState }) => {
-    console.log('[Redux] 开始激活角色:', roleId)
+    console.log('[Redux] 🎯 选择角色（仅更新UI状态）:', roleId)
     
     const state = getState() as { chat: ChatState }
     const role = state.chat.roles.availableRoles.find(r => r.id === roleId)
@@ -185,41 +230,26 @@ export const activateRole = createAsyncThunk(
       throw new Error(`角色不存在: ${roleId}`)
     }
     
-    // 🔥 只需要通知DeeChat提示词系统设置PromptX角色
-    // 不需要调用PromptX的action命令，让AI在下次对话时使用新的提示词
-    try {
-      if (window.api?.llm?.setPromptXRole) {
-        await window.api.llm.setPromptXRole(roleId, role.description, role.capabilities || [])
-        console.log('[Redux] DeeChat提示词系统角色已设置:', role.name)
-      }
-    } catch (error) {
-      console.error('[Redux] 设置DeeChat提示词系统角色失败:', error)
-      throw error
-    }
+    // ✅ 只更新前端状态，不直接调用PromptX
+    // 真正的角色激活将在下次对话时由LangChain通过MCP工具自动处理
+    console.log('[Redux] ✅ 角色已选择，下次对话时LangChain将通过MCP工具自动激活:', role.name)
+    console.log('[Redux] 💡 避免重复调用：不再直接调用PromptXLocalService')
     
-    console.log('[Redux] 角色激活成功，下次对话将使用此角色:', role.name)
     return role
   }
 )
 
-// 🎭 异步thunk：清除角色
+// 🎭 异步thunk：清除角色（仅更新前端状态，下次对话时恢复默认模式）
 export const clearRole = createAsyncThunk(
   'chat/clearRole',
   async () => {
-    console.log('[Redux] 开始清除角色')
+    console.log('[Redux] 🎯 清除角色选择（仅更新UI状态）')
     
-    // 通知DeeChat提示词系统清除PromptX角色
-    try {
-      if (window.api?.llm?.setPromptXRole) {
-        await window.api.llm.setPromptXRole('', '', [])
-        console.log('[Redux] DeeChat提示词系统角色已清除')
-      }
-    } catch (error) {
-      console.error('[Redux] 清除DeeChat提示词系统角色失败:', error)
-      throw error
-    }
+    // ✅ 只更新前端状态，不直接调用PromptX
+    // 下次对话时将自动使用默认的assistant模式
+    console.log('[Redux] ✅ 角色选择已清除，下次对话将恢复默认AI模式')
+    console.log('[Redux] 💡 避免重复调用：不再直接调用PromptXLocalService')
     
-    console.log('[Redux] 角色清除成功，下次对话将恢复基础AI模式')
     return null
   }
 )
@@ -415,6 +445,7 @@ const chatSlice = createSlice({
             content: action.payload.data.content,
             timestamp: Date.now(),
             modelId: action.payload.data.model,
+            toolExecutions: action.payload.data.toolExecutions, // 🔧 包含工具执行信息
           }
           state.currentSession.messages.push(assistantMessage)
           state.currentSession.updatedAt = Date.now()

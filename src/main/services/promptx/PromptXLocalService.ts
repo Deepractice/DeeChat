@@ -14,8 +14,9 @@ export class PromptXLocalService implements IPromptXService {
   constructor() {
     // 确定PromptX模块路径
     if (process.env.NODE_ENV === 'development') {
-      // 开发环境：从项目根目录开始
-      this.promptxPath = path.join(process.cwd(), 'resources/promptx/package');
+      // 开发环境：使用__dirname相对路径定位到项目根目录
+      const projectRoot = path.resolve(__dirname, '../../../..');
+      this.promptxPath = path.join(projectRoot, 'resources/promptx/package');
     } else {
       this.promptxPath = path.join(process.resourcesPath, 'resources/promptx/package');
     }
@@ -198,6 +199,15 @@ export class PromptXLocalService implements IPromptXService {
    */
   async initWorkspace(workspacePath?: string, ideType?: string): Promise<any> {
     if (workspacePath) {
+      // 设置环境变量，让PromptX ProjectManager知道项目路径
+      process.env.PROMPTX_PROJECT_PATH = workspacePath;
+      process.env.PROMPTX_WORKSPACE = workspacePath;
+      // 备用环境变量名称
+      process.env.PROJECT_ROOT = workspacePath;
+      process.env.WORKSPACE_ROOT = workspacePath;
+      
+      console.log(`[PromptXLocalService] 设置项目路径环境变量: ${workspacePath}`);
+      
       // 使用MCP格式的对象参数
       return this.execute(PromptXCommand.INIT, [{ 
         workingDirectory: workspacePath,

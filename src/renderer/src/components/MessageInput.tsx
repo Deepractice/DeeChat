@@ -23,7 +23,7 @@ interface MessageInputProps {
 const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedModel, onSendMessage, onModelSelect, onGoToModelManagement }) => {
   const dispatch = useDispatch<AppDispatch>()
   const { config } = useSelector((state: RootState) => state.config)
-  const { currentSession } = useSelector((state: RootState) => state.chat)
+  const { currentSession, roles } = useSelector((state: RootState) => state.chat)
   const [inputValue, setInputValue] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<FileUploadItem[]>([])
   const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([])
@@ -110,6 +110,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
         let response;
 
         // 优先使用MCP增强模式，如果不可用则降级到普通模式
+        console.log('🔍 [调试] 检查MCP增强模式可用性:');
+        console.log('  window.electronAPI:', !!window.electronAPI);
+        console.log('  window.electronAPI.ai:', !!window.electronAPI?.ai);
+        console.log('  window.electronAPI.ai.sendMessageWithMCPTools:', !!window.electronAPI?.ai?.sendMessageWithMCPTools);
+        
         if (window.electronAPI?.ai?.sendMessageWithMCPTools) {
           console.log('🔧 [前端] 使用MCP增强模式发送消息');
           response = await window.electronAPI.ai.sendMessageWithMCPTools({
@@ -117,7 +122,10 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
               message: trimmedValue,
               temperature: 0.7,
               maxTokens: 2000,
-              attachmentIds: attachmentIds
+              attachmentIds: attachmentIds,
+              // 🎭 传递当前选择的角色信息
+              activeRole: roles.currentRole?.id,
+              sessionId: currentSession?.id
             },
             configId: selectedModel.id,
             enableMCPTools: true,
@@ -130,7 +138,10 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
               message: trimmedValue,
               temperature: 0.7,
               maxTokens: 2000,
-              attachmentIds: attachmentIds
+              attachmentIds: attachmentIds,
+              // 🎭 传递当前选择的角色信息
+              activeRole: roles.currentRole?.id,
+              sessionId: currentSession?.id
             },
             configId: selectedModel.id,
             chatHistory: chatHistory  // 🆕 传递聊天历史

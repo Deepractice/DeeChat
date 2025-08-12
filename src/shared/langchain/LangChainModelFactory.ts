@@ -22,12 +22,12 @@ export class LangChainModelFactory {
     
     switch (provider) {
       case 'openai':
-        log.info(`🤖 [ModelFactory] 创建ChatOpenAI实例 - Model: ${config.model}`)
+        log.info(`🤖 [ModelFactory] 创建ChatOpenAI实例 - Model: ${config.model}, BaseURL: ${config.baseURL}`)
         return new ChatOpenAI({
-          modelName: config.model,
-          openAIApiKey: config.apiKey,
+          modelName: config.model, // LangChain 0.5.x 使用 modelName
+          openAIApiKey: config.apiKey, // LangChain 0.5.x 使用 openAIApiKey
           configuration: {
-            baseURL: config.baseURL
+            baseURL: config.baseURL || 'https://api.openai.com/v1'
           },
           temperature: 0.7,
           maxTokens: 2000
@@ -74,12 +74,12 @@ export class LangChainModelFactory {
       // 对于自定义提供商，使用ChatOpenAI with 自定义baseURL
       // 大多数自定义API都是OpenAI兼容的
       default:
-        log.info(`🔧 [ModelFactory] 创建默认ChatOpenAI实例 - Provider: ${provider}, Model: ${config.model}`)
+        log.info(`🔧 [ModelFactory] 创建默认ChatOpenAI实例 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
         return new ChatOpenAI({
-          apiKey: config.apiKey,
-          model: config.model,
+          openAIApiKey: config.apiKey,
+          modelName: config.model,
           configuration: {
-            baseURL: config.baseURL
+            baseURL: config.baseURL || 'https://api.openai.com/v1'
           },
           temperature: 0.7,
           maxTokens: 2000
@@ -135,7 +135,7 @@ export class LangChainModelFactory {
           modelName: config.model,
           openAIApiKey: config.apiKey,
           configuration: {
-            baseURL: config.baseURL
+            baseURL: config.baseURL || 'https://api.openai.com/v1'
           },
           ...params
         });
@@ -162,10 +162,10 @@ export class LangChainModelFactory {
       default:
         // 对于自定义提供商，使用ChatOpenAI with 自定义baseURL
         return new ChatOpenAI({
-          apiKey: config.apiKey,
-          model: config.model,
+          openAIApiKey: config.apiKey,
+          modelName: config.model,
           configuration: {
-            baseURL: config.baseURL
+            baseURL: config.baseURL || 'https://api.openai.com/v1'
           },
           ...params
         });

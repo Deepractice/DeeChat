@@ -95,7 +95,19 @@ export function registerPromptXHandlers(): void {
   ipcMain.handle('promptx:activateRole', async (_, roleId: string) => {
     try {
       const result = await promptxService.activateRole(roleId);
-      return { success: true, data: result };
+      
+      // 安全的序列化处理：只返回简单的激活状态信息
+      const safeResult = {
+        roleId: roleId,
+        activated: true,
+        timestamp: new Date().toISOString(),
+        // 如果result有特定字段，可以安全地提取
+        ...(result && typeof result === 'object' && result.message ? { message: String(result.message) } : {}),
+        ...(result && typeof result === 'string' ? { message: result } : {})
+      };
+      
+      console.log('[IPC] PromptX角色激活成功，返回安全数据:', safeResult);
+      return { success: true, data: safeResult };
     } catch (error) {
       console.error('[IPC] 激活角色失败:', error);
       return { 

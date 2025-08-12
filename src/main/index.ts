@@ -20,13 +20,14 @@ import { ConfigService } from './services/core/ConfigService'
 import { ChatService } from './services/core/ChatService'
 import { LLMService } from './services/llm/LLMService'
 import { ModelService } from './services/model/ModelService'
-import { silentSystemRoleManager } from './services/core/SilentSystemRoleManager'
 import { LocalStorageService } from './services/core/LocalStorageService'
 import { FrontendUserPreferenceRepository } from './repositories/FrontendUserPreferenceRepository'
 import { UserPreferenceEntity } from '../shared/entities/UserPreferenceEntity'
 
 // 开发环境检测
 const isDev = process.env.NODE_ENV === 'development'
+
+// 移除复杂的端口检测，使用标准的Vite环境变量方案
 
 // 🔥 设置应用名称（解决开发模式下显示为Electron的问题）
 app.setName('DeeChat')
@@ -103,9 +104,16 @@ if (!gotTheLock) {
 
     // 加载应用
     if (isDev) {
-      const devUrl = 'http://localhost:5173'
-      console.log('🔧 [开发模式] 加载开发服务器:', devUrl)
-      mainWindow.loadURL(devUrl)
+      // 🎯 使用标准的Vite环境变量方案，自动适配端口变化
+      if (process.env.VITE_DEV_SERVER_URL) {
+        console.log('🔧 [开发模式] 加载Vite开发服务器:', process.env.VITE_DEV_SERVER_URL)
+        mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+      } else {
+        // 降级到默认URL（通常不会执行到这里）
+        const fallbackUrl = 'http://localhost:5173'
+        console.log('⚠️ [开发模式] VITE_DEV_SERVER_URL未设置，使用默认URL:', fallbackUrl)
+        mainWindow.loadURL(fallbackUrl)
+      }
       mainWindow.webContents.openDevTools()
     } else {
       const htmlPath = join(__dirname, '../../renderer/index.html')
@@ -142,14 +150,7 @@ if (!gotTheLock) {
     console.log('🔧 [主进程] 初始化基础服务...')
 
     try {
-      // 初始化系统角色管理器
-      try {
-        console.log('🤖 [主进程] 开始静默激活系统角色...')
-        await silentSystemRoleManager.initializeOnStartup()
-        console.log('✅ [主进程] 系统角色静默激活完成')
-      } catch (error) {
-        console.error('❌ [主进程] 系统角色激活失败:', error)
-      }
+      // 🔥 旧的SystemRoleManager初始化已删除，使用智能分层提示词系统代替
 
       console.log('✅ [主进程] 基础服务初始化完成')
 
@@ -710,87 +711,55 @@ function registerIPCHandlers(): void {
 
   // 添加所有缺失的核心IPC处理器
   
-  // LLM相关IPC（兼容旧版本）
+  // LLM相关IPC（启用MCP工具支持）
   ipcMain.handle('llm:sendMessage', async (_, message: string, config: any) => {
     try {
-      const response = await langChainService.sendMessageLegacy(message, config)
-      return { success: true, data: response }
+      // 🔥 启用MCP工具支持让AI能主动调用PromptX工具
+      console.log('🔧 [IPC] 使用MCP工具发送消息，配置:', JSON.stringify(config, null, 2))
+      
+      // 提取配置参数
+      const { 
+        configId = 'default',
+        sessionId = `session_${Date.now()}`,
+        currentRole,
+        systemPrompt 
+      } = config || {}
+      
+      // 构建LLMRequest对象
+      const llmRequest = {
+        message: message,
+        sessionId: sessionId,
+        activeRole: currentRole?.id, // 传递当前激活的角色ID
+        systemPrompt: systemPrompt,
+        attachmentIds: []
+      }
+      
+      // 使用带MCP工具支持的方法
+      const response = await langChainService.sendMessageWithMCPTools(
+        llmRequest,
+        configId,
+        true, // 启用MCP工具
+        [] // 暂时不传历史消息
+      )
+      
+      console.log('✅ [IPC] MCP工具消息发送成功')
+      return { success: true, data: { content: response.content, model: response.model } }
     } catch (error) {
-      console.error('LangChain API调用失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+      console.error('❌ [IPC] MCP工具消息发送失败:', error)
+      
+      // 降级到传统方法
+      try {
+        console.log('⚠️ [IPC] 降级到传统消息发送方法')
+        const response = await langChainService.sendMessageLegacy(message, config)
+        return { success: true, data: response }
+      } catch (fallbackError) {
+        console.error('❌ [IPC] 降级方法也失败:', fallbackError)
+        return { success: false, error: fallbackError instanceof Error ? fallbackError.message : '未知错误' }
+      }
     }
   })
 
-  // DeeChat专属提示词系统IPC处理器
-  ipcMain.handle('llm:setupChatContext', async () => {
-    try {
-      await langChainService.setupChatContext()
-      return { success: true }
-    } catch (error) {
-      console.error('设置聊天上下文失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:setupResourcesContext', async () => {
-    try {
-      await langChainService.setupResourcesContext()
-      return { success: true }
-    } catch (error) {
-      console.error('设置资源管理上下文失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:setupFileManagerContext', async () => {
-    try {
-      await langChainService.setupFileManagerContext()
-      return { success: true }
-    } catch (error) {
-      console.error('设置文件管理上下文失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:setFeatureContext', async (_, feature: string, data?: any) => {
-    try {
-      await langChainService.setFeatureContext(feature as any, data)
-      return { success: true }
-    } catch (error) {
-      console.error('设置功能上下文失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:setPromptXRole', async (_, role: string, description?: string, capabilities?: string[]) => {
-    try {
-      await langChainService.setPromptXRole(role, description, capabilities)
-      return { success: true }
-    } catch (error) {
-      console.error('设置PromptX角色失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:getCurrentSystemPrompt', async () => {
-    try {
-      const prompt = await langChainService.getCurrentSystemPrompt()
-      return { success: true, data: prompt }
-    } catch (error) {
-      console.error('获取系统提示词失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('llm:cleanupPromptContext', async () => {
-    try {
-      langChainService.cleanupPromptContext()
-      return { success: true }
-    } catch (error) {
-      console.error('清理提示词上下文失败:', error)
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
+  // 🔥 旧的SystemRoleManager IPC处理器已删除，使用智能分层提示词系统代替
 
   // 配置相关IPC
   ipcMain.handle('config:get', async () => {
@@ -996,8 +965,7 @@ function registerIPCHandlers(): void {
         }
       }
       
-      const status = silentSystemRoleManager.getSystemRoleStatus()
-      return { success: true, data: status }
+      return { success: true, data: { status: 'legacy_system_removed' } }
     } catch (error) {
       console.error('获取系统角色状态失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -1013,8 +981,7 @@ function registerIPCHandlers(): void {
         }
       }
       
-      silentSystemRoleManager.resetSystemRoleState()
-      return { success: true }
+      return { success: true, message: 'legacy_system_removed' }
     } catch (error) {
       console.error('重置系统角色失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -1033,6 +1000,18 @@ app.whenReady().then(async () => {
   console.log(`🔧 [主进程] 环境: ${isDev ? '开发' : '生产'}`)
   console.log(`🔧 [主进程] Node版本: ${process.version}`)
   console.log(`🔧 [主进程] 平台: ${process.platform}`)
+
+  // 🎯 预先设置PromptX环境变量，避免ProjectManager路径解析错误
+  const promptxWorkspacePath = path.join(app.getPath('userData'), 'promptx-workspace')
+  process.env.PROMPTX_PROJECT_PATH = promptxWorkspacePath
+  process.env.PROMPTX_WORKSPACE = promptxWorkspacePath
+  process.env.PROJECT_ROOT = promptxWorkspacePath
+  process.env.WORKSPACE_ROOT = promptxWorkspacePath
+  // 确保工作区目录存在
+  if (!fs.existsSync(promptxWorkspacePath)) {
+    fs.mkdirSync(promptxWorkspacePath, { recursive: true })
+  }
+  console.log(`🎯 [主进程] 预设PromptX工作区路径: ${promptxWorkspacePath}`)
 
   // 0. 初始化ServiceManager和核心服务（现在app已准备就绪）
   console.log('🔧 [主进程] 通过ServiceManager初始化核心服务...')

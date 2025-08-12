@@ -1,5 +1,19 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// 监听主进程发送的日志消息并输出到渲染进程控制台
+ipcRenderer.on('main-process-log', (_event, logData) => {
+  const { level, message, timestamp } = logData;
+  const formattedMessage = `[${new Date(timestamp).toLocaleTimeString()}] ${message}`;
+  
+  if (level === 'info') {
+    console.info(formattedMessage);
+  } else if (level === 'warn') {
+    console.warn(formattedMessage);
+  } else if (level === 'error') {
+    console.error(formattedMessage);
+  }
+});
+
 // 定义暴露给渲染进程的 API
 const electronAPI = {
   // 应用信息

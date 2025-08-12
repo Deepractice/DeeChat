@@ -1,16 +1,13 @@
 import React, { useState } from 'react'
 import { 
   Progress, 
-  Tag, 
   Collapse, 
-  Space, 
   Typography, 
   Button
 } from 'antd'
 import { 
   RobotOutlined, 
   CheckCircleOutlined,
-  EyeOutlined,
   CopyOutlined,
   DownOutlined,
   RightOutlined
@@ -94,178 +91,22 @@ const generateResultSummary = (execution: ToolExecution): string => {
   }
 }
 
-// 判断结果是否需要预览
+// 判断结果是否需要预览 - 扩展到更多工具类型
 const shouldShowPreview = (toolName: string): boolean => {
-  const previewTools = ['context7_resolve-library-id', 'web-search', 'code-execution', 'promptx_welcome']
+  const previewTools = [
+    'context7_resolve-library-id', 
+    'web-search', 
+    'code-execution', 
+    'promptx_welcome',
+    'promptx_action',  // 添加角色激活工具
+    'promptx_recall',  // 添加记忆检索工具
+    'file-read',       // 添加文件读取工具
+    'context7_get-library-docs' // 添加文档获取工具
+  ]
   return previewTools.includes(toolName)
 }
 
-// 生成智能预览内容
-const generateSmartPreview = (execution: ToolExecution): React.ReactNode => {
-  const { toolName, result, error } = execution
-  
-  if (error || !result) {
-    return null
-  }
-
-  try {
-    const data = typeof result === 'string' ? JSON.parse(result) : result
-
-    switch (toolName) {
-      case 'context7_resolve-library-id':
-        if (data?.libraries && Array.isArray(data.libraries)) {
-          return (
-            <div>
-              <Text strong style={{ color: '#1890ff', marginBottom: 8, display: 'block' }}>
-                📚 找到的资源库：
-              </Text>
-              {data.libraries.slice(0, 3).map((lib: any, index: number) => (
-                <div key={index} style={{ 
-                  padding: '8px 12px', 
-                  background: '#f8f9ff', 
-                  borderRadius: '6px',
-                  marginBottom: '6px',
-                  borderLeft: '3px solid #1890ff'
-                }}>
-                  <Text strong>{lib.name || lib.title}</Text>
-                  {lib.description && (
-                    <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
-                      {lib.description.length > 80 ? lib.description.substring(0, 80) + '...' : lib.description}
-                    </div>
-                  )}
-                  {lib.trustScore && (
-                    <Tag color="blue" style={{ marginTop: '4px', fontSize: '11px' }}>
-                      信任度: {lib.trustScore}/10
-                    </Tag>
-                  )}
-                </div>
-              ))}
-              {data.libraries.length > 3 && (
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  ...还有 {data.libraries.length - 3} 个资源库
-                </Text>
-              )}
-            </div>
-          )
-        }
-        break
-
-      case 'promptx_welcome':
-        if (data?.roles && Array.isArray(data.roles)) {
-          return (
-            <div>
-              <Text strong style={{ color: '#52c41a', marginBottom: 8, display: 'block' }}>
-                🎭 可用专业角色：
-              </Text>
-              {data.roles.slice(0, 4).map((role: any, index: number) => (
-                <div key={index} style={{ 
-                  padding: '8px 12px', 
-                  background: '#f6ffed',
-                  borderRadius: '6px',
-                  marginBottom: '6px',
-                  borderLeft: '3px solid #52c41a'
-                }}>
-                  <Space>
-                    <Text strong>{role.name}</Text>
-                    <Tag color={role.source === 'system' ? 'blue' : 'green'} style={{ fontSize: '10px' }}>
-                      {role.source === 'system' ? '系统' : '项目'}
-                    </Tag>
-                  </Space>
-                  {role.description && (
-                    <div style={{ color: '#666', fontSize: '12px', marginTop: '2px' }}>
-                      {role.description.length > 60 ? role.description.substring(0, 60) + '...' : role.description}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {data.roles.length > 4 && (
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  ...还有 {data.roles.length - 4} 个角色
-                </Text>
-              )}
-            </div>
-          )
-        }
-        break
-
-      case 'context7_get-library-docs':
-        if (data?.content || data?.codeSnippets) {
-          return (
-            <div>
-              <Text strong style={{ color: '#722ed1', marginBottom: 8, display: 'block' }}>
-                📖 获取的文档内容：
-              </Text>
-              {data.codeSnippets && (
-                <div style={{ marginBottom: '8px' }}>
-                  <Tag color="purple">代码示例: {data.codeSnippets.length}</Tag>
-                </div>
-              )}
-              {data.content && (
-                <div style={{ 
-                  background: '#f9f0ff',
-                  padding: '12px',
-                  borderRadius: '6px',
-                  maxHeight: '150px',
-                  overflow: 'auto',
-                  fontSize: '12px',
-                  lineHeight: '1.4'
-                }}>
-                  {typeof data.content === 'string' 
-                    ? data.content.substring(0, 300) + (data.content.length > 300 ? '...' : '')
-                    : JSON.stringify(data.content, null, 2).substring(0, 300) + '...'
-                  }
-                </div>
-              )}
-            </div>
-          )
-        }
-        break
-
-      default:
-        // 通用预览格式
-        const preview = JSON.stringify(data, null, 2)
-        if (preview.length > 200) {
-          return (
-            <div>
-              <Text strong style={{ color: '#1890ff', marginBottom: 8, display: 'block' }}>
-                🔧 执行结果预览：
-              </Text>
-              <div style={{ 
-                background: '#f5f5f5',
-                padding: '12px',
-                borderRadius: '6px',
-                maxHeight: '120px',
-                overflow: 'auto',
-                fontSize: '12px',
-                fontFamily: 'Monaco, Consolas, monospace'
-              }}>
-                {preview.substring(0, 200)}...
-              </div>
-            </div>
-          )
-        }
-    }
-  } catch (e) {
-    // JSON解析失败，显示原始内容
-    const preview = typeof result === 'string' ? result : String(result)
-    if (preview.length > 100) {
-      return (
-        <div style={{ 
-          background: '#f5f5f5',
-          padding: '12px',
-          borderRadius: '6px',
-          maxHeight: '120px',
-          overflow: 'auto',
-          fontSize: '12px'
-        }}>
-          {preview.substring(0, 100)}...
-        </div>
-      )
-    }
-  }
-
-  return null
-}
+// 删除未使用的函数
 
 // 动画定义
 const fadeInUp = keyframes`
@@ -279,183 +120,107 @@ const fadeInUp = keyframes`
   }
 `
 
-const slideInLeft = keyframes`
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-`
+// 删除未使用的动画
 
-const pulse = keyframes`
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.02);
-  }
-`
-
-const shimmer = keyframes`
-  0% {
-    background-position: -200px 0;
-  }
-  100% {
-    background-position: calc(200px + 100%) 0;
-  }
-`
-
-const successPop = keyframes`
-  0% {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-`
-
-// 样式组件
+// 样式组件 - 简约风格
 const ConversationContainer = styled.div`
-  margin: 16px 0;
-  animation: ${fadeInUp} 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 12px 0;
+  animation: ${fadeInUp} 0.3s ease-out;
 `
 
 const ThinkingProcess = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #f6f8ff 0%, #e8f4ff 100%);
-  background-size: 200px 100%;
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0) 100%
-  ),
-  linear-gradient(135deg, #f6f8ff 0%, #e8f4ff 100%);
-  animation: ${shimmer} 2s infinite linear, ${pulse} 3s infinite ease-in-out;
-  border-radius: 12px;
-  border-left: 4px solid #1890ff;
-  margin-bottom: 8px;
-  transition: all 0.3s ease;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
   
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+    border-color: #d9d9d9;
   }
 `
 
 const ThinkingText = styled(Text)`
-  color: #1890ff;
-  font-weight: 500;
+  color: #666;
+  font-size: 13px;
+  font-weight: 400;
 `
 
 const ResultSummary = styled.div<{ $hasError?: boolean }>`
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  background: ${props => props.$hasError ? '#fff2f0' : '#f6ffed'};
-  border-radius: 12px;
-  border-left: 4px solid ${props => props.$hasError ? '#ff4d4f' : '#52c41a'};
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fafafa;
   margin-bottom: 8px;
-  animation: ${props => props.$hasError ? slideInLeft : successPop} 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  transition: all 0.3s ease;
-  position: relative;
+  transition: border-color 0.2s ease;
   overflow: hidden;
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      ${props => props.$hasError 
-        ? 'rgba(255, 77, 79, 0.1)' 
-        : 'rgba(82, 196, 26, 0.1)'
-      },
-      transparent
-    );
-    animation: ${shimmer} 1.5s ease-in-out;
+  &:hover {
+    border-color: #d9d9d9;
   }
   
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px ${props => props.$hasError 
-      ? 'rgba(255, 77, 79, 0.15)' 
-      : 'rgba(82, 196, 26, 0.15)'
-    };
-  }
+  ${props => props.$hasError && `
+    border-color: #ffccc7;
+    background: #fff2f0;
+    &:hover {
+      border-color: #ff7875;
+    }
+  `}
 `
 
 const ResultIcon = styled.div`
-  font-size: 20px;
-  margin-top: 2px;
+  font-size: 14px;
+  margin-top: 1px;
+  margin-right: 2px;
 `
 
-const ResultContent = styled.div`
-  flex: 1;
-`
+// 删除未使用的样式
 
 const ResultTitle = styled(Text)`
-  color: #52c41a;
-  font-weight: 600;
+  color: #333;
+  font-weight: 500;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  font-size: 13px;
 `
 
 const ResultDescription = styled(Text)`
   color: #666;
-  line-height: 1.5;
+  line-height: 1.4;
+  font-size: 12px;
 `
 
 const ActionButtons = styled.div`
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  animation: ${fadeInUp} 0.3s ease-out 0.2s both;
+  gap: 6px;
+  margin-top: 8px;
   
   .ant-btn {
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease;
+    font-size: 12px;
+    height: 24px;
+    padding: 0 8px;
     
     &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-    
-    &:active {
-      transform: translateY(0);
+      transform: none;
+      box-shadow: none;
     }
   }
 `
 
 const DetailPanel = styled.div`
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 8px;
-  animation: ${fadeInUp} 0.3s ease-out;
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s ease;
+  background: #f8f8f8;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 6px;
+  border: 1px solid #e8e8e8;
+  transition: all 0.2s ease;
   
   &:hover {
     border-color: #d9d9d9;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 `
 
@@ -523,99 +288,171 @@ const ConversationalToolCall: React.FC<ConversationalToolCallProps> = ({
     )
   }
 
-  // 按工具分组显示结果
+  // 简洁的工具调用结果显示
   return (
     <ConversationContainer>
       {toolExecutions.map((execution) => {
-        const { action } = getToolActionDescription(execution.toolName)
+        const { action, icon } = getToolActionDescription(execution.toolName)
         const summary = generateResultSummary(execution)
         const hasError = !!execution.error
         const showPreview = shouldShowPreview(execution.toolName)
 
         return (
-          <div key={execution.id}>
+          <div key={`tool-${execution.id || Date.now()}-${execution.toolName}-${Math.random().toString(36).substr(2, 9)}`}>
             <ResultSummary $hasError={hasError}>
-              <ResultIcon>
-                {hasError ? '❌' : '✅'}
-              </ResultIcon>
-              
-              <ResultContent>
-                <ResultTitle style={{ color: hasError ? '#ff4d4f' : '#52c41a' }}>
-                  {hasError ? '操作失败' : `已为您${action}`}
-                </ResultTitle>
+              <div style={{ padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <ResultIcon>{icon}</ResultIcon>
+                  <ResultTitle>
+                    {hasError ? '操作失败' : action}
+                  </ResultTitle>
+                  {execution.duration && (
+                    <Text style={{ color: '#999', fontSize: '11px', marginLeft: 'auto' }}>
+                      {execution.duration < 1000 ? `${execution.duration}ms` : `${(execution.duration/1000).toFixed(1)}s`}
+                    </Text>
+                  )}
+                </div>
+                
                 <ResultDescription>
                   {summary}
                 </ResultDescription>
-                
-                {execution.duration && (
-                  <div style={{ marginTop: 8 }}>
-                    <Tag color="blue" style={{ fontSize: '11px' }}>
-                      耗时 {execution.duration < 1000 ? `${execution.duration}ms` : `${(execution.duration/1000).toFixed(1)}s`}
-                    </Tag>
-                    {execution.serverName && (
-                      <Tag color="geekblue" style={{ fontSize: '11px' }}>
-                        {execution.serverName}
-                      </Tag>
-                    )}
-                  </div>
-                )}
 
-                {/* 智能预览内容 */}
-                {showPreview && !hasError && (() => {
-                  const smartPreview = generateSmartPreview(execution)
-                  return smartPreview ? (
-                    <div style={{ marginTop: '12px' }}>
-                      {smartPreview}
-                    </div>
-                  ) : null
-                })()}
-
-                <ActionButtons>
-                  {showPreview && !hasError && (
+                {/* 增强的展开详情区域 */}
+                {(showPreview && !hasError) && (
+                  <ActionButtons>
                     <Collapse 
                       ghost 
                       size="small"
+                      style={{ margin: 0, width: '100%' }}
                       expandIcon={({ isActive }) => 
-                        isActive ? <DownOutlined /> : <RightOutlined />
+                        <span style={{ fontSize: '12px' }}>
+                          {isActive ? <DownOutlined /> : <RightOutlined />}
+                        </span>
                       }
                       items={[
                         {
-                          key: 'preview',
+                          key: 'details',
                           label: (
-                            <Space>
-                              <EyeOutlined />
-                              <span>查看技术详情</span>
-                            </Space>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <Text style={{ fontSize: '12px', color: '#666' }}>
+                                查看执行详情
+                              </Text>
+                              <Text style={{ fontSize: '11px', color: '#999' }}>
+                                {execution.toolName}
+                              </Text>
+                            </div>
                           ),
                           children: (
                             <DetailPanel>
-                              <JsonDisplay>
-                                {JSON.stringify(execution.result, null, 2)}
-                              </JsonDisplay>
+                              {/* 工具调用信息摘要 */}
+                              <div style={{ marginBottom: '12px', padding: '8px', background: '#f0f0f0', borderRadius: '4px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                                  <div>
+                                    <Text strong style={{ fontSize: '11px', color: '#666' }}>工具名称:</Text>
+                                    <br />
+                                    <Text code style={{ fontSize: '11px' }}>{execution.toolName}</Text>
+                                  </div>
+                                  <div>
+                                    <Text strong style={{ fontSize: '11px', color: '#666' }}>服务器:</Text>
+                                    <br />
+                                    <Text style={{ fontSize: '11px' }}>{execution.serverName || execution.serverId}</Text>
+                                  </div>
+                                  <div>
+                                    <Text strong style={{ fontSize: '11px', color: '#666' }}>执行时间:</Text>
+                                    <br />
+                                    <Text style={{ fontSize: '11px' }}>
+                                      {execution.duration ? 
+                                        (execution.duration < 1000 ? `${execution.duration}ms` : `${(execution.duration/1000).toFixed(1)}s`) : 
+                                        '未知'
+                                      }
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text strong style={{ fontSize: '11px', color: '#666' }}>状态:</Text>
+                                    <br />
+                                    <Text style={{ 
+                                      fontSize: '11px', 
+                                      color: execution.success ? '#52c41a' : '#ff4d4f' 
+                                    }}>
+                                      {execution.success ? '✅ 成功' : '❌ 失败'}
+                                    </Text>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 输入参数 */}
+                              {execution.params && Object.keys(execution.params).length > 0 && (
+                                <div style={{ marginBottom: '12px' }}>
+                                  <Text strong style={{ fontSize: '12px', color: '#333' }}>
+                                    📥 输入参数:
+                                  </Text>
+                                  <JsonDisplay>
+                                    {JSON.stringify(execution.params, null, 2)}
+                                  </JsonDisplay>
+                                </div>
+                              )}
+
+                              {/* 执行结果 */}
+                              <div style={{ marginBottom: '8px' }}>
+                                <Text strong style={{ fontSize: '12px', color: '#333' }}>
+                                  📤 执行结果:
+                                </Text>
+                                <JsonDisplay>
+                                  {JSON.stringify(execution.result, null, 2)}
+                                </JsonDisplay>
+                              </div>
+
+                              {/* 操作按钮 */}
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={copiedIds.has(`${execution.id}-params`) ? <CheckCircleOutlined /> : <CopyOutlined />}
+                                  onClick={() => handleCopy(
+                                    JSON.stringify(execution.params, null, 2),
+                                    `${execution.id}-params`
+                                  )}
+                                >
+                                  {copiedIds.has(`${execution.id}-params`) ? '参数已复制' : '复制参数'}
+                                </Button>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={copiedIds.has(`${execution.id}-result`) ? <CheckCircleOutlined /> : <CopyOutlined />}
+                                  onClick={() => handleCopy(
+                                    JSON.stringify(execution.result, null, 2),
+                                    `${execution.id}-result`
+                                  )}
+                                >
+                                  {copiedIds.has(`${execution.id}-result`) ? '结果已复制' : '复制结果'}
+                                </Button>
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={copiedIds.has(execution.id) ? <CheckCircleOutlined /> : <CopyOutlined />}
+                                  onClick={() => handleCopy(
+                                    JSON.stringify({
+                                      tool: execution.toolName,
+                                      server: execution.serverName || execution.serverId,
+                                      params: execution.params,
+                                      result: execution.result,
+                                      duration: execution.duration,
+                                      success: execution.success
+                                    }, null, 2),
+                                    execution.id
+                                  )}
+                                >
+                                  {copiedIds.has(execution.id) ? '全部已复制' : '复制全部'}
+                                </Button>
+                              </div>
                             </DetailPanel>
                           )
                         }
                       ]}
                     />
-                  )}
-                  
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={copiedIds.has(execution.id) ? <CheckCircleOutlined /> : <CopyOutlined />}
-                    onClick={() => handleCopy(
-                      JSON.stringify({
-                        tool: execution.toolName,
-                        params: execution.params,
-                        result: execution.result
-                      }, null, 2),
-                      execution.id
-                    )}
-                  >
-                    {copiedIds.has(execution.id) ? '已复制' : '复制详情'}
-                  </Button>
-                </ActionButtons>
-              </ResultContent>
+                  </ActionButtons>
+                )}
+              </div>
             </ResultSummary>
           </div>
         )

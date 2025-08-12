@@ -32,6 +32,8 @@ export interface LLMRequest {
   maxTokens?: number
   stream?: boolean
   attachmentIds?: string[]  // 附件ID列表
+  sessionId?: string        // 会话ID，用于上下文管理
+  activeRole?: string       // 当前激活的角色，用于智能分层系统
 }
 
 // LLM提供商接口

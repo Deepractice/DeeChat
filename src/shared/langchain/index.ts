@@ -7,12 +7,8 @@
 export { LangChainModelFactory } from './LangChainModelFactory';
 export { LangChainLLMService } from './LangChainLLMService';
 
-// 提示词模板
-export {
-  BUILT_IN_TEMPLATES,
-  FEW_SHOT_TEMPLATES,
-  TemplateManager
-} from './PromptTemplates';
+// 智能分层提示词系统
+export { SmartLayeredPromptSystem } from './SmartLayeredPromptSystem';
 
 // 重新导出LangChain核心类型，方便使用
 export type { 
