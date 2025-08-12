@@ -154,18 +154,17 @@ export const loadAvailableRoles = createAsyncThunk(
   'chat/loadAvailableRoles',
   async (forceRefresh: boolean = false) => {
     try {
-      // 使用RoleDiscoveryService统一管理角色发现
-      const { roleDiscoveryService } = await import('../../services/RoleDiscoveryService');
+      console.log('[Redux] 开始加载可用角色列表...');
       
-      if (forceRefresh) {
-        await roleDiscoveryService.refreshRoles();
-      } else {
-        // 确保服务已初始化
-        await roleDiscoveryService.initializeOnAppStart();
+      // 直接调用PromptX welcome工具获取角色列表
+      const welcomeResponse = await window.electronAPI.promptx.welcome();
+      
+      if (!welcomeResponse.success) {
+        throw new Error(`角色加载失败: ${welcomeResponse.error || '未知错误'}`);
       }
       
-      // 从服务获取角色列表，已经是ParsedRole[]格式
-      const roles = roleDiscoveryService.getAllRoles();
+      // 解析PromptX welcome返回的内容
+      const roles = parsePromptXWelcome(welcomeResponse.data);
       
       const result = {
         roles: roles,
@@ -177,7 +176,7 @@ export const loadAvailableRoles = createAsyncThunk(
         }
       };
       
-      console.log(`[Redux] 通过RoleDiscoveryService加载 ${result.roles.length} 个角色`);
+      console.log(`[Redux] 成功加载 ${result.roles.length} 个角色`);
       return result;
       
     } catch (error) {

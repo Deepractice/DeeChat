@@ -215,6 +215,7 @@ export class LangChainLLMService {
       // 执行工具调用并收集结果
       const toolResults: any[] = [];
       for (const toolCall of currentResponse.tool_calls) {
+        const startTime = Date.now();
         try {
           log.info(`🔧 [工具执行] 执行工具: ${toolCall.name}`);
           
@@ -225,6 +226,7 @@ export class LangChainLLMService {
             arguments: toolCall.args
           });
           
+          const duration = Date.now() - startTime;
           const toolResult = mcpResponse?.success ? mcpResponse.result : 
                             (mcpResponse?.error || 'Tool execution failed');
 
@@ -237,6 +239,7 @@ export class LangChainLLMService {
             result: typeof toolResult === 'string' ? toolResult : 
                    (toolResult?.result || JSON.stringify(toolResult)),
             success: true,
+            duration: duration,
             timestamp: Date.now()
           };
           
@@ -245,6 +248,7 @@ export class LangChainLLMService {
           
           log.info(`✅ [工具执行] 工具 ${toolCall.name} 执行成功`);
         } catch (error) {
+          const duration = Date.now() - startTime;
           log.error(`❌ [工具执行] 工具 ${toolCall.name} 执行失败:`, error);
           
           const execution = {
@@ -256,6 +260,7 @@ export class LangChainLLMService {
             result: null,
             success: false,
             error: error instanceof Error ? error.message : String(error),
+            duration: duration,
             timestamp: Date.now()
           };
           

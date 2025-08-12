@@ -24,7 +24,7 @@ export class PromptXLocalService implements IPromptXService {
   }
 
   /**
-   * 初始化PromptX，按照正确的流程：ServerEnvironment -> CLI -> 工作区
+   * 初始化PromptX，按照正确的流程：ServerEnvironment -> CLI -> 项目初始化 -> 工作区
    */
   private async initialize(): Promise<void> {
     if (this.initialized) {
@@ -53,7 +53,42 @@ export class PromptXLocalService implements IPromptXService {
       this.promptxCLI = cli;
       console.log('[PromptXLocalService] PromptX CLI初始化成功');
 
-      // 3. 收集可用命令
+      // 2.1 确保ServerEnvironment也绑定到CLI
+      const cliServerEnv = this.promptxCLI.stateMachine?.serverEnvironment;
+      if (cliServerEnv && !cliServerEnv.isInitialized()) {
+        cliServerEnv.initialize({
+          transport: 'stdio',
+          host: null,
+          port: null
+        });
+        console.log('[PromptXLocalService] CLI ServerEnvironment初始化成功');
+      }
+
+      // 3. 🔥 新增：初始化PromptX项目环境
+      try {
+        // 获取正确的工作目录
+        let workingDirectory: string;
+        
+        if (process.env.NODE_ENV === 'development') {
+          // 开发环境：使用项目根目录
+          workingDirectory = path.resolve(__dirname, '../../../..');
+        } else {
+          // 生产环境：使用用户数据目录，PromptX会在init时创建自己的.promptx资源
+          const { app } = require('electron');
+          workingDirectory = app.getPath('userData');
+        }
+          
+        console.log(`[PromptXLocalService] 正在初始化PromptX项目环境: ${workingDirectory}`);
+        
+        // 调用init命令初始化项目
+        const initResult = await this.promptxCLI.execute('init', [workingDirectory]);
+        console.log('[PromptXLocalService] PromptX项目环境初始化成功:', initResult);
+      } catch (initError) {
+        console.warn('[PromptXLocalService] PromptX项目初始化警告:', initError);
+        // 项目初始化失败不阻止整个服务启动，某些功能可能会受限
+      }
+
+      // 4. 收集可用命令
       this.collectAvailableCommands();
       
       this.initialized = true;
