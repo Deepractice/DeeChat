@@ -51,7 +51,7 @@
     "sharp": "^0.34.3",
     "ts-jest": "^29.4.0",
     "typescript": "^5.2.2",
-    "vite": "^5.0.8",
+    "vite": "^7.1.2",
     "vite-plugin-electron": "^0.15.5",
     "wait-on": "^7.2.0"
   },
@@ -75,7 +75,7 @@
     "gpt-tokenizer": "^3.0.1",
     "https-proxy-agent": "^7.0.6",
     "langchain": "^0.3.29",
-    "mermaid": "^10.9.3",
+    "mermaid": "^11.9.0",
     "openai": "^4.20.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
