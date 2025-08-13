@@ -513,54 +513,37 @@ export class LangChainLLMService {
       });
     }
 
-    // 支持kimi模型
-    if (modelKey.includes('kimi')) {
-      return new ModelConfigEntity({
-        id: modelKey,
-        name: 'Kimi',
-        provider: 'openai', // kimi使用OpenAI兼容的API
-        model: modelKey, // 使用原始模型名
-        apiKey: process.env.KIMI_API_KEY || process.env.OPENAI_API_KEY || '',
-        baseURL: 'https://api.moonshot.cn/v1', // kimi的API endpoint
-        isEnabled: true,
-        status: 'available',
-        priority: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    // 支持通义千问模型
-    if (modelKey.includes('qwen')) {
-      return new ModelConfigEntity({
-        id: modelKey,
-        name: 'Qwen',
-        provider: 'openai',
-        model: modelKey,
-        apiKey: process.env.QWEN_API_KEY || process.env.OPENAI_API_KEY || '',
-        baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        isEnabled: true,
-        status: 'available',
-        priority: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    // 默认返回OpenAI配置
+    // 统一使用ChatAnywhere代理 - 支持所有OpenAI兼容模型
+    // modelKey现在直接是模型名称，无需处理前缀
     return new ModelConfigEntity({
       id: modelKey,
-      name: 'GPT-4o',
+      name: this.getModelDisplayName(modelKey), // 动态生成显示名称
       provider: 'openai',
-      model: 'gpt-4o',
-      apiKey: process.env.OPENAI_API_KEY || '',
-      baseURL: '',
+      model: modelKey, // 直接使用modelKey作为模型名称
+      apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto', // 统一API密钥
+      baseURL: 'https://api.chatanywhere.tech/v1', // 统一代理地址
       isEnabled: true,
       status: 'available',
       priority: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
+  }
+
+  /**
+   * 根据模型ID生成友好的显示名称
+   */
+  private getModelDisplayName(modelName: string): string {
+    if (modelName.includes('gpt-4')) return 'GPT-4';
+    if (modelName.includes('gpt-3.5')) return 'GPT-3.5';
+    if (modelName.includes('gpt')) return 'GPT';
+    if (modelName.includes('kimi')) return 'Kimi';
+    if (modelName.includes('qwen')) return 'Qwen';
+    if (modelName.includes('claude')) return 'Claude';
+    if (modelName.includes('gemini')) return 'Gemini';
+    
+    // 默认使用模型名称的首字母大写形式
+    return modelName.charAt(0).toUpperCase() + modelName.slice(1);
   }
 
   /**

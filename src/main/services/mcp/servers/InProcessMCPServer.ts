@@ -175,7 +175,7 @@ export class InProcessMCPServer {
     
     if (isDev) {
       // 开发环境
-      return path.resolve(__dirname, '../../../../../resources/promptx/package/src/lib/mcp/MCPServerStdioCommand.js')
+      return path.resolve(__dirname, '../../../../../../dist/main/resources/promptx/package/src/lib/mcp/MCPServerStdioCommand.js')
     } else {
       // 生产环境
       return path.join(process.resourcesPath, 'resources/promptx/package/src/lib/mcp/MCPServerStdioCommand.js')

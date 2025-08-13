@@ -33,9 +33,17 @@ const { Title, Text } = Typography
 
 interface ChatAreaProps {
   onGoToSettings?: () => void
+  onToggleWorkspace?: (expand: boolean) => void
+  workspaceExpanded?: boolean
+  workspaceTransitioning?: boolean
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ 
+  onGoToSettings, 
+  onToggleWorkspace, 
+  workspaceExpanded = false,
+  workspaceTransitioning = false 
+}) => {
   const { currentSession, isLoading, sessions } = useSelector((state: RootState) => state.chat)
   const dispatch = useDispatch<AppDispatch>()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -343,11 +351,35 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
         {/* 聊天头部 */}
         <div
           style={{
+            height: workspaceExpanded ? '48px' : '56px',  // 工作区展开时减少高度
             borderBottom: '1px solid #f0f0f0',
-            backgroundColor: '#fff'
+            backgroundColor: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: workspaceExpanded ? '0 12px' : '0 20px'  // 工作区展开时减少内边距
           }}
         >
-          <ChatSessionDropdown />
+          {/* 左侧区域：会话管理 */}
+          <ChatSessionDropdown compact={workspaceExpanded} />
+          
+          {/* 右侧区域：工作区按钮 */}
+          <Button
+            type={workspaceExpanded ? 'default' : 'text'}
+            loading={workspaceTransitioning}
+            onClick={() => onToggleWorkspace?.(!workspaceExpanded)}
+            style={{
+              borderRadius: '4px',
+              fontWeight: '400',
+              height: '32px',
+              padding: '0 12px',
+              border: '1px solid #d9d9d9',
+              color: workspaceExpanded ? '#666' : '#1890ff',
+              backgroundColor: workspaceExpanded ? '#f5f5f5' : '#ffffff'
+            }}
+          >
+            {workspaceExpanded ? '收起工作区' : '工作区'}
+          </Button>
         </div>
 
 
@@ -399,7 +431,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
         <div
           style={{
             borderTop: '1px solid #f0f0f0',
-            padding: '16px 24px',
+            padding: workspaceExpanded ? '12px 16px' : '16px 24px',  // 工作区展开时减少内边距
             backgroundColor: '#fff'
           }}
         >
@@ -408,6 +440,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
             selectedModel={selectedModel}
             onModelSelect={handleModelChange}
             onGoToModelManagement={handleGoToModelManagement}
+            compact={workspaceExpanded}  // 传递紧凑模式状态
           />
         </div>
       </Content>

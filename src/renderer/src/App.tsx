@@ -8,6 +8,7 @@ import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
 import SettingsPage from './pages/SettingsPage'
 import ResourcesPage from './pages/ResourcesPage'
+import WorkspaceArea from './components/Workspace/WorkspaceArea'
 
 import './App.css'
 
@@ -15,11 +16,21 @@ const { Sider, Content } = Layout
 
 type AppView = 'chat' | 'resources' | 'settings'
 
+// 工作区状态管理
+interface WorkspaceState {
+  isExpanded: boolean;
+  isTransitioning: boolean;
+}
+
 const AppContent: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { error: configError } = useSelector((state: RootState) => state.config)
   const { error: chatError } = useSelector((state: RootState) => state.chat)
   const [currentView, setCurrentView] = useState<AppView>('chat')
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
+    isExpanded: false,
+    isTransitioning: false
+  })
   const { message } = AntdApp.useApp()
 
   useEffect(() => {
@@ -42,6 +53,34 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     document.body.style.backgroundColor = '#fff'
   }, [])
+
+  // 工作区切换功能
+  const toggleWorkspace = async (expand: boolean) => {
+    if (workspaceState.isTransitioning) return
+    
+    setWorkspaceState(prev => ({ ...prev, isTransitioning: true }))
+    
+    try {
+      // 动态调整窗口大小
+      if (expand) {
+        await window.electronAPI.window.resize(1600, 900)
+      } else {
+        await window.electronAPI.window.resize(1000, 700)
+      }
+      
+      // 延迟更新状态，确保窗口调整完成
+      setTimeout(() => {
+        setWorkspaceState({
+          isExpanded: expand,
+          isTransitioning: false
+        })
+      }, 150)  // 减少延迟时间，加快响应
+    } catch (error) {
+      console.error('窗口调整失败:', error)
+      message.error('窗口调整失败')
+      setWorkspaceState(prev => ({ ...prev, isTransitioning: false }))
+    }
+  }
 
 
 
@@ -67,9 +106,32 @@ const AppContent: React.FC = () => {
         {/* 动态内容区域 */}
         <Layout>
           {currentView === 'chat' && (
-            <Content>
-              <ChatArea onGoToSettings={() => setCurrentView('settings')} />
-            </Content>
+            <Layout style={{ flexDirection: 'row' }}>
+              {/* 聊天区域 */}
+              <Content style={{
+                width: workspaceState.isExpanded ? '30%' : '100%',
+                transition: workspaceState.isTransitioning ? 'none' : 'width 0.15s ease',
+                borderRight: workspaceState.isExpanded ? '1px solid #d9d9d9' : 'none'
+              }}>
+                <ChatArea 
+                  onGoToSettings={() => setCurrentView('settings')}
+                  onToggleWorkspace={toggleWorkspace}
+                  workspaceExpanded={workspaceState.isExpanded}
+                  workspaceTransitioning={workspaceState.isTransitioning}
+                />
+              </Content>
+              
+              {/* 工作区域 */}
+              {workspaceState.isExpanded && (
+                <Content style={{
+                  width: '70%',
+                  backgroundColor: '#f5f5f5',
+                  animation: workspaceState.isTransitioning ? 'none' : 'slideInRight 0.15s ease'
+                }}>
+                  <WorkspaceArea />
+                </Content>
+              )}
+            </Layout>
           )}
           
           {currentView === 'resources' && (

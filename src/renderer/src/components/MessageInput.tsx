@@ -18,9 +18,10 @@ interface MessageInputProps {
   onSendMessage?: (message: string) => void
   onModelSelect?: (modelId: string, config: ModelConfigEntity, modelName?: string) => void
   onGoToModelManagement?: () => void
+  compact?: boolean  // 紧凑模式，用于工作区展开时
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedModel, onSendMessage, onModelSelect, onGoToModelManagement }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedModel, onSendMessage, onModelSelect, onGoToModelManagement, compact = false }) => {
   const dispatch = useDispatch<AppDispatch>()
   const { config } = useSelector((state: RootState) => state.config)
   const { currentSession, roles } = useSelector((state: RootState) => state.chat)
@@ -329,9 +330,13 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
                 disabled={disabled}
                 type={showFileUpload || attachedFiles.length > 0 ? 'primary' : 'default'}
                 size="small"
-                title="添加文件附件 (支持拖拽和Ctrl+V粘贴)"
+                title={compact ? "添加附件" : "添加文件附件 (支持拖拽和Ctrl+V粘贴)"}
+                style={{ 
+                  minWidth: compact ? '28px' : 'auto',
+                  padding: compact ? '4px' : undefined
+                }}
               >
-                附件
+                {!compact && '附件'}
               </Button>
               
               {/* 角色选择器 */}
@@ -366,11 +371,16 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
               onClick={handleSend}
               disabled={disabled || (!inputValue.trim() && attachedFiles.length === 0) || (attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus !== 'success'))}
               style={{
-                borderRadius: 6
+                borderRadius: 6,
+                minWidth: compact ? '32px' : 'auto',
+                padding: compact ? '4px 8px' : undefined
               }}
+              title={compact ? '发送消息' : undefined}  // 紧凑模式显示tooltip
             >
-              {attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'uploading') ? '上传中...' : 
-               attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'error') ? '上传失败' : '发送'}
+              {compact ? null : (
+                attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'uploading') ? '上传中...' : 
+                attachedFiles.length > 0 && attachedFiles.some(f => f.uploadStatus === 'error') ? '上传失败' : '发送'
+              )}
             </Button>
           </div>
         </div>

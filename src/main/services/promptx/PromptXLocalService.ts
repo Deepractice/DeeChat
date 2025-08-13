@@ -14,13 +14,47 @@ export class PromptXLocalService implements IPromptXService {
   constructor() {
     // 确定PromptX模块路径
     if (process.env.NODE_ENV === 'development') {
-      // 开发环境：使用__dirname相对路径定位到项目根目录
-      const projectRoot = path.resolve(__dirname, '../../../..');
-      this.promptxPath = path.join(projectRoot, 'resources/promptx/package');
+      // 开发环境：通过查找package.json来确定项目根目录
+      const projectRoot = this.findProjectRoot(__dirname);
+      this.promptxPath = path.join(projectRoot, 'dist/main/resources/promptx/package');
     } else {
+      // 生产环境：使用process.resourcesPath
       this.promptxPath = path.join(process.resourcesPath, 'resources/promptx/package');
     }
     // 延迟初始化，等待首次使用时再初始化
+  }
+
+  /**
+   * 查找项目根目录 - 通过向上查找package.json文件
+   */
+  private findProjectRoot(startPath: string): string {
+    const fs = require('fs');
+    let currentPath = startPath;
+    
+    while (true) {
+      const packageJsonPath = path.join(currentPath, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        // 检查是否是我们项目的package.json（有deechat特征）
+        try {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          if (packageJson.name === 'deechat' || packageJson.productName === 'DeeChat') {
+            return currentPath;
+          }
+        } catch (e) {
+          // 忽略解析错误，继续向上查找
+        }
+      }
+      
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) {
+        // 已经到达根目录，回退到相对路径方案
+        break;
+      }
+      currentPath = parentPath;
+    }
+    
+    // 如果找不到，回退到原来的相对路径方案
+    return path.resolve(__dirname, '../../../..');
   }
 
   /**

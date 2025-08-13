@@ -78,3 +78,92 @@
   top: 0;
   z-index: 1;
 }
+
+/* 工作区动画 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+/* 工作区样式 */
+.workspace-container {
+  animation: slideInRight 0.15s ease;
+}
+
+.workspace-container.exiting {
+  animation: slideOutRight 0.15s ease;
+}
+
+/* 平滑过渡效果 */
+.layout-transition {
+  transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 聊天头部样式 */
+.chat-header {
+  height: 56px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.chat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 工作区按钮样式 */
+.workspace-toggle-btn {
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px 0 rgba(116, 75, 162, 0.25);
+  transition: all 0.3s ease;
+  color: white !important;
+  border-color: transparent !important;
+}
+
+.workspace-toggle-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px 0 rgba(116, 75, 162, 0.35);
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+}
+
+.workspace-toggle-btn:focus {
+  box-shadow: 0 0 0 2px rgba(116, 75, 162, 0.3);
+  color: white !important;
+}
+
+.workspace-toggle-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px 0 rgba(116, 75, 162, 0.3);
+}

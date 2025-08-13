@@ -235,7 +235,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
                 
                 const actualProvider = config.provider || getModelProvider(modelName)
                 const modelOption: ModelOption = {
-                  id: `${config.id}-${modelName}`, // 使用配置ID和模型名组合作为唯一ID
+                  id: modelName, // 直接使用模型名称作为ID，无需前缀
                   configId: config.id,
                   configName: config.name,
                   provider: actualProvider,
@@ -278,7 +278,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
               })
               
               modelOptions.push({
-                id: `${DEFAULT_CONFIG.id}-${modelName}`,
+                id: modelName, // 直接使用模型名称作为ID，无需前缀
                 configId: DEFAULT_CONFIG.id,
                 configName: DEFAULT_CONFIG.name,
                 provider: actualProvider,
