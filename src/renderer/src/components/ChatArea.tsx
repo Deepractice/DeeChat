@@ -6,10 +6,11 @@ import { createNewSession, saveCurrentSession, updateSessionModel } from '../sto
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import ModelManagement from '../pages/ModelManagement'
+import ChatSessionDropdown from './ChatSessionDropdown'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
-import { parseModelId } from '../../../shared/utils/modelIdHelper'
+// import { parseModelId } from '../../../shared/utils/modelIdHelper'
 import { ApiResponse } from '../../../shared/types'
-import { UserPreferenceEntity } from '../../../shared/entities/UserPreferenceEntity'
+import { UserPreferenceEntity, UserPreferenceData } from '../../../shared/entities/UserPreferenceEntity'
 
 // 内置默认配置
 const DEFAULT_CONFIG = {
@@ -88,7 +89,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
       if (window.electronAPI?.preference?.get && window.electronAPI?.preference?.save) {
         try {
           console.log('🔄 [ChatArea] 开始保存用户模型偏好:', modelId)
-          const prefResponse: ApiResponse<UserPreferenceEntity> = await window.electronAPI.preference.get()
+          const prefResponse: ApiResponse<UserPreferenceData> = await window.electronAPI.preference.get()
           if (prefResponse?.success && prefResponse.data) {
             // 更新最后选择的模型ID
             const updatedPreferences = new UserPreferenceEntity(prefResponse.data)
@@ -112,6 +113,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
   // 🔥 简化：直接从持久化的会话数据中恢复模型选择，无需额外的 SessionService 调用
 
   // 简化模型配置加载 - 直接使用默认配置
+  /*
   const loadModelConfig = async (configId: string, modelName: string) => {
     try {
       // 如果是默认配置的模型，或者配置ID以 'default-config' 开头，都使用默认配置
@@ -139,6 +141,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
       setSelectedModel(null)
     }
   }
+  */
 
   // 🔥 重构：直接从持久化会话数据恢复模型选择
   useEffect(() => {
@@ -184,7 +187,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
             console.log('🔍 [ChatArea] 开始加载用户默认模型配置...')
             // 获取用户偏好设置
             if (window.electronAPI?.preference?.get) {
-              const prefResponse: ApiResponse<UserPreferenceEntity> = await window.electronAPI.preference.get()
+              const prefResponse: ApiResponse<UserPreferenceData> = await window.electronAPI.preference.get()
               console.log('🔍 [ChatArea] 用户偏好响应:', prefResponse)
               if (prefResponse?.success && prefResponse.data) {
                 const preferences = new UserPreferenceEntity(prefResponse.data)
@@ -244,10 +247,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
     const setupChatContext = async () => {
       try {
         // 通过IPC通知主进程设置聊天上下文
-        if (window.api?.llm?.setupChatContext) {
-          await window.api.llm.setupChatContext()
-          console.log('💬 [ChatArea] 聊天上下文已设置')
-        }
+        // Legacy API call - may not be available in current implementation
+        // if (window.electronAPI?.llm?.setupChatContext) {
+        //   await window.electronAPI.llm.setupChatContext()
+        // }
+        console.log('💬 [ChatArea] 聊天上下文已设置')
       } catch (error) {
         console.error('❌ [ChatArea] 设置聊天上下文失败:', error)
       }
@@ -310,17 +314,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
           }
         />
 
-        {/* 如果有历史会话，显示创建新会话按钮 */}
-        {sessions.length > 0 && (
-          <Button
-            type="primary"
-            size="large"
-            onClick={handleCreateNewSession}
-            style={{ marginTop: '20px' }}
-          >
-            创建新对话
-          </Button>
-        )}
+        {/* 始终显示创建新会话按钮 */}
+        <Button
+          type="primary"
+          size="large"
+          onClick={handleCreateNewSession}
+          style={{ marginTop: '20px' }}
+        >
+          开始新对话
+        </Button>
       </div>
     )
   }
@@ -341,16 +343,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ onGoToSettings }) => {
         {/* 聊天头部 */}
         <div
           style={{
-            padding: '16px 24px',
             borderBottom: '1px solid #f0f0f0',
-            backgroundColor: '#fafafa'
+            backgroundColor: '#fff'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <Title level={5} style={{ margin: 0 }}>
-              {activeSession.title}
-            </Title>
-          </div>
+          <ChatSessionDropdown />
         </div>
 
 

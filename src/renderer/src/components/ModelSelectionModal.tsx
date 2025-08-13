@@ -10,17 +10,16 @@ import {
 } from '@ant-design/icons'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 
-// 内置默认配置
+// 内置默认配置 - 用户可以通过这个配置获取所有可用模型
 const DEFAULT_CONFIG = {
   id: 'default-config',
   name: 'ChatAnywhere (内置)',
   provider: 'openai',
-  model: 'gpt-4o-mini',
+  model: '', // 动态从API获取，不写死
   apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
   baseURL: 'https://api.chatanywhere.tech/v1/',
   isEnabled: true,
-  priority: 10,
-  enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+  priority: 10
 }
 
 const { Text, Title } = Typography
@@ -192,86 +191,118 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
     setLoading(true)
     try {
       const modelOptions: ModelOption[] = []
-      const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
       
-      // 通过主进程调用 /models 接口
-      if (window.electronAPI?.ai?.getAvailableModels) {
-        const models = await window.electronAPI.ai.getAvailableModels({
-          baseURL: DEFAULT_CONFIG.baseURL,
-          apiKey: DEFAULT_CONFIG.apiKey
-        })
-        
-        if (models && Array.isArray(models)) {
-          models.forEach((modelName: string) => {
-            const actualProvider = getModelProvider(modelName)
-            const configForModel = new ModelConfigEntity({
-              ...DEFAULT_CONFIG,
-              provider: actualProvider,
-              model: modelName
-            })
+      // 🔥 获取所有用户配置的模型配置
+      if (window.electronAPI?.model?.getAll) {
+        try {
+          const { success, data: configData } = await window.electronAPI.model.getAll()
+          
+          if (success && configData && Array.isArray(configData)) {
+            console.log('📊 获取到', configData.length, '个模型配置')
             
-            modelOptions.push({
-              id: modelName,  // 直接使用模型ID
-              configId: DEFAULT_CONFIG.id,
-              configName: DEFAULT_CONFIG.name,
-              provider: actualProvider,
-              modelName: modelName,
-              status: 'success',
-              config: configForModel
-            })
-          })
+            // 遍历所有启用的配置
+            for (const configItem of configData) {
+              if (!configItem.isEnabled) {
+                console.log('⏭️ 跳过已禁用的配置:', configItem.name)
+                continue
+              }
+              
+              const config = new ModelConfigEntity(configItem)
+              
+              // 🔥 修复：获取配置支持的模型列表 - 从动态API获取实际可用模型
+              let modelsToAdd: string[] = []
+              
+              try {
+                // 🔥 使用LangChain服务的getAvailableModels方法获取真实的模型列表
+                const models = await window.electronAPI.langchain.getAvailableModels(configItem)
+                
+                if (models && Array.isArray(models) && models.length > 0) {
+                  // 使用API返回的实际模型列表
+                  modelsToAdd = models
+                  console.log('🌐 从API获取到', modelsToAdd.length, '个可用模型:', modelsToAdd.slice(0, 5), '...')
+                } else {
+                  console.warn('⚠️ 跳过配置:', configItem.name, '- 无法获取到模型列表')
+                  continue // 跳过这个配置
+                }
+              } catch (apiError) {
+                console.warn('⚠️ 跳过配置:', configItem.name, '- API获取模型失败:', apiError)
+                continue // 跳过这个配置
+              }
+              
+              // 为每个模型创建选项
+              modelsToAdd.forEach(modelName => {
+                if (!modelName) return
+                
+                const actualProvider = config.provider || getModelProvider(modelName)
+                const modelOption: ModelOption = {
+                  id: `${config.id}-${modelName}`, // 使用配置ID和模型名组合作为唯一ID
+                  configId: config.id,
+                  configName: config.name,
+                  provider: actualProvider,
+                  modelName: modelName,
+                  status: configItem.status || 'untested',
+                  config: new ModelConfigEntity({
+                    ...configItem,
+                    model: modelName,
+                    provider: actualProvider
+                  })
+                }
+                
+                modelOptions.push(modelOption)
+              })
+            }
+            
+            console.log('✅ 总共收集到', modelOptions.length, '个可用模型')
+          }
+        } catch (error) {
+          console.error('❌ 获取用户模型配置失败:', error)
         }
       }
       
-      // 如果没有获取到模型，使用默认模型列表
+      // 🔥 如果没有用户配置，使用默认配置从API获取模型
       if (modelOptions.length === 0) {
-        DEFAULT_CONFIG.enabledModels.forEach(modelName => {
-          const actualProvider = getModelProvider(modelName)
-          const configForModel = new ModelConfigEntity({
-            ...DEFAULT_CONFIG,
-            provider: actualProvider,
-            model: modelName
-          })
+        console.log('📦 没有用户配置，使用默认配置从API获取模型')
+        
+        try {
+          const defaultModels = await window.electronAPI.langchain.getAvailableModels(DEFAULT_CONFIG)
           
-          modelOptions.push({
-            id: modelName,  // 直接使用模型ID
-            configId: DEFAULT_CONFIG.id,
-            configName: DEFAULT_CONFIG.name,
-            provider: actualProvider,
-            modelName: modelName,
-            status: 'success',
-            config: configForModel
-          })
-        })
+          if (defaultModels && Array.isArray(defaultModels) && defaultModels.length > 0) {
+            defaultModels.forEach(modelName => {
+              if (!modelName) return
+              
+              const actualProvider = getModelProvider(modelName)
+              const configForModel = new ModelConfigEntity({
+                ...DEFAULT_CONFIG,
+                provider: actualProvider,
+                model: modelName
+              })
+              
+              modelOptions.push({
+                id: `${DEFAULT_CONFIG.id}-${modelName}`,
+                configId: DEFAULT_CONFIG.id,
+                configName: DEFAULT_CONFIG.name,
+                provider: actualProvider,
+                modelName: modelName,
+                status: 'success',
+                config: configForModel
+              })
+            })
+            
+            console.log('✅ 从默认配置API获取到', defaultModels.length, '个模型')
+          } else {
+            console.log('⚠️ 默认配置也无法获取到模型')
+          }
+        } catch (error) {
+          console.error('❌ 默认配置API获取失败:', error)
+        }
       }
 
       setAvailableModels(modelOptions)
     } catch (error) {
-      console.error('Load models error:', error)
-      // 出错时提供默认模型
-      const defaultConfig = new ModelConfigEntity(DEFAULT_CONFIG)
-      const fallbackOptions: ModelOption[] = []
+      console.error('❌ Load models error:', error)
       
-      DEFAULT_CONFIG.enabledModels.forEach(modelName => {
-        const actualProvider = getModelProvider(modelName)
-        const configForModel = new ModelConfigEntity({
-          ...DEFAULT_CONFIG,
-          provider: actualProvider,
-          model: modelName
-        })
-        
-        fallbackOptions.push({
-          id: modelName,  // 直接使用模型ID
-          configId: DEFAULT_CONFIG.id,
-          configName: DEFAULT_CONFIG.name,
-          provider: actualProvider,
-          modelName: modelName,
-          status: 'success',
-          config: configForModel
-        })
-      })
-      
-      setAvailableModels(fallbackOptions)
+      // 出错时清空模型列表
+      setAvailableModels([])
     } finally {
       setLoading(false)
     }
@@ -519,7 +550,8 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
                           color: '#8c8c8c',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px'
+                          gap: '4px',
+                          marginBottom: '1px'
                         }}>
                           <span style={{
                             display: 'inline-block',
@@ -529,6 +561,13 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
                             backgroundColor: providerInfo.color
                           }} />
                           {providerInfo.name}
+                        </div>
+                        <div style={{ 
+                          fontSize: '11px', 
+                          color: '#bfbfbf',
+                          fontStyle: 'italic'
+                        }}>
+                          来自: {modelOption.configName}
                         </div>
                       </div>
                       {isSelected && (

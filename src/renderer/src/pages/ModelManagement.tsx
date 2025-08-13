@@ -1055,10 +1055,14 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
               optionFilterProp="label"
               size="large"
               style={{ width: '100%' }}
-              dropdownStyle={{ 
-                maxHeight: 400, 
-                overflow: 'auto',
-                zIndex: 9999 
+              styles={{
+                popup: {
+                  root: {
+                    maxHeight: 400, 
+                    overflow: 'auto',
+                    zIndex: 9999 
+                  }
+                }
               }}
               optionLabelProp="label"
               getPopupContainer={(triggerNode) => triggerNode.parentElement}

@@ -31,36 +31,36 @@ const DevTools: React.FC = () => {
         const methods = []
         
         // 检查基础方法
-        if (api.getVersion) methods.push('getVersion')
-        if (api.sendMessage) methods.push('sendMessage')
-        if (api.getConfig) methods.push('getConfig')
-        if (api.getChatHistory) methods.push('getChatHistory')
+        if (typeof api.getVersion === 'function') methods.push('getVersion')
+        if (typeof api.sendMessage === 'function') methods.push('sendMessage')
+        if (typeof api.getConfig === 'function') methods.push('getConfig')
+        if (typeof api.getChatHistory === 'function') methods.push('getChatHistory')
         
         // 检查模型管理API
         if (api.model) {
-          if (api.model.getAll) methods.push('model.getAll')
-          if (api.model.save) methods.push('model.save')
-          if (api.model.delete) methods.push('model.delete')
-          if (api.model.test) methods.push('model.test')
-          if (api.model.update) methods.push('model.update')
+          if (typeof api.model.getAll === 'function') methods.push('model.getAll')
+          if (typeof api.model.save === 'function') methods.push('model.save')
+          if (typeof api.model.delete === 'function') methods.push('model.delete')
+          if (typeof api.model.test === 'function') methods.push('model.test')
+          if (typeof api.model.update === 'function') methods.push('model.update')
         }
         
         // 检查AI服务API
         if (api.ai) {
-          if (api.ai.sendMessage) methods.push('ai.sendMessage')
-          if (api.ai.testProvider) methods.push('ai.testProvider')
+          if (typeof api.ai.sendMessage === 'function') methods.push('ai.sendMessage')
+          if (typeof api.ai.testProvider === 'function') methods.push('ai.testProvider')
         }
         
         // 检查用户偏好API
         if (api.preference) {
-          if (api.preference.get) methods.push('preference.get')
-          if (api.preference.save) methods.push('preference.save')
+          if (typeof api.preference.get === 'function') methods.push('preference.get')
+          if (typeof api.preference.save === 'function') methods.push('preference.save')
         }
         
         // 检查会话管理API
         if (api.session) {
-          if (api.session.getModel) methods.push('session.getModel')
-          if (api.session.switchModel) methods.push('session.switchModel')
+          if (typeof api.session.getModel === 'function') methods.push('session.getModel')
+          if (typeof api.session.switchModel === 'function') methods.push('session.switchModel')
         }
 
         setApiStatus({

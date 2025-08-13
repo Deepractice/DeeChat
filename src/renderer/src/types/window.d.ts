@@ -97,6 +97,30 @@ declare global {
         resetSystemRole: () => Promise<void>;
       };
       
+      // Window API
+      window: {
+        resize: (width: number, height: number) => Promise<{ success: boolean }>;
+        getSize: () => Promise<{ width: number; height: number }>;
+      };
+      
+      // WebContentsView API
+      webContentsView: {
+        create: (options?: any) => Promise<number>;
+        loadURL: (viewId: number, url: string) => Promise<void>;
+        setBounds: (viewId: number, bounds: any) => Promise<void>;
+        attachToWindow: (viewId: number) => Promise<void>;
+        goBack: (viewId: number) => Promise<void>;
+        goForward: (viewId: number) => Promise<void>;
+        reload: (viewId: number) => Promise<void>;
+        getURL: (viewId: number) => Promise<string>;
+        canGoBack: (viewId: number) => Promise<boolean>;
+        canGoForward: (viewId: number) => Promise<boolean>;
+        destroy: (viewId: number) => Promise<void>;
+        onDidStartLoading: (viewId: number, callback: () => void) => void;
+        onDidFinishLoad: (viewId: number, callback: (url: string) => void) => void;
+        onNavigationStateChanged: (viewId: number, callback: (state: any) => void) => void;
+      };
+      
       // Legacy APIs
       sendMessage: (message: string, config: any) => Promise<any>;
       getConfig: () => Promise<any>;

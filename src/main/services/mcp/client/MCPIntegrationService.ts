@@ -131,15 +131,9 @@ export class MCPIntegrationService implements IMCPProvider {
         return
       }
 
-      // 🔥 打印每个服务器的详细信息
+      // 打印启用的服务器信息
       enabledServers.forEach((server, index) => {
-        log.info(`[MCP] 📋 服务器 ${index + 1}: ${server.name}`)
-        log.info(`[MCP]   - ID: ${server.id}`)
-        log.info(`[MCP]   - 类型: ${server.type}`)
-        log.info(`[MCP]   - 命令: ${server.command}`)
-        log.info(`[MCP]   - 参数: ${server.args?.join(' ') || '无'}`)
-        log.info(`[MCP]   - 工作目录: ${server.workingDirectory || '未设置'}`)
-        log.info(`[MCP]   - 启用状态: ${server.isEnabled}`)
+        log.info(`[MCP] 📋 服务器 ${index + 1}: ${server.name} (${server.type})`)
       })
 
       // 🔥 顺序连接服务器（避免并发问题）
@@ -179,28 +173,19 @@ export class MCPIntegrationService implements IMCPProvider {
   /**
    * 带重试的服务器连接
    */
-  private async connectServerWithRetry(server: MCPServerEntity, maxRetries = 3): Promise<void> {
+  private async connectServerWithRetry(server: MCPServerEntity, maxRetries = 1): Promise<void> {
     let lastError: Error | null = null
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         log.info(`[MCP] 🔄 连接尝试 ${attempt}/${maxRetries}: ${server.name}`)
-        log.info(`[MCP] 📋 服务器配置详情:`, {
-          id: server.id,
-          command: server.command,
-          args: server.args,
-          workingDirectory: server.workingDirectory,
-          type: server.type
-        })
         
-        // 🔥 详细的连接过程日志
-        log.info(`[MCP] 🚀 开始初始化客户端...`)
+        // 初始化客户端
         await this.clientManager.initClient(server)
-        log.info(`[MCP] ✅ 客户端初始化完成`)
         
-        // 🔥 关键：等待客户端稳定后再发现工具
+        // 等待客户端稳定后再发现工具
         log.info(`[MCP] ⏳ 等待客户端稳定...`)
-        await new Promise(resolve => setTimeout(resolve, 2000)) // 增加到2秒
+        await new Promise(resolve => setTimeout(resolve, 500)) // 优化为500ms
         
         // 发现工具
         log.info(`[MCP] 🔍 开始发现工具...`)
@@ -241,7 +226,7 @@ export class MCPIntegrationService implements IMCPProvider {
         
         if (attempt < maxRetries) {
           // 等待后重试
-          const delay = attempt * 2000 // 递增延迟：2s, 4s, 6s
+          const delay = 1000 // 简化为固定1秒延迟
           log.info(`[MCP] ⏳ ${delay/1000}秒后重试...`)
           await new Promise(resolve => setTimeout(resolve, delay))
         }

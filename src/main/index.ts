@@ -6,7 +6,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import * as path from 'path'
 const { join } = path
-import * as fs from 'fs'
 import { ServiceManager } from './core/ServiceManager'
 
 // 导入旧的IPC处理器
@@ -23,6 +22,7 @@ import { ModelService } from './services/model/ModelService'
 import { LocalStorageService } from './services/core/LocalStorageService'
 import { FrontendUserPreferenceRepository } from './repositories/FrontendUserPreferenceRepository'
 import { UserPreferenceEntity } from '../shared/entities/UserPreferenceEntity'
+// WebContentsView服务已禁用，不再需要
 
 // 开发环境检测
 const isDev = process.env.NODE_ENV === 'development'
@@ -96,6 +96,7 @@ if (!gotTheLock) {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        webviewTag: true, // 启用webview标签
         preload: join(__dirname, '../preload/index.js'),
       },
       titleBarStyle: 'default',
@@ -216,6 +217,33 @@ if (!gotTheLock) {
   }
 
 /**
+ * 获取统一的项目根目录路径
+ */
+function getProjectRoot(): string {
+  if (process.env.NODE_ENV === 'development') {
+    // 开发环境：相对于编译后的目录找到项目根
+    // 当前__dirname: /Users/macmima1234/Desktop/DeeChat/dist/main/main
+    // 需要回到: /Users/macmima1234/Desktop/DeeChat
+    const projectRoot = path.resolve(__dirname, '../../..')
+    console.log(`🔧 [getProjectRoot] 开发环境__dirname: ${__dirname}`)
+    console.log(`🔧 [getProjectRoot] 计算项目根目录: ${projectRoot}`)
+    return projectRoot
+  } else {
+    // 生产环境：根据不同平台确定项目根目录
+    if (process.platform === 'darwin') {
+      // macOS: DeeChat.app/Contents/Resources/app.asar -> DeeChat.app/Contents
+      return path.resolve(process.resourcesPath, '..')
+    } else if (process.platform === 'win32') {
+      // Windows: 可执行文件所在目录
+      return path.dirname(process.execPath)
+    } else {
+      // Linux: 可执行文件所在目录
+      return path.dirname(process.execPath)
+    }
+  }
+}
+
+/**
  * 初始化PromptX工作区
  */
 async function initializePromptXWorkspace(): Promise<void> {
@@ -223,18 +251,15 @@ async function initializePromptXWorkspace(): Promise<void> {
   
   try {
     const promptxService = getPromptXLocalService()
-    const workspacePath = path.join(app.getPath('userData'), 'promptx-workspace')
+    const projectRoot = getProjectRoot()
     
-    // 确保工作区目录存在
-    if (!fs.existsSync(workspacePath)) {
-      fs.mkdirSync(workspacePath, { recursive: true })
-    }
+    console.log(`🎯 [主进程] 使用项目根目录作为PromptX项目上下文: ${projectRoot}`)
     
     // 初始化PromptX工作区（PromptXLocalService 将在首次使用时自动初始化）
-    const result = await promptxService.initWorkspace(workspacePath, 'electron')
+    const result = await promptxService.initWorkspace(projectRoot, 'electron')
     
     if (result.success) {
-      console.log('✅ [主进程] PromptX工作区初始化成功:', workspacePath)
+      console.log('✅ [主进程] PromptX工作区初始化成功:', projectRoot)
     } else {
       console.warn('⚠️ [主进程] PromptX工作区初始化失败:', result.error)
       // 不抛出错误，允许应用继续运行
@@ -988,6 +1013,39 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // 窗口大小调整处理器
+  ipcMain.handle('window:resize', async (_, width: number, height: number) => {
+    try {
+      if (mainWindow) {
+        const currentSize = mainWindow.getSize()
+        console.log(`🖼️ [窗口调整] 当前大小: ${currentSize[0]}x${currentSize[1]}, 目标大小: ${width}x${height}`)
+        
+        // 平滑调整窗口大小
+        mainWindow.setSize(width, height, true)
+        
+        return { success: true, currentSize: currentSize, newSize: [width, height] }
+      }
+      return { success: false, error: '主窗口不存在' }
+    } catch (error) {
+      console.error('调整窗口大小失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  // 获取当前窗口大小
+  ipcMain.handle('window:getSize', async () => {
+    try {
+      if (mainWindow) {
+        const size = mainWindow.getSize()
+        return { success: true, width: size[0], height: size[1] }
+      }
+      return { success: false, error: '主窗口不存在' }
+    } catch (error) {
+      console.error('获取窗口大小失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
   console.log('✅ [主进程] 所有IPC处理器注册完成')
 }
 
@@ -1001,17 +1059,20 @@ app.whenReady().then(async () => {
   console.log(`🔧 [主进程] Node版本: ${process.version}`)
   console.log(`🔧 [主进程] 平台: ${process.platform}`)
 
-  // 🎯 预先设置PromptX环境变量，避免ProjectManager路径解析错误
-  const promptxWorkspacePath = path.join(app.getPath('userData'), 'promptx-workspace')
-  process.env.PROMPTX_PROJECT_PATH = promptxWorkspacePath
-  process.env.PROMPTX_WORKSPACE = promptxWorkspacePath
-  process.env.PROJECT_ROOT = promptxWorkspacePath
-  process.env.WORKSPACE_ROOT = promptxWorkspacePath
-  // 确保工作区目录存在
-  if (!fs.existsSync(promptxWorkspacePath)) {
-    fs.mkdirSync(promptxWorkspacePath, { recursive: true })
-  }
-  console.log(`🎯 [主进程] 预设PromptX工作区路径: ${promptxWorkspacePath}`)
+  // 🌐 WebContentsView需要BaseWindow架构，暂时跳过，使用iframe方案
+  console.log('ℹ️ [主进程] 跳过WebContentsView初始化，使用iframe浏览器方案')
+  // WebContentsView与BrowserWindow不兼容，需要BaseWindow架构
+  // 当前保持BrowserWindow架构，使用iframe作为浏览器工作区
+
+  // 🎯 预先设置PromptX环境变量，使用DeeChat项目根目录
+  const projectRoot = getProjectRoot()
+  
+  process.env.PROMPTX_PROJECT_PATH = projectRoot
+  process.env.PROMPTX_WORKSPACE = projectRoot
+  process.env.PROJECT_ROOT = projectRoot
+  process.env.WORKSPACE_ROOT = projectRoot
+  
+  console.log(`🎯 [主进程] 预设PromptX项目根目录: ${projectRoot}`)
 
   // 0. 初始化ServiceManager和核心服务（现在app已准备就绪）
   console.log('🔧 [主进程] 通过ServiceManager初始化核心服务...')
@@ -1070,32 +1131,31 @@ app.whenReady().then(async () => {
       })
     }
   }
-
   // 1. 注册IPC处理器
   registerIPCHandlers()
   
-  // 2. 注册旧的IPC处理器（兼容现有前端）
+  // 3. 注册旧的IPC处理器（兼容现有前端）
   registerLangChainHandlers()
   
-  // 3. 注册PromptX本地调用处理器
+  // 4. 注册PromptX本地调用处理器
   registerPromptXHandlers()
   
-  // 4. 初始化PromptX工作区
+  // 5. 初始化PromptX工作区
   await initializePromptXWorkspace()
   
   // 注意：MCP IPC处理器已通过新架构在registerIPCHandlers()中注册
 
-  // 5. 创建主窗口
+  // 6. 创建主窗口
   createWindow()
 
-  // 6. 异步初始化基础服务（不阻塞界面显示）
+  // 7. 异步初始化基础服务（不阻塞界面显示）
   setTimeout(() => {
     initializeBasicServices().catch(error => {
       console.error('❌ [主进程] 基础服务初始化失败:', error)
     })
   }, 1000) // 延迟1秒，让界面先显示
 
-  // 7. 初始化文件管理服务（基础服务，独立于MCP）
+  // 8. 初始化文件管理服务（基础服务，独立于MCP）
   try {
     // 先初始化数据库
     const db = (await import('./db')).default
@@ -1159,6 +1219,9 @@ app.on('before-quit', async () => {
       console.error('❌ [主进程] 服务管理器关闭失败:', error)
     }
   }
+
+  // WebContentsView服务已禁用，无需清理
+  console.log('ℹ️ [主进程] WebContentsView服务未启用，跳过清理')
 
   // 注销旧的IPC处理器
   unregisterLangChainHandlers()

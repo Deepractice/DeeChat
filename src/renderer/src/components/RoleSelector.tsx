@@ -168,7 +168,9 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     
     // 按来源分组的角色列表
     ...(['system', 'project', 'user'] as const).map(source => {
-      const sourceRoles = roles.availableRoles.filter(role => role.source === source)
+      // 确保availableRoles是数组
+      const availableRoles = Array.isArray(roles.availableRoles) ? roles.availableRoles : []
+      const sourceRoles = availableRoles.filter(role => role.source === source)
       if (sourceRoles.length === 0) return null
       
       const sourceInfo = getSourceInfo(source)

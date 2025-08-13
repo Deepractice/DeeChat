@@ -11,6 +11,7 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST'],
+        ignoredActionsPaths: ['meta.arg', 'payload.timestamp'],
       },
     }),
 })

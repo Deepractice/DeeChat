@@ -164,14 +164,20 @@ export const loadAvailableRoles = createAsyncThunk(
       }
       
       // 解析PromptX welcome返回的内容
-      const roles = parsePromptXWelcome(welcomeResponse.data);
+      console.log('[Redux] welcomeResponse.data类型:', typeof welcomeResponse.data);
+      console.log('[Redux] welcomeResponse.data预览:', welcomeResponse.data?.substring ? welcomeResponse.data.substring(0, 200) : welcomeResponse.data);
+      
+      const parsedResult = parsePromptXWelcome(welcomeResponse.data);
+      console.log('[Redux] parsePromptXWelcome返回结果:', parsedResult);
+      console.log('[Redux] parsedResult.roles类型:', typeof parsedResult?.roles);
+      console.log('[Redux] parsedResult.roles长度:', parsedResult?.roles?.length);
       
       const result = {
-        roles: roles,
-        tools: [],
+        roles: parsedResult?.roles || [],
+        tools: parsedResult?.tools || [],
         metadata: {
-          totalRoles: roles.length,
-          totalTools: 0,
+          totalRoles: parsedResult?.roles?.length || 0,
+          totalTools: parsedResult?.tools?.length || 0,
           timestamp: new Date().toISOString()
         }
       };
@@ -544,13 +550,16 @@ const chatSlice = createSlice({
         state.roles.loading = false
         state.roles.initialized = true  // 设置初始化标志
         
-        if (action.payload && action.payload.roles) {
+        if (action.payload && action.payload.roles && Array.isArray(action.payload.roles)) {
           state.roles.availableRoles = action.payload.roles
-          state.roles.lastUpdated = action.payload.metadata.timestamp
+          state.roles.lastUpdated = action.payload.metadata?.timestamp || new Date().toISOString()
+        } else {
+          // 确保availableRoles总是一个数组
+          state.roles.availableRoles = []
         }
         
         // 如果当前有角色选中，更新其激活状态
-        if (state.roles.currentRole) {
+        if (state.roles.currentRole && Array.isArray(state.roles.availableRoles)) {
           const currentRole = state.roles.availableRoles.find(
             r => r.id === state.roles.currentRole?.id
           )

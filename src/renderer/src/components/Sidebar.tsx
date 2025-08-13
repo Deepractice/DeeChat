@@ -23,6 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     onViewChange?.('chat')
   }
 
+
   const handleResourcesClick = () => {
     onViewChange?.('resources')
   }

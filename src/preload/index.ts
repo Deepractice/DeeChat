@@ -129,7 +129,11 @@ const electronAPI = {
       ipcRenderer.invoke('promptx:initWorkspace', workspacePath, ideType),
     remember: (role: string, content: string) => ipcRenderer.invoke('promptx:remember', role, content),
     recall: (role: string, query?: string) => ipcRenderer.invoke('promptx:recall', role, query),
-    think: (role: string, thought: any) => ipcRenderer.invoke('promptx:think', role, thought)
+    think: (role: string, thought: any) => ipcRenderer.invoke('promptx:think', role, thought),
+    // 便捷方法：直接调用welcome命令
+    welcome: () => ipcRenderer.invoke('promptx:execute', 'welcome'),
+    // 便捷方法：直接调用action命令  
+    action: (roleId: string) => ipcRenderer.invoke('promptx:execute', 'action', [roleId])
   },
 
   // 🤖 调试API（仅开发环境）
@@ -155,6 +159,18 @@ const electronAPI = {
     export: (fileId: string, targetPath: string) => ipcRenderer.invoke('file:export', fileId, targetPath),
     tree: (category?: string) => ipcRenderer.invoke('file:tree', category),
     updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content)
+  },
+
+  // 🪟 窗口管理API
+  window: {
+    resize: (width: number, height: number) => ipcRenderer.invoke('window:resize', width, height),
+    getSize: () => ipcRenderer.invoke('window:getSize')
+  },
+
+  // 🌐 浏览器相关API（保留用于未来扩展）
+  browser: {
+    // 占位 - 如果需要与主进程通信的浏览器功能可以在这里添加
+    openExternal: (url: string) => ipcRenderer.invoke('browser:open-external', url)
   }
 }
 

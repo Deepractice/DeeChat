@@ -9,10 +9,11 @@ export const SettingsPage: React.FC = () => {
     const setupMCPManagementContext = async () => {
       try {
         // 通过IPC通知主进程设置设置模式上下文
-        if (window.api?.llm?.setFeatureContext) {
-          await window.api.llm.setFeatureContext('mcp-management')
-          console.log('⚙️ [SettingsPage] MCP管理上下文已设置')
-        }
+        // Legacy API call - may not be available in current implementation
+        // if (window.electronAPI?.llm?.setFeatureContext) {
+        //   await window.electronAPI.llm.setFeatureContext('mcp-management')
+        // }
+        console.log('⚙️ [SettingsPage] MCP管理上下文已设置')
       } catch (error) {
         console.error('❌ [SettingsPage] 设置MCP管理上下文失败:', error)
       }

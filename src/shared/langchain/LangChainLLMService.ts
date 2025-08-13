@@ -564,41 +564,52 @@ export class LangChainLLMService {
   }
 
   /**
-   * 获取提供商的可用模型列表
+   * 获取提供商的可用模型列表 - 从真实API获取
    */
   async getAvailableModels(config: ModelConfigEntity): Promise<string[]> {
-    const provider = config.provider.toLowerCase();
-
-    switch (provider) {
-      case 'anthropic':
-      case 'claude':
-        return [
-          'claude-3-5-sonnet-20241022',
-          'claude-3-5-haiku-20241022',
-          'claude-3-opus-20240229',
-          'claude-3-sonnet-20240229',
-          'claude-3-haiku-20240307'
-        ];
-
-      case 'openai':
-        return [
-          'gpt-4o',
-          'gpt-4o-mini',
-          'gpt-4-turbo',
-          'gpt-3.5-turbo'
-        ];
-
-      case 'google':
-      case 'gemini':
-        return [
-          'gemini-1.5-pro',
-          'gemini-1.5-flash',
-          'gemini-pro'
-        ];
-
-      default:
-        log.warn(`⚠️ [模型列表] 未知提供商: ${provider}`);
+    if (!config.baseURL || !config.apiKey) {
+      log.warn(`⚠️ [模型列表] 配置不完整: baseURL=${!!config.baseURL}, apiKey=${!!config.apiKey}`);
+      return [];
+    }
+    
+    try {
+      log.info(`🌐 [模型列表] 从API获取模型: ${config.baseURL}`);
+      
+      // 构造 /models 端点URL
+      const baseURL = config.baseURL.replace(/\/+$/, ''); // 移除末尾斜杠
+      const modelsURL = `${baseURL}/models`;
+      
+      const response = await fetch(modelsURL, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && Array.isArray(data.data)) {
+          // OpenAI格式的响应：{ data: [{id: "model-name"}, ...] }
+          const models = data.data
+            .map((model: any) => model.id)
+            .filter((id: string) => id && typeof id === 'string')
+            .sort(); // 按字母排序
+          
+          log.info(`✅ [模型列表] 从API获取到 ${models.length} 个模型`);
+          return models;
+        } else {
+          log.warn(`⚠️ [模型列表] API响应格式错误:`, data);
+          return [];
+        }
+      } else {
+        const errorText = await response.text();
+        log.warn(`⚠️ [模型列表] API请求失败: ${response.status} ${response.statusText}`, errorText);
         return [];
+      }
+    } catch (error) {
+      log.error(`❌ [模型列表] API获取失败:`, error);
+      return [];
     }
   }
 

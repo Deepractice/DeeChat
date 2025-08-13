@@ -6,7 +6,6 @@ import { loadConfig } from './store/slices/configSlice'
 import { loadChatHistory } from './store/slices/chatSlice'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
-import ChatSessionPanel from './components/ChatSessionPanel'
 import SettingsPage from './pages/SettingsPage'
 import ResourcesPage from './pages/ResourcesPage'
 
@@ -44,6 +43,8 @@ const AppContent: React.FC = () => {
     document.body.style.backgroundColor = '#fff'
   }, [])
 
+
+
   return (
     <div className="app-container">
       <Layout style={{ height: '100vh' }}>
@@ -66,23 +67,9 @@ const AppContent: React.FC = () => {
         {/* 动态内容区域 */}
         <Layout>
           {currentView === 'chat' && (
-            <>
-              {/* 聊天会话侧边栏 */}
-              <Sider
-                width={280}
-                theme="light"
-                style={{
-                  borderRight: '1px solid #f0f0f0',
-                  overflow: 'auto',
-                  backgroundColor: '#ffffff'
-                }}
-              >
-                <ChatSessionPanel />
-              </Sider>
-              <Content>
-                <ChatArea onGoToSettings={() => setCurrentView('settings')} />
-              </Content>
-            </>
+            <Content>
+              <ChatArea onGoToSettings={() => setCurrentView('settings')} />
+            </Content>
           )}
           
           {currentView === 'resources' && (

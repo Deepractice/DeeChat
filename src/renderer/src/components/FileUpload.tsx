@@ -1,15 +1,14 @@
-import React, { useState, useRef, useCallback } from 'react'
-import { Upload, Button, Card, Space, Typography, Tag, message } from 'antd'
+import React, { useRef, useCallback } from 'react'
+import { Button, Card, Typography, Tag, message } from 'antd'
 import { 
   PlusOutlined, 
   FileOutlined, 
   DeleteOutlined,
   PictureOutlined,
   FileTextOutlined,
-  FilePdfOutlined,
   FileZipOutlined
 } from '@ant-design/icons'
-import type { UploadFile, UploadProps } from 'antd'
+// import type { UploadFile, UploadProps } from 'antd'
 
 const { Text } = Typography
 
