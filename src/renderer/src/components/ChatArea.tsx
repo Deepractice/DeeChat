@@ -11,6 +11,8 @@ import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 // import { parseModelId } from '../../../shared/utils/modelIdHelper'
 import { ApiResponse } from '../../../shared/types'
 import { UserPreferenceEntity, UserPreferenceData } from '../../../shared/entities/UserPreferenceEntity'
+import { useStreamingMessage } from '../hooks/useStreamingMessage'
+import { useRoleStateManager } from '../hooks/useRoleStateManager'
 
 // 内置默认配置
 const DEFAULT_CONFIG = {
@@ -50,6 +52,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const previousSessionIdRef = useRef<string | null>(null)
   const [selectedModel, setSelectedModel] = useState<{ id: string; config: ModelConfigEntity } | null>(null)
   const [modelManagementVisible, setModelManagementVisible] = useState(false)
+  
+  // 🔥 使用流式消息hook
+  const { resetStreaming } = useStreamingMessage()
+  
+  // 🎭 使用角色状态管理器 - 解决"角色选择 ≠ 角色激活"问题
+  const { roleStateInfo, resetRoleState } = useRoleStateManager({
+    enableAutoSync: true,        // 启用自动同步
+    enableNewSessionReset: true, // 启用新会话时重置角色
+    enableConsistencyCheck: true // 启用一致性检查
+  })
 
   // 处理模型选择
   const handleModelChange = async (modelId: string, modelConfig: ModelConfigEntity) => {

@@ -105,51 +105,44 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       const chatHistory = currentSession?.messages || []
       console.log(`📚 [前端] 当前会话包含 ${chatHistory.length} 条历史消息`)
 
-      // 默认总是启用MCP工具，让AI自己决定是否使用
-      // 使用新的AI服务API发送消息
-      if (window.electronAPI?.ai?.sendMessage) {
-        let response;
+      // 🎯 采用统一接口设计：工具总是可用，让AI智能决定何时使用
+      console.log('🔧 [前端] 发送消息到AI服务 - 工具总是可用，由AI决定是否使用');
 
-        // 优先使用MCP增强模式，如果不可用则降级到普通模式
-        console.log('🔍 [调试] 检查MCP增强模式可用性:');
-        console.log('  window.electronAPI:', !!window.electronAPI);
-        console.log('  window.electronAPI.ai:', !!window.electronAPI?.ai);
-        console.log('  window.electronAPI.ai.sendMessageWithMCPTools:', !!window.electronAPI?.ai?.sendMessageWithMCPTools);
-        
-        if (window.electronAPI?.ai?.sendMessageWithMCPTools) {
-          console.log('🔧 [前端] 使用MCP增强模式发送消息');
-          response = await window.electronAPI.ai.sendMessageWithMCPTools({
-            llmRequest: {
-              message: trimmedValue,
-              temperature: 0.7,
-              maxTokens: 2000,
-              attachmentIds: attachmentIds,
-              // 🎭 传递当前选择的角色信息
-              activeRole: roles.currentRole?.id,
-              sessionId: currentSession?.id
-            },
-            configId: selectedModel.id,
-            enableMCPTools: true,
-            chatHistory: chatHistory  // 🆕 传递聊天历史
-          });
-        } else {
-          console.log('🔧 [前端] MCP增强模式不可用，使用普通模式');
-          response = await window.electronAPI.ai.sendMessage({
-            llmRequest: {
-              message: trimmedValue,
-              temperature: 0.7,
-              maxTokens: 2000,
-              attachmentIds: attachmentIds,
-              // 🎭 传递当前选择的角色信息
-              activeRole: roles.currentRole?.id,
-              sessionId: currentSession?.id
-            },
-            configId: selectedModel.id,
-            chatHistory: chatHistory  // 🆕 传递聊天历史
-          });
-        }
+      let response;
+      
+      // 统一使用带MCP工具的接口
+      if (window.electronAPI?.ai?.sendMessageWithMCPTools) {
+        response = await window.electronAPI.ai.sendMessageWithMCPTools({
+          llmRequest: {
+            message: trimmedValue,
+            temperature: 0.7,
+            maxTokens: 2000,
+            attachmentIds: attachmentIds,
+            // 🎭 传递当前选择的角色信息
+            activeRole: roles.currentRole?.id,
+            sessionId: currentSession?.id
+          },
+          configId: selectedModel.id,
+          enableMCPTools: true, // 总是true，让AI决定
+          chatHistory: chatHistory
+        });
+      } else if (window.electronAPI?.ai?.sendMessage) {
+        // 降级到普通接口
+        response = await window.electronAPI.ai.sendMessage({
+          llmRequest: {
+            message: trimmedValue,
+            temperature: 0.7,
+            maxTokens: 2000,
+            attachmentIds: attachmentIds,
+            activeRole: roles.currentRole?.id,
+            sessionId: currentSession?.id
+          },
+          configId: selectedModel.id,
+          chatHistory: chatHistory
+        });
+      }
 
-        if (response && response.success) {
+      if (response && response.success) {
           // 🔥 解析实际使用的模型名称
           const parseModelName = (modelId: string) => {
             const parts = modelId.split('-')
@@ -192,9 +185,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
         // 自动保存会话
         dispatch(saveCurrentSession())
-        } else {
-          throw new Error(response?.error || '发送消息失败')
-        }
+      } else {
+        throw new Error(response?.error || '发送消息失败')
       }
 
     } catch (error) {

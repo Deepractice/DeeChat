@@ -823,7 +823,8 @@ export class LLMService {
     request: LLMRequest,
     configId: string,
     enableMCPTools: boolean = false,
-    chatHistory?: ChatMessage[]
+    chatHistory?: ChatMessage[],
+    onStreamUpdate?: (update: any) => void
   ): Promise<LLMResponse> {
     try {
       if (!enableMCPTools) {
@@ -938,7 +939,10 @@ export class LLMService {
         config, // 传递配置对象
         sessionId,
         request.activeRole, // 传递角色信息！
-        request.systemPrompt
+        request.systemPrompt,
+        undefined, // uiContext
+        onStreamUpdate, // 🔥 传递流式更新回调
+        chatHistory // 🔥 传递聊天历史用于角色激活判断
       )
 
       log.info(`📊 [LangChain标准工具调用] 响应生成完成`)

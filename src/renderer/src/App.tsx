@@ -9,6 +9,7 @@ import ChatArea from './components/ChatArea'
 import SettingsPage from './pages/SettingsPage'
 import ResourcesPage from './pages/ResourcesPage'
 import WorkspaceArea from './components/Workspace/WorkspaceArea'
+import { useRoleStateManager } from './hooks/useRoleStateManager'
 
 import './App.css'
 
@@ -32,6 +33,13 @@ const AppContent: React.FC = () => {
     isTransitioning: false
   })
   const { message } = AntdApp.useApp()
+
+  // 🎭 全局角色状态管理器 - 确保应用级别的角色状态一致性
+  useRoleStateManager({
+    enableAutoSync: true,        // 在应用级别启用全局同步
+    enableNewSessionReset: true, // 启用新会话重置
+    enableConsistencyCheck: true // 启用一致性检查
+  })
 
   useEffect(() => {
     // 应用启动时加载配置和聊天历史

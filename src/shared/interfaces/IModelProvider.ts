@@ -23,6 +23,13 @@ export interface LLMResponse {
     compressionApplied: boolean
     removedCount: number
   }
+  // 🔥 新增：角色状态同步信息
+  roleStatus?: {
+    previousRole?: string      // 之前的角色
+    currentRole?: string       // 当前请求的角色
+    activatedRole?: string     // AI实际激活的角色
+    roleChanged: boolean       // 是否发生角色变化
+  }
 }
 
 export interface LLMRequest {

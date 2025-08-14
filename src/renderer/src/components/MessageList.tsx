@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { Avatar, Card, Typography, Space, Tag, Spin } from 'antd'
 import { UserOutlined, RobotOutlined } from '@ant-design/icons'
+import { useSelector } from 'react-redux'
+import { RootState } from '../store'
 import { ChatMessage } from '../../../shared/types'
 import TypewriterText from './TypewriterText'
 import TypewriterRenderer from './TypewriterRenderer'
 import ConversationalToolCall from './ConversationalToolCall'
 import MessageRenderer from './MessageRenderer'
+import StreamingAIMessage from './StreamingAIMessage'
+import { useStreamingMessage } from '../hooks/useStreamingMessage'
 
 const { Text, Paragraph } = Typography
 
@@ -19,6 +23,10 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading, currentT
   const [loadingText, setLoadingText] = useState('AI正在思考中')
   const [dotCount, setDotCount] = useState(0)
   const [lastMessageId, setLastMessageId] = useState<string | null>(null)
+  
+  // 🔥 使用流式消息状态和hook
+  const streamingMessage = useSelector((state: RootState) => state.chat.streamingMessage)
+  const { resetStreaming } = useStreamingMessage()
 
   // 动态加载文本效果
   useEffect(() => {
@@ -203,8 +211,22 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading, currentT
     <div>
       {messages.map((message, index) => renderMessage(message, index))}
       
-      {/* 加载状态 */}
-      {isLoading && (
+      {/* 🔥 流式AI消息显示 */}
+      {streamingMessage.isActive && (
+        <StreamingAIMessage
+          isActive={streamingMessage.isActive}
+          currentStage={streamingMessage.currentStage}
+          updates={streamingMessage.updates}
+          finalContent=""
+          finalToolExecutions={[]}
+          onComplete={() => {
+            console.log('🔥 [MessageList] 流式消息完成')
+          }}
+        />
+      )}
+      
+      {/* 加载状态（传统模式） */}
+      {isLoading && !streamingMessage.isActive && (
         <div
           style={{
             display: 'flex',

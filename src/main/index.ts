@@ -284,17 +284,89 @@ function registerIPCHandlers(): void {
     return app.getVersion()
   })
 
-  // 文件服务API
-  console.log('🔧 [调试] 注册文件服务API...')
-  ipcMain.handle('file:upload', async (_event, fileBuffer: Buffer, metadata: { name: string; mimeType: string }) => {
+  // 文件操作API - 使用统一的FileOperationService
+  console.log('🔧 [调试] 注册文件操作API...')
+  
+  // 统一文件读取接口
+  ipcMain.handle('fileOp:read', async (_event, filePath: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        return { success: false, error: '文件服务未初始化' }
+      if (!serviceManager?.isReady()) {
+        throw new Error('ServiceManager未初始化')
       }
       
-      const fileId = await fileService.saveAttachment(fileBuffer, metadata)
-      return { success: true, data: { fileId } }
+      const fileOpService = serviceManager.getFileOperationService()
+      const fileContent = await fileOpService.readFile(filePath)
+      
+      console.log(`✅ [主进程] 文件读取成功: ${filePath}`)
+      return fileContent
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '读取文件失败'
+      console.error(`❌ [主进程] 文件读取失败: ${filePath}`, error)
+      throw new Error(errorMsg)
+    }
+  })
+
+  // 统一文件写入接口
+  ipcMain.handle('fileOp:write', async (_event, filePath: string, content: any) => {
+    try {
+      if (!serviceManager?.isReady()) {
+        throw new Error('ServiceManager未初始化')
+      }
+      
+      const fileOpService = serviceManager.getFileOperationService()
+      await fileOpService.writeFile(filePath, content)
+      
+      console.log(`✅ [主进程] 文件写入成功: ${filePath}`)
+      return { success: true }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '写入文件失败'
+      console.error(`❌ [主进程] 文件写入失败: ${filePath}`, error)
+      throw new Error(errorMsg)
+    }
+  })
+
+  // 检查文件是否可编辑
+  ipcMain.handle('fileOp:isEditable', async (_event, filePath: string) => {
+    try {
+      if (!serviceManager?.isReady()) {
+        throw new Error('ServiceManager未初始化')
+      }
+      
+      const fileOpService = serviceManager.getFileOperationService()
+      return {
+        isEditable: fileOpService.isEditable(filePath),
+        editorType: fileOpService.getEditorType(filePath)
+      }
+    } catch (error) {
+      console.error(`❌ [主进程] 检查文件可编辑性失败: ${filePath}`, error)
+      return { isEditable: false, editorType: 'text' }
+    }
+  })
+  
+  ipcMain.handle('file:upload', async (_event, fileBuffer: Buffer, metadata: { name: string; mimeType: string }) => {
+    try {
+      if (!serviceManager || !serviceManager.isReady()) {
+        return { success: false, error: '服务管理器未初始化' }
+      }
+      
+      // 使用新的工作区服务保存文件
+      const workspaceService = serviceManager.getWorkspaceService()
+      
+      // 首先保存文件到临时位置
+      const { app } = require('electron')
+      const path = require('path')
+      const fs = require('fs').promises
+      
+      const tempDir = path.join(app.getPath('userData'), 'temp')
+      await fs.mkdir(tempDir, { recursive: true })
+      
+      const tempFilePath = path.join(tempDir, metadata.name)
+      await fs.writeFile(tempFilePath, fileBuffer)
+      
+      // 添加文件引用到工作区
+      const workspaceFile = await workspaceService.addUserFile(tempFilePath, metadata.name)
+      
+      return { success: true, data: { fileId: workspaceFile.id, filePath: workspaceFile.originalPath } }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -302,13 +374,20 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:get', async (_event, fileId: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        return { success: false, error: '文件服务未初始化' }
+      if (!serviceManager || !serviceManager.isReady()) {
+        return { success: false, error: '服务管理器未初始化' }
       }
       
-      const fileData = await fileService.getAttachment(fileId)
-      return { success: true, data: fileData }
+      // 使用新的工作区服务获取文件引用
+      const workspaceService = serviceManager.getWorkspaceService()
+      const fileReferences = await workspaceService.listFileReferences()
+      const fileRef = fileReferences.find(ref => ref.id === fileId)
+      
+      if (!fileRef) {
+        return { success: false, error: '文件未找到' }
+      }
+      
+      return { success: true, data: { path: fileRef.originalPath, name: fileRef.displayName } }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -316,12 +395,13 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:getContent', async (_event, fileId: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        return { success: false, error: '文件服务未初始化' }
+      if (!serviceManager || !serviceManager.isReady()) {
+        return { success: false, error: '服务管理器未初始化' }
       }
       
-      const content = await fileService.getAttachmentContent(fileId)
+      // 使用新的工作区服务读取文件内容
+      const workspaceService = serviceManager.getWorkspaceService()
+      const content = await workspaceService.readFileContent(fileId)
       return { success: true, data: content }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -330,30 +410,31 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:delete', async (_event, fileId: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        return { success: false, error: '文件服务未初始化' }
+      if (!serviceManager || !serviceManager.isReady()) {
+        return { success: false, error: '服务管理器未初始化' }
       }
       
-      await fileService.deleteAttachment(fileId)
+      // 使用新的工作区服务删除文件引用
+      const workspaceService = serviceManager.getWorkspaceService()
+      await workspaceService.removeFileReference(fileId)
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
 
-  // ResourcesPage需要的文件管理API
+  // ResourcesPage需要的PromptX文件管理API - 委托给PromptXResourceService
   ipcMain.handle('file:list', async (_event, options?: { category?: string }) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        console.error('❌ [文件列表] FileService未初始化')
+      if (!serviceManager || !serviceManager.isReady()) {
+        console.error('❌ [文件列表] ServiceManager未初始化')
         return []
       }
       
-      console.log('📋 [文件列表] ResourcesPage请求文件列表:', options)
-      const fileList = await fileService.scanPromptXResources(options?.category)
-      console.log(`✅ [文件列表] 返回 ${fileList.length} 个文件`)
+      const promptxResourceService = serviceManager.getPromptXResourceService()
+      console.log('📋 [文件列表] ResourcesPage请求PromptX文件列表:', options)
+      const fileList = await promptxResourceService.scanPromptXResources(options?.category)
+      console.log(`✅ [文件列表] 返回 ${fileList.length} 个PromptX资源文件`)
       
       return fileList
     } catch (error) {
@@ -364,14 +445,14 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:tree', async (_event, category?: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        console.error('❌ [文件树] FileService未初始化')
+      if (!serviceManager || !serviceManager.isReady()) {
+        console.error('❌ [文件树] ServiceManager未初始化')
         return []
       }
       
-      console.log('🌳 [文件树] ResourcesPage请求文件树:', category)
-      const tree = await fileService.buildFileTree(category)
+      const promptxResourceService = serviceManager.getPromptXResourceService()
+      console.log('🌳 [文件树] ResourcesPage请求PromptX文件树:', category)
+      const tree = await promptxResourceService.getPromptXResourceTree(category)
       console.log(`✅ [文件树] 返回 ${tree.length} 个根节点`)
       
       return tree
@@ -383,9 +464,8 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:stats', async () => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        console.error('❌ [文件统计] FileService未初始化')
+      if (!serviceManager || !serviceManager.isReady()) {
+        console.error('❌ [文件统计] ServiceManager未初始化')
         return {
           totalFiles: 0,
           totalSize: 0,
@@ -394,9 +474,23 @@ function registerIPCHandlers(): void {
         }
       }
       
-      console.log('📊 [文件统计] ResourcesPage请求统计信息')
-      const stats = await fileService.getFileStats()
-      console.log(`✅ [文件统计] 返回统计信息: ${stats.totalFiles} 个文件`)
+      const promptxResourceService = serviceManager.getPromptXResourceService()
+      console.log('📊 [文件统计] ResourcesPage请求PromptX统计信息')
+      const resources = await promptxResourceService.scanPromptXResources()
+      const stats = {
+        totalFiles: resources.length,
+        totalSize: resources.reduce((sum, file) => sum + file.size, 0),
+        byCategory: {} as Record<string, number>,
+        byType: {} as Record<string, number>
+      }
+      
+      // 按分类统计
+      resources.forEach(resource => {
+        stats.byCategory[resource.category] = (stats.byCategory[resource.category] || 0) + 1
+        stats.byType[resource.type] = (stats.byType[resource.type] || 0) + 1
+      })
+      
+      console.log(`✅ [文件统计] 返回PromptX统计信息: ${stats.totalFiles} 个文件`)
       
       return stats
     } catch (error) {
@@ -410,17 +504,17 @@ function registerIPCHandlers(): void {
     }
   })
 
-  // 添加文件内容读取和更新API，支持ResourcesPage的编辑功能
+  // PromptX文件内容读取和更新API，支持ResourcesPage的编辑功能
   ipcMain.handle('file:read', async (_event, fileId: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        throw new Error('FileService未初始化')
+      if (!serviceManager || !serviceManager.isReady()) {
+        throw new Error('ServiceManager未初始化')
       }
       
-      console.log(`📖 [文件读取] 读取文件内容: ${fileId}`)
-      const content = await fileService.readFileContent(fileId)
-      console.log(`✅ [文件读取] 成功读取文件，长度: ${content.length} 字符`)
+      const promptxResourceService = serviceManager.getPromptXResourceService()
+      console.log(`📖 [文件读取] 读取PromptX资源文件内容: ${fileId}`)
+      const content = await promptxResourceService.readPromptXResource(fileId)
+      console.log(`✅ [文件读取] 成功读取PromptX文件，长度: ${content.length} 字符`)
       
       return content
     } catch (error) {
@@ -431,14 +525,14 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:updateContent', async (_event, fileId: string, content: string) => {
     try {
-      const fileService = (global as any).fileService
-      if (!fileService) {
-        throw new Error('FileService未初始化')
+      if (!serviceManager || !serviceManager.isReady()) {
+        throw new Error('ServiceManager未初始化')
       }
       
-      console.log(`✍️ [文件更新] 更新文件内容: ${fileId}，长度: ${content.length} 字符`)
-      await fileService.updateFileContent(fileId, content)
-      console.log(`✅ [文件更新] 成功更新文件: ${fileId}`)
+      const promptxResourceService = serviceManager.getPromptXResourceService()
+      console.log(`✍️ [文件更新] 更新PromptX资源文件内容: ${fileId}，长度: ${content.length} 字符`)
+      await promptxResourceService.updatePromptXResource(fileId, content)
+      console.log(`✅ [文件更新] 成功更新PromptX文件: ${fileId}`)
       
       return { success: true }
     } catch (error) {
@@ -676,7 +770,7 @@ function registerIPCHandlers(): void {
     }
   })
 
-  // 系统角色API（懒加载）
+  // 🎭 角色系统API（统一使用PromptX）
   ipcMain.handle('role:getAvailable', async () => {
     try {
       await ensureMCPServices() // 🔥 懒加载MCP服务
@@ -688,15 +782,16 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const roleManager = serviceManager.getSystemRoleManager()
-      const roles = roleManager.getAvailableRoles()
-      return { success: true, data: roles }
+      // 🎭 使用PromptX系统获取角色列表
+      const promptxService = getPromptXLocalService()
+      const rolesData = await promptxService.getAvailableRoles()
+      return { success: true, data: rolesData }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
 
-  ipcMain.handle('role:activate', async (_, roleId: string, config?: any) => {
+  ipcMain.handle('role:activate', async (_, roleId: string) => {
     try {
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager) {
@@ -707,9 +802,10 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const roleManager = serviceManager.getSystemRoleManager()
-      await roleManager.activateRole(roleId, config)
-      return { success: true }
+      // 🎭 使用PromptX系统激活角色
+      const promptxService = getPromptXLocalService()
+      const result = await promptxService.activateRole(roleId)
+      return { success: true, data: result }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -726,9 +822,10 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const roleManager = serviceManager.getSystemRoleManager()
-      await roleManager.deactivateRole(roleId)
-      return { success: true }
+      // 🎭 PromptX系统中角色是基于工具调用的，没有显式停用概念
+      // 角色状态由对话上下文管理，这里仅做记录
+      console.log(`🎭 [角色管理] 角色停用请求: ${roleId} (PromptX系统中角色由上下文管理)`)
+      return { success: true, message: '角色已停用' }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -736,8 +833,8 @@ function registerIPCHandlers(): void {
 
   // 添加所有缺失的核心IPC处理器
   
-  // LLM相关IPC（启用MCP工具支持）
-  ipcMain.handle('llm:sendMessage', async (_, message: string, config: any) => {
+  // LLM相关IPC（启用MCP工具支持 + 流式更新）
+  ipcMain.handle('llm:sendMessage', async (event, message: string, config: any) => {
     try {
       // 🔥 启用MCP工具支持让AI能主动调用PromptX工具
       console.log('🔧 [IPC] 使用MCP工具发送消息，配置:', JSON.stringify(config, null, 2))
@@ -750,6 +847,15 @@ function registerIPCHandlers(): void {
         systemPrompt 
       } = config || {}
       
+      // 🔥 创建流式更新回调函数
+      const onStreamUpdate = (update: any) => {
+        console.log('📡 [流式更新]', update.type, ':', update.stage)
+        event.sender.send('llm:stream-update', {
+          sessionId,
+          update
+        })
+      }
+      
       // 构建LLMRequest对象
       const llmRequest = {
         message: message,
@@ -759,16 +865,27 @@ function registerIPCHandlers(): void {
         attachmentIds: []
       }
       
-      // 使用带MCP工具支持的方法
+      // 🔥 发送开始事件
+      event.sender.send('llm:stream-start', { sessionId })
+      
+      // 使用带MCP工具支持的方法（加上流式更新回调）
       const response = await langChainService.sendMessageWithMCPTools(
-        llmRequest,
-        configId,
-        true, // 启用MCP工具
-        [] // 暂时不传历史消息
+        llmRequest,                 // request: LLMRequest
+        configId,                   // configId: string
+        true,                       // enableMCPTools: boolean
+        [],                         // chatHistory?: ChatMessage[]
+        onStreamUpdate              // onStreamUpdate?: (update: any) => void
       )
       
       console.log('✅ [IPC] MCP工具消息发送成功')
-      return { success: true, data: { content: response.content, model: response.model } }
+      
+      // 🔥 发送完成事件
+      event.sender.send('llm:stream-complete', { 
+        sessionId,
+        response: { content: response.content, model: response.model, toolExecutions: response.toolExecutions }
+      })
+      
+      return { success: true, data: { content: response.content, model: response.model, toolExecutions: response.toolExecutions } }
     } catch (error) {
       console.error('❌ [IPC] MCP工具消息发送失败:', error)
       
@@ -1155,25 +1272,8 @@ app.whenReady().then(async () => {
     })
   }, 1000) // 延迟1秒，让界面先显示
 
-  // 8. 初始化文件管理服务（基础服务，独立于MCP）
-  try {
-    // 先初始化数据库
-    const db = (await import('./db')).default
-    await db.initialize()
-    console.log('💾 [主进程] 数据库已初始化')
-    
-    // 初始化文件服务
-    const { FileService } = await import('./services/FileService')
-    const fileService = new FileService()
-    await fileService.initialize()
-    
-    // 将fileService存储为全局变量以便IPC使用
-    ;(global as any).fileService = fileService
-    
-    console.log('📁 [主进程] 文件管理服务已初始化（独立基础服务）')
-  } catch (error) {
-    console.error('❌ [主进程] 文件管理服务初始化失败:', error)
-  }
+  // 8. 文件管理服务已通过ServiceManager统一管理，无需独立初始化
+  console.log('📁 [主进程] 文件管理服务已通过ServiceManager统一管理')
 
   // 6. 🔥 PromptX改为真正的按需加载（避免启动时多进程）
   // 移除自动预加载，改为用户首次使用PromptX时再启动

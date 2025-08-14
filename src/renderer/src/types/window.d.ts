@@ -16,6 +16,32 @@ declare global {
         tree: (category?: string) => Promise<any[]>;
         updateContent: (fileId: string, content: string) => Promise<void>;
       };
+
+      // 统一文件操作API
+      fileOp: {
+        read: (filePath: string) => Promise<{
+          type: 'text' | 'binary' | 'structured';
+          content: string | Buffer | any;
+          metadata?: {
+            encoding?: string;
+            format?: string;
+            [key: string]: any;
+          };
+        }>;
+        write: (filePath: string, content: {
+          type: 'text' | 'binary' | 'structured';
+          content: string | Buffer | any;
+          metadata?: {
+            encoding?: string;
+            format?: string;
+            [key: string]: any;
+          };
+        }) => Promise<{ success: boolean }>;
+        isEditable: (filePath: string) => Promise<{
+          isEditable: boolean;
+          editorType: 'text' | 'markdown' | 'code' | 'word' | 'excel' | 'powerpoint' | 'pdf';
+        }>;
+      };
       
       // Model API
       model: {

@@ -26,6 +26,20 @@ const electronAPI = {
   sendMessage: (message: string, config: any) =>
     ipcRenderer.invoke('llm:sendMessage', message, config),
 
+  // 🔥 流式消息相关事件监听
+  onStreamStart: (callback: (data: any) => void) => {
+    ipcRenderer.on('llm:stream-start', (_event, data) => callback(data))
+    return () => ipcRenderer.removeAllListeners('llm:stream-start')
+  },
+  onStreamUpdate: (callback: (data: any) => void) => {
+    ipcRenderer.on('llm:stream-update', (_event, data) => callback(data))
+    return () => ipcRenderer.removeAllListeners('llm:stream-update')
+  },
+  onStreamComplete: (callback: (data: any) => void) => {
+    ipcRenderer.on('llm:stream-complete', (_event, data) => callback(data))
+    return () => ipcRenderer.removeAllListeners('llm:stream-complete')
+  },
+
   // 配置管理（旧版兼容）
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (config: any) => ipcRenderer.invoke('config:set', config),
@@ -159,6 +173,13 @@ const electronAPI = {
     export: (fileId: string, targetPath: string) => ipcRenderer.invoke('file:export', fileId, targetPath),
     tree: (category?: string) => ipcRenderer.invoke('file:tree', category),
     updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content)
+  },
+
+  // 🗄️ 统一文件操作API
+  fileOp: {
+    read: (filePath: string) => ipcRenderer.invoke('fileOp:read', filePath),
+    write: (filePath: string, content: any) => ipcRenderer.invoke('fileOp:write', filePath, content),
+    isEditable: (filePath: string) => ipcRenderer.invoke('fileOp:isEditable', filePath)
   },
 
   // 🪟 窗口管理API

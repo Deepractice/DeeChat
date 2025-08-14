@@ -326,7 +326,7 @@ export class RoleStatusMonitorLayer {
   }
 
   /**
-   * 构建增强的系统提示词（增强版：支持UI意图注入）
+   * 构建增强的系统提示词（增强版：支持UI意图注入，智能判断角色激活需求）
    */
   private buildEnhancedSystemPrompt(
     baseSystemPrompt: string,
@@ -346,39 +346,39 @@ export class RoleStatusMonitorLayer {
     // 2. 角色切换通知和激活引导（智能检测角色状态变化）
     const currentUIRole = uiContext?.selectedRole; // UI当前选择的角色
     const previousSessionRole = context.activeRole; // 会话中之前的角色
+    const isExplicitRoleRequest = uiContext?.roleActivationRequest === true; // 是否是明确的角色激活请求
     
-    log.info(`🔍 [角色检测] UI角色: ${currentUIRole || '无'}, 会话角色: ${previousSessionRole || '无'}`);
+    log.info(`🔍 [角色检测] UI角色: ${currentUIRole || '无'}, 会话角色: ${previousSessionRole || '无'}, 明确请求: ${isExplicitRoleRequest}`);
     
-    if (currentUIRole) {
-      // 用户选择了角色
+    if (currentUIRole && isExplicitRoleRequest) {
+      // 🔥 关键修复：只有明确的角色激活请求才触发工具调用
       if (previousSessionRole && previousSessionRole !== currentUIRole) {
         // 场景1：角色切换 - 从一个角色切换到另一个角色
         const roleSwitchNotice = `# 🔄 ROLE_SWITCH_NOTIFICATION
 🎭 **重要：用户已从 \`${previousSessionRole}\` 切换到 \`${currentUIRole}\` 角色**
-💡 **必须立即调用工具切换角色！**
+💡 **需要调用工具切换角色**
 
-🔧 **工具调用指令**：
-请调用 promptx_action 工具，参数设置为：
+🔧 **建议操作**：
+如果用户的问题需要专业角色知识，请调用 promptx_action 工具：
 - role: "${currentUIRole}"
 
 📝 激活后，你将以 \`${currentUIRole}\` 角色身份提供专业服务。
-⚠️ **重要**：请忘记之前的 \`${previousSessionRole}\` 角色身份，完全切换到新角色！
-💬 **调用工具后**：请继续以新角色身份正常回答用户问题。`;
+💬 如果是简单问候或常规对话，可以先正常回答，后续需要时再激活角色。`;
         sections.push(roleSwitchNotice);
         log.info(`🔄 [角色切换] 检测到角色切换: ${previousSessionRole} → ${currentUIRole}`);
       } else if (!previousSessionRole || this.shouldTriggerRoleActivation(context, currentUIRole)) {
         // 场景2：首次激活 - 之前没有角色或需要重新激活
         const activationGuidance = `# 🎯 ROLE_ACTIVATION_GUIDANCE
 🚀 用户已选择角色：${currentUIRole}
-💡 **必须立即调用工具激活角色！**
+💡 **可以根据需要激活角色**
 
-🔧 **工具调用指令**：
-请调用 promptx_action 工具，参数设置为：
-- role: "${currentUIRole}"
+🔧 **建议操作**：
+- 如果用户问题需要专业知识，请调用 promptx_action 工具激活角色
+- 如果是简单问候("你好"、"hi"等)或常规对话，可以先正常回答
+- 参数：role: "${currentUIRole}"
 
 📝 激活后，你将自动获得该角色的完整专业定义和能力。
-⚠️ **重要**：不调用工具就无法获得角色能力！
-💬 **调用工具后**：请继续以该角色身份正常回答用户问题。`;
+💬 请根据用户实际需求决定是否立即激活角色。`;
         sections.push(activationGuidance);
         log.info(`🎯 [角色激活] 已添加角色激活引导: ${currentUIRole}`);
       } else {
@@ -389,6 +389,18 @@ export class RoleStatusMonitorLayer {
         sections.push(roleReminder);
         log.info(`😊 [角色状态] 角色${currentUIRole}已激活，添加身份提醒`);
       }
+    } else if (currentUIRole && !isExplicitRoleRequest) {
+      // 🔥 新增：角色存在但不是明确请求时的处理
+      const roleContextNotice = `# 🎭 ROLE_CONTEXT_NOTICE
+📋 **会话中有角色上下文：\`${currentUIRole}\`**
+💡 **智能判断原则**：
+- 简单问候和日常对话：以通用AI身份回答
+- 专业问题和复杂任务：可考虑激活 \`${currentUIRole}\` 角色
+- 用户明确要求专业服务时：调用 promptx_action 工具
+
+🎯 请根据用户问题的复杂程度和专业性需求，智能决定回答方式。`;
+      sections.push(roleContextNotice);
+      log.info(`🎭 [智能角色] 角色${currentUIRole}存在但非明确请求，使用智能判断模式`);
     } else {
       // 用户没有选择角色
       if (previousSessionRole) {
@@ -458,12 +470,30 @@ ${JSON.stringify(context.roleContent, null, 2)}
    */
   private shouldTriggerRoleActivation(context: ConversationContext, roleId: string): boolean {
     const roleKey = `${context.sessionId}_${roleId}`;
-    const hasActivated = this.roleActivationHistory.has(roleKey);
+    const hasActivatedInMemory = this.roleActivationHistory.has(roleKey);
     
-    // 如果从未激活过这个角色，就应该激活
-    const shouldActivate = !hasActivated;
+    // 🔥 核心修复：主要依赖工具激活上下文来判断是否真正激活
+    const isCurrentSessionRole = context.activeRole === roleId;
+    const hasToolActivationContext = context.toolActivationContext?.roleId === roleId;
+    const hasRoleContent = !!(context.roleContent && context.toolActivationContext);
     
-    log.info(`🔍 [激活检查] 角色: ${roleId}, 已激活: ${hasActivated}, 应激活: ${shouldActivate}`);
+    // 🎯 精确判断：只有真正通过工具激活并获得角色内容时才认为已激活
+    const isTrulyActivated = hasToolActivationContext && hasRoleContent;
+    
+    // 🔄 防重复激活：同一会话中已激活过的角色，如果工具上下文丢失，允许重新激活
+    const shouldReactivate = hasActivatedInMemory && isCurrentSessionRole && !isTrulyActivated;
+    
+    // 最终决策：未真正激活 OR 需要重新激活
+    const shouldActivate = !isTrulyActivated || shouldReactivate;
+    
+    log.info(`🔍 [激活检查优化] 角色: ${roleId}`);
+    log.info(`  - 内存记录: ${hasActivatedInMemory}`);
+    log.info(`  - 会话角色: ${isCurrentSessionRole} (当前: ${context.activeRole})`);
+    log.info(`  - 工具上下文: ${hasToolActivationContext} (工具角色: ${context.toolActivationContext?.roleId})`);
+    log.info(`  - 角色内容: ${hasRoleContent}`);
+    log.info(`  - 真正激活: ${isTrulyActivated}`);
+    log.info(`  - 需要重激活: ${shouldReactivate}`);
+    log.info(`  - 最终决策: ${shouldActivate ? '需要激活' : '已激活，跳过'}`);
     
     return shouldActivate;
   }

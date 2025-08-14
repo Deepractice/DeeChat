@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { loadAvailableRoles, activateRole, clearRole, clearRoleError, refreshRoleCache } from '../store/slices/chatSlice'
 import { ParsedRole, getSourceDisplayName } from '../utils/promptxParser'
+import { useRoleStateManager } from '../hooks/useRoleStateManager'
 
 const { Text } = Typography
 
@@ -23,6 +24,13 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   const dispatch = useDispatch<AppDispatch>()
   const { roles } = useSelector((state: RootState) => state.chat)
   const [dropdownVisible, setDropdownVisible] = useState(false)
+  
+  // 🎭 使用角色状态管理器获取状态信息
+  const { roleStateInfo } = useRoleStateManager({
+    enableAutoSync: false,        // RoleSelector只读取状态，不参与同步
+    enableNewSessionReset: false, // 由ChatArea统一处理
+    enableConsistencyCheck: false // 由ChatArea统一处理
+  })
 
   // 组件挂载时加载角色列表
   useEffect(() => {
@@ -118,12 +126,28 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
               <span style={{ fontSize: '16px' }}>
                 {getSourceInfo(roles.currentRole.source).icon}
               </span>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 500, color: '#262626' }}>
                   {roles.currentRole.name}
+                  {/* 🎭 角色状态指示器 */}
+                  <span style={{ 
+                    marginLeft: '8px',
+                    fontSize: '10px',
+                    padding: '2px 6px',
+                    borderRadius: '8px',
+                    backgroundColor: roleStateInfo.isActivatedInSession ? '#52c41a' : '#faad14',
+                    color: 'white',
+                    fontWeight: 'normal'
+                  }}>
+                    {roleStateInfo.isActivatedInSession ? '已激活' : '待激活'}
+                  </span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
                   {getSourceDisplayName(roles.currentRole.source)} · {roles.currentRole.description}
+                </div>
+                {/* 🎯 状态说明 */}
+                <div style={{ fontSize: '11px', color: roleStateInfo.isActivatedInSession ? '#52c41a' : '#fa8c16', marginTop: '4px' }}>
+                  {roleStateInfo.stateDescription}
                 </div>
               </div>
             </Space>
@@ -297,15 +321,27 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: '120px'
+                maxWidth: '120px',
+                display: 'flex',
+                alignItems: 'center'
               }}
               title={roles.currentRole.name}
             >
               {roles.currentRole.name}
+              {/* 🎭 状态指示点 */}
+              <span style={{
+                marginLeft: '6px',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: roleStateInfo.isActivatedInSession ? '#52c41a' : '#faad14',
+                display: 'inline-block',
+                flexShrink: 0
+              }} />
             </div>
             {size !== 'small' && (
               <div style={{ fontSize: '10px', color: '#999', lineHeight: 1.2 }}>
-                {sourceInfo.name}
+                {sourceInfo.name} • {roleStateInfo.isActivatedInSession ? '已激活' : '待激活'}
               </div>
             )}
           </div>

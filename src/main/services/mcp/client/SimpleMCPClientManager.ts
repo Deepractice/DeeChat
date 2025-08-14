@@ -20,6 +20,7 @@ import {
 } from '../../../../shared/interfaces/IMCPProvider'
 import { InProcessMCPServer } from '../servers/InProcessMCPServer'
 import { FileOperationsMCPServer } from '../servers/FileOperationsMCPServer'
+// WorkspaceMCPServer已移除，统一使用FileOperationsMCPServer
 
 /**
  * MCP客户端管理器
@@ -97,6 +98,7 @@ export class SimpleMCPClientManager {
           if (!sandboxMode) {
             log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
           }
+        // workspace-builtin已移除，统一使用file-operations-builtin
         } else {
           throw new Error(`未知的内置服务器类型: ${server.id}`)
         }
@@ -464,6 +466,7 @@ export class SimpleMCPClientManager {
         if (!sandboxMode) {
           log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
         }
+      // workspace-builtin已移除，统一使用file-operations-builtin
       } else {
         throw new Error(`未知的内置服务器类型: ${server.id}`)
       }
@@ -488,7 +491,7 @@ export class SimpleMCPClientManager {
     
     return {
       success: true,
-      result: [result], // 包装成数组格式
+      result: result.content || [result], // 如果result已包含content数组则直接使用，否则包装
       duration
     }
   }
@@ -556,6 +559,7 @@ export class SimpleMCPClientManager {
             if (!sandboxMode) {
               log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
             }
+          // workspace-builtin已移除，统一使用file-operations-builtin
           } else {
             throw new Error(`未知的内置服务器类型: ${server.id}`)
           }

@@ -44,6 +44,13 @@ export interface SmartPromptResponse {
   compressionTriggered: boolean;
   totalTokens: number;
   uiIntentProcessed?: boolean; // 新增：是否处理了UI意图
+  // 🔥 新增：角色状态跟踪
+  roleStatus?: {
+    previousRole?: string;      // 之前的角色
+    currentRole?: string;       // 当前请求的角色
+    activatedRole?: string;     // AI实际激活的角色
+    roleChanged: boolean;       // 是否发生角色变化
+  };
 }
 
 // 3层级执行结果（移除第4层）
@@ -177,12 +184,28 @@ export class SmartLayeredPromptSystem {
         this.layer1.recordRoleActivation(conversationContext.sessionId, activeRole);
       }
 
+      // 🔥 构建角色状态跟踪信息
+      const previousRole = conversationContext.activeRole;
+      const currentRole = uiContext?.selectedRole || conversationContext.activeRole;
+      const activatedRole = conversationContext.toolActivationContext?.roleId;
+      const roleChanged = !!(
+        (currentRole && currentRole !== previousRole) ||
+        (activatedRole && activatedRole !== currentRole)
+      );
+
       // 构建3层架构响应
       const response: SmartPromptResponse = {
         messages,
         compressionTriggered: !!layerResults.compressionResult,
         totalTokens: tokenStats.totalTokens,
-        uiIntentProcessed: !!uiContext
+        uiIntentProcessed: !!uiContext,
+        // 🔥 包含角色状态信息
+        roleStatus: {
+          previousRole,
+          currentRole,
+          activatedRole,
+          roleChanged
+        }
       };
 
       log.info(`✅ [SmartLayeredPrompt3层] 会话 ${conversationContext.sessionId.slice(0, 8)} 提示词构建完成 (${tokenStats.totalTokens} tokens, UI处理: ${!!uiContext})`);

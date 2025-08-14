@@ -8,6 +8,13 @@ interface ChatState {
   sessions: ChatSession[]
   isLoading: boolean
   error: string | null
+  // 🔥 新增：流式消息状态
+  streamingMessage: {
+    isActive: boolean
+    sessionId: string | null
+    updates: any[]
+    currentStage: any | null
+  }
   // 🎭 角色管理状态
   roles: {
     availableRoles: ParsedRole[]
@@ -24,6 +31,13 @@ const initialState: ChatState = {
   sessions: [],
   isLoading: false,
   error: null,
+  // 🔥 流式消息初始状态
+  streamingMessage: {
+    isActive: false,
+    sessionId: null,
+    updates: [],
+    currentStage: null
+  },
   // 🎭 角色管理初始状态
   roles: {
     availableRoles: [],
@@ -157,7 +171,7 @@ export const loadAvailableRoles = createAsyncThunk(
       console.log('[Redux] 开始加载可用角色列表...');
       
       // 直接调用PromptX welcome工具获取角色列表
-      const welcomeResponse = await window.electronAPI.promptx.welcome();
+      const welcomeResponse = await window.electronAPI.promptx.execute('welcome', []);
       
       if (!welcomeResponse.success) {
         throw new Error(`角色加载失败: ${welcomeResponse.error || '未知错误'}`);
@@ -274,6 +288,9 @@ const chatSlice = createSlice({
       }
       state.sessions.unshift(newSession)
       state.currentSession = newSession
+      
+      // 注意：角色状态重置现在由 useRoleStateManager Hook 处理
+      // 这样可以提供更好的用户体验和状态管理
     },
 
     // 切换会话
@@ -433,6 +450,54 @@ const chatSlice = createSlice({
       state.roles.lastUpdated = null
       state.roles.initialized = false  // 重置初始化标志，允许重新加载
     },
+
+    // 🔥 流式消息相关reducers
+    // 开始流式消息
+    startStreamingMessage: (state, action: PayloadAction<{ sessionId: string }>) => {
+      state.streamingMessage.isActive = true
+      state.streamingMessage.sessionId = action.payload.sessionId
+      state.streamingMessage.updates = []
+      state.streamingMessage.currentStage = null
+      state.isLoading = true
+    },
+
+    // 添加流式更新
+    addStreamUpdate: (state, action: PayloadAction<any>) => {
+      state.streamingMessage.updates.push(action.payload)
+      state.streamingMessage.currentStage = action.payload
+    },
+
+    // 完成流式消息
+    completeStreamingMessage: (state, action: PayloadAction<{ content: string; model?: string; toolExecutions?: any[] }>) => {
+      state.streamingMessage.isActive = false
+      state.streamingMessage.sessionId = null
+      state.streamingMessage.updates = []
+      state.streamingMessage.currentStage = null
+      state.isLoading = false
+
+      // 添加AI消息到当前会话
+      if (state.currentSession) {
+        const aiMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: action.payload.content,
+          timestamp: Date.now(),
+          modelId: action.payload.model,
+          toolExecutions: action.payload.toolExecutions,
+        }
+        state.currentSession.messages.push(aiMessage)
+        state.currentSession.updatedAt = Date.now()
+      }
+    },
+
+    // 重置流式消息状态
+    resetStreamingMessage: (state) => {
+      state.streamingMessage.isActive = false
+      state.streamingMessage.sessionId = null
+      state.streamingMessage.updates = []
+      state.streamingMessage.currentStage = null
+      state.isLoading = false
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -454,6 +519,25 @@ const chatSlice = createSlice({
           }
           state.currentSession.messages.push(assistantMessage)
           state.currentSession.updatedAt = Date.now()
+          
+          // 🔥 新增：处理角色状态同步
+          const roleStatus = action.payload.data.roleStatus
+          if (roleStatus && roleStatus.roleChanged) {
+            console.log('[Redux] 🎭 检测到角色状态变化:', roleStatus)
+            
+            // 如果AI激活了不同的角色，同步到前端状态
+            if (roleStatus.activatedRole && roleStatus.activatedRole !== state.roles.currentRole?.id) {
+              const activatedRole = state.roles.availableRoles.find(r => r.id === roleStatus.activatedRole)
+              if (activatedRole) {
+                console.log('[Redux] 🎯 同步AI激活的角色到UI:', activatedRole.name)
+                state.roles.currentRole = activatedRole
+                // 更新角色激活状态
+                state.roles.availableRoles.forEach(role => {
+                  role.isActive = role.id === activatedRole.id
+                })
+              }
+            }
+          }
         }
       })
       .addCase(sendMessage.rejected, (state, action) => {
@@ -624,7 +708,12 @@ export const {
   setCurrentRole,
   clearCurrentRole,
   clearRoleError,
-  refreshRoleCache
+  refreshRoleCache,
+  // 🔥 流式消息actions
+  startStreamingMessage,
+  addStreamUpdate,
+  completeStreamingMessage,
+  resetStreamingMessage
 } = chatSlice.actions
 
 // 🔥 注意：loadSessionWithConfig 和 switchToSessionWithConfig

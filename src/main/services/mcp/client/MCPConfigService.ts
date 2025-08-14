@@ -119,6 +119,7 @@ export class MCPConfigService implements IMCPConfigService {
       if (!MCPConfigService._builtinServersInitialized) {
         const promptxExists = servers.some(s => s.id === 'promptx-builtin');
         const fileOpsExists = servers.some(s => s.id === 'file-operations-builtin');
+        // 工作区管理已移除，统一使用文件操作MCP
         
         // 添加PromptX配置
         if (!promptxExists) {
@@ -155,6 +156,8 @@ export class MCPConfigService implements IMCPConfigService {
         } else {
           console.log('[MCP Config] 文件操作配置已存在，跳过初始化');
         }
+
+        console.log('[MCP Config] 工作区管理已移除，统一使用文件操作MCP管理工作区文件');
         
         // 🔥 标记为已初始化，防止后续重复检查
         MCPConfigService._builtinServersInitialized = true;
@@ -391,7 +394,10 @@ export class MCPConfigService implements IMCPConfigService {
       throw error; // 首次初始化失败应该抛出错误
     }
 
-    const defaultServers = [promptxServer];
+    // 工作区管理已移除，只保留PromptX和文件操作
+    const fileOpsServer = this.createDefaultFileOperationsServer();
+    
+    const defaultServers = [promptxServer, fileOpsServer];
 
     // 保存默认配置
     await this.saveAllConfigs(defaultServers);
@@ -495,6 +501,8 @@ export class MCPConfigService implements IMCPConfigService {
     console.log(`[MCP Config] ✅ 创建文件操作内置服务器配置完成`);
     return server;
   }
+
+  // 工作区管理服务器已移除，统一使用文件操作MCP
 
   /**
    * 初始化PromptX服务器配置（优先传统模式，沙箱将在运行时自动检测）

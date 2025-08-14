@@ -61,9 +61,15 @@ class CrossPlatformPathUtils {
       // Electron环境
       return [
         app.getPath('userData'),
-        path.join(app.getPath('userData'), 'promptx-workspace'),
+        path.join(app.getPath('userData'), 'deechat-workspace'), // DeeChat混合工作区根目录
+        path.join(app.getPath('userData'), 'deechat-workspace', 'ai-generated'), // AI生成文件目录
+        path.join(app.getPath('userData'), 'deechat-workspace', 'temp'), // 临时文件目录
+        path.join(app.getPath('userData'), 'promptx-workspace'), // PromptX专用工作目录
         path.join(app.getPath('userData'), 'attachments'),
-        path.join(app.getPath('documents'), 'DeeChat')
+        path.join(app.getPath('documents'), 'DeeChat'),
+        app.getPath('desktop'), // 用户桌面(引用模式)
+        app.getPath('downloads'), // 用户下载目录(引用模式)
+        app.getPath('documents') // 用户文档目录(引用模式)
       ]
     } catch {
       // Node.js测试环境
@@ -71,8 +77,12 @@ class CrossPlatformPathUtils {
       
       return [
         path.join(homeDir, '.deechat'),
-        path.join(homeDir, '.deechat', 'workspace'),
+        path.join(homeDir, '.deechat', 'deechat-workspace'), // DeeChat混合工作区根目录
+        path.join(homeDir, '.deechat', 'deechat-workspace', 'ai-generated'), // AI生成文件目录
+        path.join(homeDir, '.deechat', 'deechat-workspace', 'temp'), // 临时文件目录
         path.join(homeDir, '.deechat', 'attachments'),
+        path.join(homeDir, 'Desktop'), // 用户桌面
+        path.join(homeDir, 'Downloads'), // 用户下载目录
         process.cwd()
       ]
     }
@@ -161,6 +171,9 @@ export class FileOperationsMCPServer {
       // 确保允许的目录存在
       await this.ensureAllowedDirectories()
 
+      // 注册工作区发现工具
+      this.registerWorkspaceDiscoveryTool()
+      
       // 注册9个标准文件操作工具
       this.registerFileReadTool()
       this.registerFileWriteTool() 
@@ -228,14 +241,68 @@ export class FileOperationsMCPServer {
    * 获取工具定义列表 (DeeChat集成所需的接口)
    */
   getToolDefinitions(): any[] {
+    // 获取关键路径信息用于工具描述
+    const { app } = require('electron')
+    const userDataPath = app.getPath('userData')
+    const workspaceRoot = `${userDataPath}/deechat-workspace`
+    const aiGeneratedPath = `${workspaceRoot}/ai-generated`
+    const tempPath = `${workspaceRoot}/temp`
+    const desktopPath = app.getPath('desktop')
+    const downloadsPath = app.getPath('downloads')
+    
+    // 🎯 获取当前工作区的实际文件路径列表
+    const workspaceFiles = this.getCurrentWorkspaceFiles()
+    
     const tools = [
       {
+        name: 'discover_workspace',
+        description: `🎯 发现DeeChat工作区 (🔍开始文件操作前必读)
+
+📋 **工作区概览**：
+• 工作区根目录：${workspaceRoot}
+• AI生成文件目录：${aiGeneratedPath}  
+• 临时文件目录：${tempPath}
+• 用户常用目录：${desktopPath}, ${downloadsPath}
+
+🔍 **快速探索**：
+此工具帮你了解工作区结构和现有文件，建议在开始任何文件操作前先调用！
+
+💡 **返回信息**：
+• 工作区目录结构
+• 各目录的文件数量
+• 推荐的文件操作路径
+• 用户文件和AI文件的区别说明`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      },
+      {
         name: 'read_file',
-        description: '读取文件内容，支持文本文件和二进制文件的base64编码',
+        description: `📖 读取文件内容 (🎯DeeChat工作区智能读取)
+
+📂 **当前工作区文件** - 可直接使用这些路径：
+${workspaceFiles.userFiles.length > 0 ? workspaceFiles.userFiles.map(path => `• ${path}`).join('\n') : '• (暂无用户引用文件)'}
+
+🤖 **AI生成文件** - 当前可用：
+${workspaceFiles.aiFiles.length > 0 ? workspaceFiles.aiFiles.map(path => `• ${path}`).join('\n') : '• (暂无AI生成文件)'}
+
+⏰ **临时文件** - 当前可用：
+${workspaceFiles.tempFiles.length > 0 ? workspaceFiles.tempFiles.map(path => `• ${path}`).join('\n') : '• (暂无临时文件)'}
+
+📁 **创建新文件推荐路径**：
+• AI生成文件：${aiGeneratedPath}/your_file.ext
+• 临时文件：${tempPath}/temp_file.ext
+
+💡 **使用说明**：
+1. 优先使用上面列出的具体文件路径
+2. 支持所有常见格式：txt、md、pdf、docx、csv、json、py、js等
+3. 用户拖拽新文件后，路径会自动更新到此列表`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: '文件路径，必须在允许的目录范围内' },
+            path: { type: 'string', description: '文件绝对路径 - 用户文件的完整路径或AI生成文件路径' },
             encoding: { type: 'string', enum: ['utf8', 'base64'], default: 'utf8', description: '文件编码格式' }
           },
           required: ['path']
@@ -243,11 +310,29 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'write_file',
-        description: '写入文件内容，如果文件不存在会创建新文件',
+        description: `✏️ 写入文件内容 (🎯DeeChat工作区智能写入)
+
+📝 **创建AI生成文件** (推荐)：
+• AI报告/分析：${aiGeneratedPath}/analysis_report.md
+• 代码文件：${aiGeneratedPath}/generated_code.py
+• 数据处理：${aiGeneratedPath}/processed_data.csv
+
+⏰ **创建临时文件**：
+• 临时处理：${tempPath}/temp_analysis.txt
+• 临时输出：${tempPath}/temp_result.json
+
+⚠️ **更新现有文件**：
+• 可以修改AI生成的文件
+• 不建议修改用户引用文件的源文件
+
+💡 **命名建议**：
+• 使用描述性文件名：summary_report.md
+• 包含时间戳：analysis_20250814.txt
+• 指明文件类型：.md .txt .py .json .csv`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: '文件路径，必须在允许的目录范围内' },
+            path: { type: 'string', description: '文件路径 - 推荐使用AI生成目录或临时目录' },
             content: { type: 'string', description: '文件内容' },
             encoding: { type: 'string', enum: ['utf8', 'base64'], default: 'utf8', description: '文件编码格式' }
           },
@@ -256,11 +341,30 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'list_directory',
-        description: '列出目录中的文件和子目录',
+        description: `📁 列出目录内容 (🎯DeeChat工作区导航)
+
+🎯 **当前工作区目录**：
+• 工作区根目录：${workspaceRoot}
+• AI生成文件目录：${aiGeneratedPath}
+• 临时文件目录：${tempPath}
+
+📂 **用户文件目录** (从当前引用文件推断)：
+${workspaceFiles.userFiles.length > 0 ? 
+  [...new Set(workspaceFiles.userFiles.map(path => path.substring(0, path.lastIndexOf('/'))))].slice(0, 3).map(dir => `• ${dir}/`).join('\n') 
+  : '• (用户尚未拖拽文件，可浏览桌面或下载目录)'}
+
+🔍 **常用用户目录**：
+• 用户桌面：${desktopPath}
+• 用户下载：${downloadsPath}
+
+💡 **推荐操作**：
+1. 查看工作区结构：list_directory("${workspaceRoot}")
+2. 浏览AI生成文件：list_directory("${aiGeneratedPath}")
+3. 探索用户文件目录：使用上述用户文件目录路径`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: '目录路径，必须在允许的目录范围内' },
+            path: { type: 'string', description: '目录路径 - 工作区路径、用户常用目录或任意允许的路径' },
             recursive: { type: 'boolean', default: false, description: '是否递归列出子目录' },
             includeHidden: { type: 'boolean', default: false, description: '是否包含隐藏文件' }
           },
@@ -269,7 +373,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'create_directory',
-        description: '创建目录，支持递归创建',
+        description: '📂 创建目录 (🎯混合工作区支持) - 在AI生成目录、临时目录或其他允许位置创建新目录，支持递归创建',
         inputSchema: {
           type: 'object',
           properties: {
@@ -281,7 +385,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'delete_file',
-        description: '删除文件或目录（谨慎使用）',
+        description: '🗑️ 删除文件或目录 (⚠️谨慎使用) - 可删除AI生成文件、临时文件或其他允许位置的文件，用户引用文件请谨慎',
         inputSchema: {
           type: 'object',
           properties: {
@@ -293,7 +397,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'move_file',
-        description: '移动或重命名文件/目录',
+        description: '🚚 移动/重命名文件 (🎯混合工作区) - 移动或重命名AI生成文件/目录，用户引用文件不建议移动',
         inputSchema: {
           type: 'object',
           properties: {
@@ -305,7 +409,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'copy_file',
-        description: '复制文件或目录',
+        description: '📄 复制文件或目录 (🎯混合工作区) - 复制用户引用文件到AI生成目录，或复制AI生成文件',
         inputSchema: {
           type: 'object',
           properties: {
@@ -318,7 +422,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'get_file_info',
-        description: '获取文件或目录的详细信息',
+        description: '📊 获取文件信息 (🎯混合工作区) - 查看用户引用文件、AI生成文件或其他文件的详细信息（大小、修改时间等）',
         inputSchema: {
           type: 'object',
           properties: {
@@ -329,7 +433,7 @@ export class FileOperationsMCPServer {
       },
       {
         name: 'search_files',
-        description: '在指定目录中搜索文件',
+        description: '🔍 搜索文件 (🎯混合工作区全覆盖) - 在用户目录、AI生成目录、临时目录中搜索文件，支持文件名和内容搜索',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1457,5 +1561,108 @@ export class FileOperationsMCPServer {
     }
 
     return toolHandlers[toolName] || null
+  }
+
+  /**
+   * 获取当前工作区的实际文件路径列表
+   */
+  private getCurrentWorkspaceFiles(): { userFiles: string[], aiFiles: string[], tempFiles: string[] } {
+    try {
+      // 尝试获取ServiceManager实例并获取工作区服务
+      const ServiceManager = require('../../core/ServiceManager').ServiceManager
+      const serviceManager = ServiceManager.getInstance()
+      
+      if (serviceManager?.isInitialized) {
+        const workspaceService = serviceManager.getWorkspaceService()
+        
+        // 获取不同类型的文件
+        const userFiles = workspaceService.getUserFiles().map((ref: any) => ref.originalPath).slice(0, 5) // 最多显示5个
+        const aiFiles = workspaceService.getAIFiles().map((ref: any) => ref.originalPath).slice(0, 5) 
+        const tempFiles = workspaceService.getTempFiles().map((ref: any) => ref.originalPath).slice(0, 5)
+        
+        return { userFiles, aiFiles, tempFiles }
+      }
+    } catch (error) {
+      // 如果获取失败，返回空列表
+      console.log('[FileOperations MCP] 📝 工作区服务尚未初始化，将显示示例路径')
+    }
+    
+    // 返回空列表作为默认值
+    return { userFiles: [], aiFiles: [], tempFiles: [] }
+  }
+
+  /**
+   * 注册工作区发现工具
+   */
+  private registerWorkspaceDiscoveryTool(): void {
+    this.server.registerTool(
+      'discover_workspace',
+      {
+        title: '发现工作区文件结构',
+        description: '获取当前工作区的文件列表和路径信息',
+        inputSchema: {}
+      },
+      async () => {
+        try {
+          const { app } = require('electron')
+          const userDataPath = app.getPath('userData')
+          const workspaceRoot = `${userDataPath}/deechat-workspace`
+          const aiGeneratedPath = `${workspaceRoot}/ai-generated`
+          const tempPath = `${workspaceRoot}/temp`
+          
+          const workspaceFiles = this.getCurrentWorkspaceFiles()
+          
+          const discoveryInfo = {
+            success: true,
+            message: '🎯 DeeChat工作区发现完成',
+            workspace: {
+              root: workspaceRoot,
+              aiGenerated: aiGeneratedPath,
+              temp: tempPath
+            },
+            currentFiles: {
+              userFiles: workspaceFiles.userFiles,
+              aiFiles: workspaceFiles.aiFiles,
+              tempFiles: workspaceFiles.tempFiles
+            },
+            recommendations: {
+              forReading: [
+                ...workspaceFiles.userFiles,
+                ...workspaceFiles.aiFiles
+              ],
+              forWriting: [
+                `${aiGeneratedPath}/your_analysis.md`,
+                `${aiGeneratedPath}/generated_code.py`,
+                `${tempPath}/temp_output.txt`
+              ]
+            },
+            usage: {
+              userFiles: '用户拖拽的文件，只读引用，不占用额外空间',
+              aiFiles: 'AI生成的文件，保存在专用目录，可读写',
+              tempFiles: '临时文件，会自动过期清理'
+            },
+            timestamp: new Date().toISOString()
+          }
+
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(discoveryInfo, null, 2)
+            }]
+          }
+        } catch (error: any) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                error: `工作区发现失败: ${error.message}`
+              }, null, 2)
+            }],
+            isError: true
+          }
+        }
+      }
+    )
   }
 }

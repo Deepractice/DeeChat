@@ -23,36 +23,63 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
   const [activeKey, setActiveKey] = useState<string>()
   const [documents, setDocuments] = useState<DocumentTab[]>([])
 
-  // 处理文件加载
-  const handleFileLoad = (file: File) => {
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
-    const filePath = URL.createObjectURL(file) // 使用Blob URL作为临时路径
-    
-    const documentViewer = (
-      <DocumentViewer
-        filePath={filePath}
-        fileName={file.name}
-        fileType={fileExtension}
-        fileContent={file} // 传递File对象
-        onError={(error) => {
-          console.error('文档加载错误:', error)
-          message.error(`加载 ${file.name} 失败: ${error}`)
-        }}
-      />
-    )
+  // 处理文件加载 - 将拖拽文件保存到工作区以便编辑
+  const handleFileLoad = async (file: File) => {
+    try {
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+      
+      // 将拖拽的文件保存到工作区目录，这样就可以编辑了
+      const arrayBuffer = await file.arrayBuffer()
+      const fileBuffer = new Uint8Array(arrayBuffer)
+      
+      // 调用后端API上传文件到工作区
+      const result = await window.electronAPI.file.upload(fileBuffer, {
+        name: file.name,
+        mimeType: file.type || 'text/plain'
+      })
+      
+      if (result.success && result.data) {
+        // 获取上传后的文件信息
+        const fileData = await window.electronAPI.file.get(result.data.fileId)
+        
+        if (fileData.success && fileData.data) {
+          const filePath = fileData.data.path // 使用实际文件路径
+          
+          const documentViewer = (
+            <DocumentViewer
+              filePath={filePath}
+              fileName={file.name}
+              fileType={fileExtension}
+              // 不传递 fileContent，这样就可以编辑了
+              onError={(error) => {
+                console.error('文档加载错误:', error)
+                message.error(`加载 ${file.name} 失败: ${error}`)
+              }}
+            />
+          )
 
-    const newTab: DocumentTab = {
-      key: `doc-${Date.now()}-${file.name}`,
-      label: file.name,
-      content: documentViewer,
-      type: 'document',
-      filePath: filePath,
-      fileName: file.name
+          const newTab: DocumentTab = {
+            key: `doc-${Date.now()}-${file.name}`,
+            label: `📝 ${file.name}`, // 添加标识表示这是可编辑的
+            content: documentViewer,
+            type: 'document',
+            filePath: filePath,
+            fileName: file.name
+          }
+          
+          setDocuments(prev => [...prev, newTab])
+          setActiveKey(newTab.key)
+          message.success(`已加载文档并可编辑: ${file.name}`)
+        } else {
+          throw new Error('无法获取文件信息')
+        }
+      } else {
+        throw new Error(result.error || '文件保存失败')
+      }
+    } catch (error) {
+      console.error('处理拖拽文件失败:', error)
+      message.error(`处理 ${file.name} 失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
-    
-    setDocuments(prev => [...prev, newTab])
-    setActiveKey(newTab.key)
-    message.success(`已加载文档: ${file.name}`)
   }
 
   // 处理拖拽文件
@@ -166,7 +193,7 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
               暂无加载的文档
             </p>
             <p style={{ color: '#bbb', fontSize: '14px', margin: 0 }}>
-              拖拽文档到此处即可开始工作
+              拖拽文档到此处即可开始工作和编辑
             </p>
             <p style={{ color: '#ccc', fontSize: '12px', marginTop: 8 }}>
               支持 PDF, Word, TXT, Markdown, HTML, JSON 等格式
@@ -239,21 +266,25 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
               style={{ 
                 flex: 1, 
                 height: '100%',
-                backgroundColor: '#fff'
+                backgroundColor: '#fff',
+                display: 'flex',
+                flexDirection: 'column'
               }}
               tabBarStyle={{
                 margin: 0,
                 paddingLeft: 16,
-                borderBottom: '1px solid #f0f0f0'
+                borderBottom: '1px solid #f0f0f0',
+                flexShrink: 0
               }}
+              className="workspace-tabs"
               items={documents.map(doc => ({
                 key: doc.key,
                 label: doc.label,
                 children: (
                   <div style={{ 
-                    height: 'calc(100vh - 200px)', 
+                    height: '100%', 
                     overflow: 'auto',
-                    padding: '0 16px 16px 16px'
+                    padding: '16px'
                   }}>
                     {doc.content}
                   </div>

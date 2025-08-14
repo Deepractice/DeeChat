@@ -186,14 +186,28 @@ export class MCPToolConverter {
   /**
    * 将MCP工具绑定到LangChain模型
    * @param model LangChain聊天模型
+   * @param filteredTools 可选的已过滤工具列表，如果提供则使用这个而不是重新获取
    * @returns 绑定了工具的模型
    */
-  async bindToolsToModel(model: any) {
+  async bindToolsToModel(model: any, filteredTools?: MCPTool[]) {
     try {
       console.log(`🔧 [MCPToolConverter] 开始绑定MCP工具到模型...`);
       log.info(`🔧 [MCPToolConverter] 开始绑定MCP工具到模型...`);
       
-      const langchainTools = await this.convertAllMCPTools();
+      // 🔥 使用已过滤的工具或重新获取全部工具
+      let mcpTools: MCPTool[];
+      if (filteredTools) {
+        mcpTools = filteredTools;
+        console.log(`🎯 [MCPToolConverter] 使用已过滤的 ${mcpTools.length} 个工具`);
+        log.info(`🎯 [MCPToolConverter] 使用已过滤的 ${mcpTools.length} 个工具`);
+      } else {
+        mcpTools = await this.mcpService.getAllTools();
+        console.log(`🔧 [MCPToolConverter] 获取到 ${mcpTools.length} 个MCP工具`);
+        log.info(`🔧 [MCPToolConverter] 获取到 ${mcpTools.length} 个MCP工具`);
+      }
+      
+      // 转换为LangChain工具
+      const langchainTools = mcpTools.map(mcpTool => this.convertMCPTool(mcpTool));
       console.log(`🔧 [MCPToolConverter] 转换得到 ${langchainTools.length} 个LangChain工具`);
       
       if (langchainTools.length === 0) {
