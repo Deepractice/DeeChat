@@ -174,11 +174,13 @@ export function registerLangChainHandlers() {
       console.log('IPC: AI发送消息:', request.llmRequest?.message?.substring(0, 50) + '...');
       console.log('IPC: 配置ID:', request.configId);
       console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
+      console.log('IPC: 会话ID:', request.sessionId || '未提供'); // 🎯 新增日志
       
       const response = await langChainService.sendMessage(
         request.llmRequest, 
         request.configId, 
-        request.chatHistory
+        request.chatHistory,
+        request.sessionId  // 🎯 新增参数：传递会话ID
       );
       console.log('IPC: AI消息发送成功');
       return { success: true, data: response };
@@ -208,12 +210,14 @@ export function registerLangChainHandlers() {
       console.log('IPC: 配置ID:', request.configId);
       console.log('IPC: 启用MCP工具:', request.enableMCPTools);
       console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
+      console.log('IPC: 会话ID:', request.sessionId || '未提供'); // 🎯 新增日志
 
       const response = await langChainService.sendMessageWithMCPTools(
         request.llmRequest,
         request.configId,
         request.enableMCPTools || false,
-        request.chatHistory
+        request.chatHistory,
+        request.sessionId  // 🎯 新增参数：传递会话ID
       );
 
       console.log('IPC: AI消息发送成功(MCP工具)');

@@ -46,7 +46,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   workspaceExpanded = false,
   workspaceTransitioning = false 
 }) => {
-  const { currentSession, isLoading, sessions } = useSelector((state: RootState) => state.chat)
+  const { currentSession, isLoading, sessions, sessionLoadingStates } = useSelector((state: RootState) => state.chat)
   const dispatch = useDispatch<AppDispatch>()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const previousSessionIdRef = useRef<string | null>(null)
@@ -433,7 +433,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           ) : (
             <>
-              <MessageList messages={activeSession.messages} isLoading={isLoading} />
+              <MessageList 
+                messages={activeSession.messages} 
+                isLoading={sessionLoadingStates[activeSession.id] || isLoading}  // 🎯 优先使用会话级状态，降级到全局状态
+              />
               <div ref={messagesEndRef} />
             </>
           )}
@@ -448,7 +451,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }}
         >
           <MessageInput
-            disabled={isLoading}
+            disabled={sessionLoadingStates[activeSession.id] || isLoading}  // 🎯 优先使用会话级状态，降级到全局状态
             selectedModel={selectedModel}
             onModelSelect={handleModelChange}
             onGoToModelManagement={handleGoToModelManagement}

@@ -8,6 +8,8 @@ import { SmartLayeredPromptSystem, ConversationContext, UIInjectionContext } fro
 import { MCPToolEntity } from '../entities/MCPToolEntity';
 import { ToolExecution } from '../types';
 import { LLMResponse } from '../interfaces/IModelProvider';
+import { ThreadManager, ThreadStatus, ThreadPriority, TaskRequest } from '../services/ThreadManager';
+import { ThreadMonitor } from '../services/ThreadMonitor';
 import log from 'electron-log';
 
 // 流式更新接口
@@ -121,6 +123,15 @@ export class LangChainLLMService {
   private configCache: Map<string, ModelConfigEntity> = new Map();
   private mcpService?: MCPIntegrationServiceInterface;
   
+  // 🎯 新增：会话级模型缓存 (sessionId_configId -> model)
+  private sessionModelCache: Map<string, BaseChatModel> = new Map();
+  // 🎯 新增：会话级工具执行记录
+  private sessionToolExecutions: Map<string, ToolExecution[]> = new Map();
+  
+  // 🧵 新增：线程管理系统
+  private threadManager: ThreadManager;
+  private threadMonitor: ThreadMonitor;
+  
   // 智能分层提示词系统
   private smartPromptSystem: SmartLayeredPromptSystem;
   
@@ -133,6 +144,21 @@ export class LangChainLLMService {
     promptSystemConfig?: any
   ) {
     this.mcpService = mcpService;
+    
+    // 🧵 初始化线程管理系统
+    this.threadManager = ThreadManager.getInstance({
+      maxConcurrentThreads: 8,
+      defaultTimeout: 180000, // 3分钟
+      maxIdleTime: 600000,    // 10分钟
+      enablePerformanceMonitoring: true,
+      enableAutoCleanup: true,
+      logLevel: 'info'
+    });
+    
+    this.threadMonitor = new ThreadMonitor(this.threadManager);
+    this.threadMonitor.startMonitoring(30000); // 每30秒监控一次
+    
+    log.info('🧵 [LangChain构造] 线程管理系统已初始化');
     
     // 🔧 添加MCP服务状态调试
     if (this.mcpService) {
@@ -267,8 +293,24 @@ export class LangChainLLMService {
     // 如果没有提供sessionId，生成一个临时的
     const finalSessionId = sessionId || `temp_${Date.now()}`;
     
-    console.log('🔧 [统一消息发送] 方法被调用');
-    console.log('🔧 [统一消息发送] mcpService存在:', !!this.mcpService);
+    // 🧵 线程管理：确保线程存在并更新状态
+    let thread = this.threadManager.getThread(finalSessionId);
+    if (!thread) {
+      thread = this.threadManager.createThread(finalSessionId, {
+        priority: ThreadPriority.NORMAL,
+        modelId: configId,
+        roleId: activeRole
+      });
+    }
+
+    // 🧵 更新线程状态为繁忙
+    this.threadManager.updateThreadStatus(finalSessionId, ThreadStatus.BUSY);
+    
+    const startTime = Date.now();
+    
+    try {
+      console.log('🔧 [统一消息发送] 方法被调用');
+      console.log('🔧 [统一消息发送] mcpService存在:', !!this.mcpService);
 
     console.log('🔧 [统一消息发送] 开始获取模型和配置');
     const modelConfig = await this.getModelConfig(configId);
@@ -313,11 +355,19 @@ export class LangChainLLMService {
 
     log.info(`📝 [LangChain] 智能提示词构建完成 - tokens: ${promptResponse.totalTokens}, 压缩: ${promptResponse.compressionTriggered}, 消息数: ${promptResponse.messages.length}`);
 
-    // 决定是否使用工具绑定的模型
+    // 🎯 决定是否使用工具绑定的模型（会话级缓存）
     let model: any;
     if (this.mcpService && mcpTools.length > 0) {
-      // 有MCP工具时，使用带工具的模型
-      const baseModel = await this.getModel(configId);
+      // 有MCP工具时，使用带工具的模型（会话级缓存）
+      const sessionKey = `${finalSessionId}_${configId}_with_tools`;
+      
+      // 🎯 检查会话级模型缓存
+      if (this.sessionModelCache.has(sessionKey)) {
+        model = this.sessionModelCache.get(sessionKey);
+        log.info(`♻️ [会话缓存] 复用会话模型: ${finalSessionId.slice(0, 8)}`);
+      } else {
+        // 创建新的会话级模型实例
+        const baseModel = await this.getModel(configId);
       
       // 🔥 直接转换MCPToolEntity[]为LangChain工具格式并绑定
       const langchainTools: any[] = mcpTools.map((mcpTool: any) => 
@@ -358,18 +408,32 @@ export class LangChainLLMService {
         )
       );
       
-      // 检查model.bindTools方法是否存在
-      if (typeof baseModel.bindTools !== 'function') {
-        log.error(`❌ [直接转换] 模型没有bindTools方法，模型类型: ${typeof baseModel}, 构造函数: ${baseModel.constructor?.name}`);
-        model = baseModel;
-      } else {
-        model = baseModel.bindTools(langchainTools);
+        // 检查model.bindTools方法是否存在
+        if (typeof baseModel.bindTools !== 'function') {
+          log.error(`❌ [直接转换] 模型没有bindTools方法，模型类型: ${typeof baseModel}, 构造函数: ${baseModel.constructor?.name}`);
+          model = baseModel;
+        } else {
+          model = baseModel.bindTools(langchainTools);
+        }
+        
+        // 🎯 缓存绑定好工具的模型到会话缓存
+        this.sessionModelCache.set(sessionKey, model);
+        log.info(`🎯 [会话缓存] 新建会话模型: ${finalSessionId.slice(0, 8)}`);
       }
       console.log(`🔧 [统一消息发送] 使用带 ${mcpTools.length} 个已过滤MCP工具的模型`);
       log.info(`🔧 [直接转换] 成功转换并绑定 ${langchainTools.length} 个工具到模型`);
     } else {
-      // 没有MCP工具时，使用普通模型
-      model = await this.getModel(configId);
+      // 没有MCP工具时，使用普通模型（也进行会话级缓存）
+      const sessionKey = `${finalSessionId}_${configId}_no_tools`;
+      
+      if (this.sessionModelCache.has(sessionKey)) {
+        model = this.sessionModelCache.get(sessionKey);
+        log.info(`♻️ [会话缓存] 复用普通会话模型: ${finalSessionId.slice(0, 8)}`);
+      } else {
+        model = await this.getModel(configId);
+        this.sessionModelCache.set(sessionKey, model);
+        log.info(`🎯 [会话缓存] 新建普通会话模型: ${finalSessionId.slice(0, 8)}`);
+      }
       console.log('🔧 [统一消息发送] 使用普通模型');
     }
 
@@ -584,12 +648,52 @@ export class LangChainLLMService {
       }
     });
 
+    // 🧵 线程管理：更新统计数据和状态
+    try {
+      const responseTime = Date.now() - startTime;
+      const tokensUsed = llmResponse.usage?.total_tokens || 0;
+      
+      // 更新线程统计
+      this.threadManager.updateThreadStats(finalSessionId, {
+        responseTime,
+        tokensUsed,
+        success: true,
+        memoryUsage: this.estimateMemoryUsage(finalSessionId),
+        modelCacheSize: this.sessionModelCache.size,
+        activeConnections: 1
+      });
+      
+      // 更新线程状态为空闲
+      this.threadManager.updateThreadStatus(finalSessionId, ThreadStatus.IDLE);
+      
+      log.info(`🧵 [线程统计] 会话 ${finalSessionId.slice(0, 8)} 完成 - 用时: ${responseTime}ms, Tokens: ${tokensUsed}`);
+    } catch (error) {
+      log.error('🧵 [线程统计] 更新线程统计失败:', error);
+    }
+
     // 保存AI响应（只有提供了sessionId才保存历史）
     if (sessionId) {
       this.smartPromptSystem.addAIResponse(finalSessionId, message, finalAIResponse);
     }
 
     return llmResponse;
+      
+    } catch (error) {
+      // 🧵 线程管理：处理错误情况
+      const responseTime = Date.now() - startTime;
+      
+      this.threadManager.updateThreadStats(finalSessionId, {
+        responseTime,
+        success: false
+      });
+      
+      this.threadManager.updateThreadStatus(finalSessionId, ThreadStatus.ERROR, error as Error);
+      
+      log.error(`🧵 [线程错误] 会话 ${finalSessionId.slice(0, 8)} 处理失败 - 用时: ${responseTime}ms, 错误: ${(error as Error).message}`);
+      
+      // 重新抛出错误
+      throw error;
+    }
   }
 
   // 为了向后兼容，保留sendMessage别名
@@ -826,6 +930,203 @@ export class LangChainLLMService {
     this.modelCache.clear();
     this.configCache.clear();
     this.sessionContexts.clear();
-    log.info('🧹 [缓存] LangChain服务缓存已清理');
+    // 🎯 清理会话级缓存
+    this.sessionModelCache.clear();
+    this.sessionToolExecutions.clear();
+    log.info('🧹 [缓存] LangChain服务缓存已清理（包括会话级缓存）');
+  }
+
+  /**
+   * 🎯 新增：清理特定会话的缓存
+   */
+  clearSessionCache(sessionId: string): void {
+    // 查找并删除该会话的所有模型缓存
+    const keysToDelete = Array.from(this.sessionModelCache.keys()).filter(key => key.startsWith(sessionId));
+    keysToDelete.forEach(key => {
+      this.sessionModelCache.delete(key);
+    });
+    
+    // 清理会话工具执行记录
+    this.sessionToolExecutions.delete(sessionId);
+    
+    // 清理会话上下文
+    this.sessionContexts.delete(sessionId);
+    
+    if (keysToDelete.length > 0) {
+      log.info(`🧹 [会话缓存] 已清理会话 ${sessionId.slice(0, 8)} 的 ${keysToDelete.length} 个模型实例`);
+    }
+  }
+
+  /**
+   * 🎯 新增：获取会话缓存统计信息
+   */
+  getSessionCacheStats() {
+    const sessionCount = new Set(
+      Array.from(this.sessionModelCache.keys()).map(key => key.split('_')[0])
+    ).size;
+    
+    return {
+      totalSessionModels: this.sessionModelCache.size,
+      activeSessions: sessionCount,
+      sessionToolExecutions: this.sessionToolExecutions.size,
+      sessionContexts: this.sessionContexts.size
+    };
+  }
+
+  // ==================== 🧵 线程管理相关方法 ====================
+
+  /**
+   * 🧵 估算会话内存使用量
+   */
+  private estimateMemoryUsage(sessionId: string): number {
+    let memoryUsage = 0;
+
+    // 统计模型实例内存（估算每个模型实例约100MB）
+    const sessionModels = Array.from(this.sessionModelCache.keys()).filter(key => key.startsWith(sessionId));
+    memoryUsage += sessionModels.length * 100;
+
+    // 统计会话上下文内存
+    const context = this.sessionContexts.get(sessionId);
+    if (context) {
+      // 估算上下文对象约1MB
+      memoryUsage += 1;
+    }
+
+    // 统计工具执行记录内存
+    const toolExecutions = this.sessionToolExecutions.get(sessionId);
+    if (toolExecutions) {
+      // 估算每个工具执行记录约0.1MB
+      memoryUsage += toolExecutions.length * 0.1;
+    }
+
+    // 估算智能提示词系统的会话数据（约10MB）
+    if (this.smartPromptSystem) {
+      memoryUsage += 10;
+    }
+
+    return Math.round(memoryUsage * 100) / 100; // 保留2位小数
+  }
+
+  /**
+   * 🧵 获取线程管理器实例
+   */
+  getThreadManager(): ThreadManager {
+    return this.threadManager;
+  }
+
+  /**
+   * 🧵 获取线程监控器实例
+   */
+  getThreadMonitor(): ThreadMonitor {
+    return this.threadMonitor;
+  }
+
+  /**
+   * 🧵 获取指定会话的线程信息
+   */
+  getThreadInfo(sessionId: string) {
+    return this.threadManager.getThread(sessionId);
+  }
+
+  /**
+   * 🧵 获取所有线程的统计信息
+   */
+  getThreadsOverview() {
+    const stats = this.threadManager.getSystemStats();
+    const latestMetrics = this.threadMonitor.getLatestMetrics();
+    const activeAlerts = this.threadMonitor.getActiveAlerts();
+
+    return {
+      systemStats: stats,
+      performanceMetrics: latestMetrics,
+      alerts: activeAlerts,
+      healthStatus: latestMetrics?.healthMetrics.overallHealth || 'unknown'
+    };
+  }
+
+  /**
+   * 🧵 手动清理指定线程
+   */
+  async cleanupThread(sessionId: string): Promise<void> {
+    // 清理会话级缓存
+    this.clearSessionCache(sessionId);
+    
+    // 销毁线程管理器中的线程
+    await this.threadManager.destroyThread(sessionId, '手动清理');
+    
+    log.info(`🧹 [线程清理] 会话 ${sessionId.slice(0, 8)} 已完全清理`);
+  }
+
+  /**
+   * 🧵 重启指定线程
+   */
+  async restartThread(sessionId: string): Promise<void> {
+    const threadInfo = this.threadManager.getThread(sessionId);
+    if (threadInfo) {
+      // 保存线程配置
+      const { modelId, roleId } = threadInfo;
+      
+      // 清理并重启
+      await this.cleanupThread(sessionId);
+      
+      // 重新创建线程
+      this.threadManager.createThread(sessionId, {
+        modelId,
+        roleId,
+        priority: ThreadPriority.NORMAL
+      });
+      
+      log.info(`🔄 [线程重启] 会话 ${sessionId.slice(0, 8)} 已重启`);
+    }
+  }
+
+  /**
+   * 🧵 暂停指定线程
+   */
+  pauseThread(sessionId: string): void {
+    this.threadManager.pauseThread(sessionId);
+  }
+
+  /**
+   * 🧵 恢复指定线程
+   */
+  resumeThread(sessionId: string): void {
+    this.threadManager.resumeThread(sessionId);
+  }
+
+  /**
+   * 🧵 获取线程详细报告
+   */
+  getThreadReport(sessionId: string): string {
+    return this.threadManager.getThreadReport(sessionId);
+  }
+
+  /**
+   * 🧵 设置线程管理配置
+   */
+  updateThreadConfig(config: Partial<{
+    maxConcurrentThreads: number
+    defaultTimeout: number
+    maxIdleTime: number
+    enableAutoCleanup: boolean
+  }>) {
+    // 注意：ThreadManager是单例，配置会影响所有实例
+    log.info('🔧 [线程配置] 线程管理配置更新请求:', config);
+    // 实际配置更新需要重新初始化ThreadManager，这里暂时只记录日志
+  }
+
+  /**
+   * 🧵 销毁线程管理系统
+   */
+  async shutdownThreadManager(): Promise<void> {
+    if (this.threadMonitor) {
+      this.threadMonitor.cleanup();
+    }
+    
+    if (this.threadManager) {
+      await this.threadManager.shutdown();
+    }
+    
+    log.info('🔧 [线程管理] 线程管理系统已关闭');
   }
 }

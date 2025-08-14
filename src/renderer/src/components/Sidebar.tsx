@@ -7,12 +7,13 @@ import {
 import {
   MessageOutlined,
   SettingOutlined,
-  FolderOutlined
+  FolderOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 
 interface SidebarProps {
-  activeView?: 'chat' | 'resources' | 'settings'
-  onViewChange?: (view: 'chat' | 'resources' | 'settings') => void
+  activeView?: 'chat' | 'resources' | 'settings' | 'threads'
+  onViewChange?: (view: 'chat' | 'resources' | 'settings' | 'threads') => void
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -30,6 +31,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleSettingsClick = () => {
     onViewChange?.('settings')
+  }
+
+  const handleThreadsClick = () => {
+    onViewChange?.('threads')
   }
 
   return (
@@ -149,6 +154,36 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             onMouseLeave={(e) => {
               if (activeView !== 'settings') {
+                e.currentTarget.style.backgroundColor = 'transparent'
+                e.currentTarget.style.color = '#999999'
+              }
+            }}
+          />
+        </Tooltip>
+        <Tooltip title="线程管理" placement="right">
+          <Button 
+            type={activeView === 'threads' ? 'primary' : 'text'}
+            icon={<ThunderboltOutlined />} 
+            size="large"
+            onClick={handleThreadsClick}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeView === 'threads' ? '#1890ff' : 'transparent',
+              color: activeView === 'threads' ? '#ffffff' : '#999999',
+              transition: 'all 0.2s ease',
+              boxShadow: activeView === 'threads' ? '0 2px 8px rgba(24, 144, 255, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeView !== 'threads') {
+                e.currentTarget.style.backgroundColor = '#2a2a2a'
+                e.currentTarget.style.color = '#ffffff'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeView !== 'threads') {
                 e.currentTarget.style.backgroundColor = 'transparent'
                 e.currentTarget.style.color = '#999999'
               }

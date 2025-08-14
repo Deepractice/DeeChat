@@ -3,7 +3,7 @@ import { Input, Button, Space, message, Divider, Tag } from 'antd'
 import { SendOutlined, PaperClipOutlined, RobotOutlined, CloseOutlined, FileTextOutlined, SelectOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { addUserMessage, addAIMessage, sendMessage, saveCurrentSession, setLoading } from '../store/slices/chatSlice'
+import { addUserMessage, addAIMessage, sendMessage, saveCurrentSession, setLoading, setSessionLoading } from '../store/slices/chatSlice'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 import FileUploadWithProgress, { FileUploadItem, FileUploadWithProgressRef } from './FileUploadWithProgress'
 import DragDropOverlay from './DragDropOverlay'
@@ -149,7 +149,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       // 保存用户消息后立即保存会话
       dispatch(saveCurrentSession())
 
-      // 🔥 设置加载状态为true
+      // 🎯 设置会话级加载状态为true
+      if (currentSession?.id) {
+        dispatch(setSessionLoading({ sessionId: currentSession.id, loading: true }))
+      }
+      // 保留全局加载状态用于向后兼容
       dispatch(setLoading(true))
 
       // 🆕 准备聊天历史数据
@@ -175,7 +179,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
           },
           configId: selectedModel.id,
           enableMCPTools: true, // 总是true，让AI决定
-          chatHistory: chatHistory
+          chatHistory: chatHistory,
+          sessionId: currentSession?.id  // 🎯 传递会话ID
         });
       } else if (window.electronAPI?.ai?.sendMessage) {
         // 降级到普通接口
@@ -189,7 +194,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
             sessionId: currentSession?.id
           },
           configId: selectedModel.id,
-          chatHistory: chatHistory
+          chatHistory: chatHistory,
+          sessionId: currentSession?.id  // 🎯 传递会话ID
         });
       }
 
@@ -231,7 +237,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
         dispatch(addAIMessage(aiMessage))
 
-        // 🔥 清除加载状态
+        // 🎯 清除会话级加载状态
+        if (currentSession?.id) {
+          dispatch(setSessionLoading({ sessionId: currentSession.id, loading: false }))
+        }
+        // 保留全局加载状态清除用于向后兼容
         dispatch(setLoading(false))
 
         // 自动保存会话
@@ -242,7 +252,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
     } catch (error) {
       console.error('发送消息失败:', error)
-      // 🔥 发生错误时也要清除加载状态
+      // 🎯 发生错误时清除会话级加载状态
+      if (currentSession?.id) {
+        dispatch(setSessionLoading({ sessionId: currentSession.id, loading: false }))
+      }
+      // 保留全局加载状态清除用于向后兼容
       dispatch(setLoading(false))
       message.error(`发送消息失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }

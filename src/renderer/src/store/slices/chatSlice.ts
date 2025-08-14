@@ -6,7 +6,8 @@ import { ParsedRole, parsePromptXWelcome, RoleCache } from '../../utils/promptxP
 interface ChatState {
   currentSession: EnhancedChatSession | null  // 🔥 使用增强的会话类型
   sessions: ChatSession[]
-  isLoading: boolean
+  isLoading: boolean  // 保留全局加载状态用于向后兼容
+  sessionLoadingStates: Record<string, boolean>  // 🎯 新增：会话级加载状态隔离
   error: string | null
   // 🔥 新增：流式消息状态
   streamingMessage: {
@@ -29,7 +30,8 @@ interface ChatState {
 const initialState: ChatState = {
   currentSession: null,
   sessions: [],
-  isLoading: false,
+  isLoading: false,  // 保留全局状态用于向后兼容
+  sessionLoadingStates: {},  // 🎯 新增：会话级加载状态映射
   error: null,
   // 🔥 流式消息初始状态
   streamingMessage: {
@@ -369,6 +371,9 @@ const chatSlice = createSlice({
       const sessionId = action.payload
       state.sessions = state.sessions.filter(s => s.id !== sessionId)
 
+      // 🎯 清理该会话的加载状态
+      delete state.sessionLoadingStates[sessionId]
+
       // 如果删除的是当前会话，切换到第一个会话或创建新会话
       if (state.currentSession?.id === sessionId) {
         state.currentSession = state.sessions.length > 0 ? state.sessions[0] : null
@@ -418,6 +423,23 @@ const chatSlice = createSlice({
     // 设置加载状态
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload
+    },
+
+    // 🎯 新增：设置会话级加载状态
+    setSessionLoading: (state, action: PayloadAction<{sessionId: string, loading: boolean}>) => {
+      const { sessionId, loading } = action.payload
+      if (loading) {
+        state.sessionLoadingStates[sessionId] = true
+      } else {
+        // 删除false状态以保持对象干净
+        delete state.sessionLoadingStates[sessionId]
+      }
+    },
+
+    // 🎯 新增：清除会话加载状态（会话删除时调用）
+    clearSessionLoading: (state, action: PayloadAction<string>) => {
+      const sessionId = action.payload
+      delete state.sessionLoadingStates[sessionId]
     },
 
     // 🎭 角色管理相关reducers
@@ -687,6 +709,9 @@ export const {
   updateSessionModelConfig,
   clearError,
   setLoading,
+  // 🎯 新增：会话级加载状态管理
+  setSessionLoading,
+  clearSessionLoading,
   // 🎭 角色管理actions
   setCurrentRole,
   clearCurrentRole,

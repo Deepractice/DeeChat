@@ -9,13 +9,14 @@ import ChatArea from './components/ChatArea'
 import SettingsPage from './pages/SettingsPage'
 import ResourcesPage from './pages/ResourcesPage'
 import WorkspaceArea from './components/Workspace/WorkspaceArea'
+import ThreadManager from './components/ThreadManager'
 import { useRoleStateManager } from './hooks/useRoleStateManager'
 
 import './App.css'
 
 const { Sider, Content } = Layout
 
-type AppView = 'chat' | 'resources' | 'settings'
+type AppView = 'chat' | 'resources' | 'settings' | 'threads'
 
 // 工作区状态管理
 interface WorkspaceState {
@@ -32,6 +33,7 @@ const AppContent: React.FC = () => {
     isExpanded: false,
     isTransitioning: false
   })
+  const [threadManagerVisible, setThreadManagerVisible] = useState(false)
   const { message } = AntdApp.useApp()
 
   // 🎭 全局角色状态管理器 - 确保应用级别的角色状态一致性
@@ -171,8 +173,20 @@ const AppContent: React.FC = () => {
               <SettingsPage />
             </Content>
           )}
+          
+          {currentView === 'threads' && (
+            <Content>
+              <ThreadManager />
+            </Content>
+          )}
         </Layout>
       </Layout>
+      
+      {/* 线程管理器模态框 */}
+      <ThreadManager 
+        visible={threadManagerVisible} 
+        onClose={() => setThreadManagerVisible(false)} 
+      />
     </div>
   )
 }

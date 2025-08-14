@@ -117,8 +117,9 @@ export class LLMService {
    * @param request LLM请求对象
    * @param modelId 模型ID（新方案：直接就是模型名称，如 gpt-4o-mini）
    * @param chatHistory 可选的聊天历史
+   * @param sessionId 🎯 新增：会话ID，用于会话级隔离
    */
-  async sendMessage(request: LLMRequest, modelId: string, chatHistory?: ChatMessage[]): Promise<LLMResponse> {
+  async sendMessage(request: LLMRequest, modelId: string, chatHistory?: ChatMessage[], sessionId?: string): Promise<LLMResponse> {
     log.info(`🔍 [模型解析] 输入模型ID: ${modelId}`)
     
     // 新方案：modelId 直接就是模型名称
@@ -234,7 +235,7 @@ export class LLMService {
         const langchainResponse = await this.langChainService.sendMessage(
           enhancedMessage,
           config.id, // 使用配置ID让LangChainLLMService内部处理
-          request.sessionId,
+          sessionId || request.sessionId,  // 🎯 使用传递的sessionId参数
           request.activeRole,
           request.systemPrompt
         )
@@ -818,18 +819,20 @@ export class LLMService {
    * @param configId 模型配置ID
    * @param enableMCPTools 是否启用MCP工具
    * @param chatHistory 可选的聊天历史
+   * @param sessionId 🎯 新增：会话ID，用于会话级隔离
    */
   async sendMessageWithMCPTools(
     request: LLMRequest,
     configId: string,
     enableMCPTools: boolean = false,
     chatHistory?: ChatMessage[],
+    sessionId?: string,
     onStreamUpdate?: (update: any) => void
   ): Promise<LLMResponse> {
     try {
       if (!enableMCPTools) {
         // 不使用MCP工具，直接调用原有方法
-        return await this.sendMessage(request, configId, chatHistory)
+        return await this.sendMessage(request, configId, chatHistory, sessionId)
       }
 
       log.info(`🔧 [LangChain标准工具调用] 启用MCP工具集成，配置ID: ${configId}`)
@@ -932,12 +935,12 @@ export class LLMService {
       }
 
       // 🆕 使用LangChain的标准工具调用方式
-      const sessionId = request.sessionId || `temp_${Date.now()}`;
+      const finalSessionId = sessionId || request.sessionId || `temp_${Date.now()}`;  // 🎯 优先使用传递的sessionId参数
       console.log('🔧 [LLMService] ===== 使用标准工具调用方式 =====');
       const langchainResponse = await this.langChainService.sendMessageWithConfig(
         enhancedMessage,
         config, // 传递配置对象
-        sessionId,
+        finalSessionId,  // 🎯 使用最终的sessionId
         request.activeRole, // 传递角色信息！
         request.systemPrompt,
         undefined, // uiContext
