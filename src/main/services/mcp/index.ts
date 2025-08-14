@@ -15,4 +15,4 @@ export { MCPCacheService } from './client/MCPCacheService';
 
 // 内置MCP服务器
 export { InProcessMCPServer } from './servers/InProcessMCPServer';
-export { FileOperationsMCPServer } from './servers/FileOperationsMCPServer';
+// FileOperationsMCPServer已移除，功能已整合到PromptX

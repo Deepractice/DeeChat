@@ -15,9 +15,9 @@ import { MCPServiceCoordinator } from './MCPServiceCoordinator'
 // SystemRoleManager已移除，统一使用PromptX角色系统
 import { QuickDatabaseManager } from '../services/core/QuickDatabaseManager'
 import { FileService } from '../services/FileService'
-import { FileOperationService } from '../services/FileOperationService'
+// FileOperationService已移除，功能整合到PromptX
 import { PromptXResourceService } from '../services/promptx/PromptXResourceService'
-import { ReferenceWorkspaceService } from '../services/workspace/ReferenceWorkspaceService'
+// ReferenceWorkspaceService已移除，功能整合到PromptX
 
 export interface ServiceStatus {
   name: string
@@ -40,9 +40,9 @@ export class ServiceManager extends EventEmitter {
   
   // 业务服务组件
   private fileService: FileService
-  private fileOperationService: FileOperationService
+  // fileOperationService已移除，功能整合到PromptX
   private promptxResourceService: PromptXResourceService
-  private workspaceService: ReferenceWorkspaceService
+  // workspaceService已移除，功能整合到PromptX
 
   // 服务状态跟踪
   private serviceStatuses: Map<string, ServiceStatus> = new Map()
@@ -58,9 +58,9 @@ export class ServiceManager extends EventEmitter {
     
     // 初始化业务服务组件
     this.fileService = new FileService()
-    this.fileOperationService = new FileOperationService()
+    // fileOperationService已移除，功能整合到PromptX
     this.promptxResourceService = new PromptXResourceService(this.fileService)
-    this.workspaceService = new ReferenceWorkspaceService()
+    // workspaceService已移除，功能整合到PromptX
 
     // 监听组件事件
     this.setupEventHandlers()
@@ -233,13 +233,11 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * 获取文件操作服务
+   * 文件操作服务已移除
+   * 请使用PromptX的@file://协议进行文件操作
    */
-  public getFileOperationService(): FileOperationService {
-    if (!this.isInitialized) {
-      throw new Error('ServiceManager未初始化，无法获取文件操作服务')
-    }
-    return this.fileOperationService
+  public getFileOperationService() {
+    throw new Error('文件操作服务已移除，请使用PromptX的@file://协议')
   }
 
   /**
@@ -253,13 +251,11 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * 获取工作区服务
+   * 工作区服务已移除
+   * 请使用PromptX的@file://协议进行工作区管理
    */
-  public getWorkspaceService(): ReferenceWorkspaceService {
-    if (!this.isInitialized) {
-      throw new Error('ServiceManager未初始化，无法获取工作区服务')
-    }
-    return this.workspaceService
+  public getWorkspaceService() {
+    throw new Error('工作区服务已移除，请使用PromptX的@file://协议')
   }
 
   /**
@@ -353,20 +349,14 @@ export class ServiceManager extends EventEmitter {
       await this.fileService.initialize()
       this.updateServiceStatus('file-service', 'ready', '文件服务就绪')
 
-      // 初始化文件操作服务
-      this.updateServiceStatus('file-operation', 'initializing', '初始化文件操作服务...')
-      await this.fileOperationService.initialize()
-      this.updateServiceStatus('file-operation', 'ready', '文件操作服务就绪')
+      // 文件操作服务已移除，功能整合到PromptX
 
       // 初始化PromptX资源服务
       this.updateServiceStatus('promptx-resource', 'initializing', '初始化PromptX资源服务...')
       await this.promptxResourceService.initialize()
       this.updateServiceStatus('promptx-resource', 'ready', 'PromptX资源服务就绪')
 
-      // 初始化工作区服务
-      this.updateServiceStatus('workspace-service', 'initializing', '初始化工作区服务...')
-      await this.workspaceService.initialize()
-      this.updateServiceStatus('workspace-service', 'ready', '工作区服务就绪')
+      // 工作区服务已移除，功能整合到PromptX
 
     } catch (error) {
       throw new Error(`业务服务初始化失败: ${error}`)
@@ -424,10 +414,7 @@ export class ServiceManager extends EventEmitter {
    */
   private async shutdownBusinessServices(): Promise<void> {
     try {
-      // 关闭工作区服务
-      this.updateServiceStatus('workspace-service', 'stopping', '关闭工作区服务...')
-      await this.workspaceService.shutdown()
-      this.serviceStatuses.delete('workspace-service')
+      // 工作区服务已移除
 
       // 关闭PromptX资源服务
       this.updateServiceStatus('promptx-resource', 'stopping', '关闭PromptX资源服务...')

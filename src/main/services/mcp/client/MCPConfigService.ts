@@ -118,7 +118,6 @@ export class MCPConfigService implements IMCPConfigService {
       // 🔥 只在真正首次运行时初始化内置服务器配置
       if (!MCPConfigService._builtinServersInitialized) {
         const promptxExists = servers.some(s => s.id === 'promptx-builtin');
-        const fileOpsExists = servers.some(s => s.id === 'file-operations-builtin');
         // 工作区管理已移除，统一使用文件操作MCP
         
         // 添加PromptX配置
@@ -140,22 +139,8 @@ export class MCPConfigService implements IMCPConfigService {
           console.log('[MCP Config] PromptX配置已存在，跳过初始化');
         }
 
-        // 🔥 添加文件操作服务器配置
-        if (!fileOpsExists) {
-          console.log(`[MCP Config] ➕ 首次运行，添加文件操作默认配置`);
-          
-          try {
-            const fileOpsServer = this.createDefaultFileOperationsServer();
-            servers.push(fileOpsServer); // 添加到末尾
-            await this.saveAllConfigs(servers);
-            
-            console.log('✅ [MCP Config] 文件操作配置添加成功');
-          } catch (error) {
-            console.error('[MCP Config] 文件操作配置添加失败:', error);
-          }
-        } else {
-          console.log('[MCP Config] 文件操作配置已存在，跳过初始化');
-        }
+        // 📦 文件操作功能已整合到PromptX，无需单独配置
+        console.log('[MCP Config] 📦 文件操作功能已整合到PromptX @file:// 协议中，无需单独服务器');
 
         console.log('[MCP Config] 工作区管理已移除，统一使用文件操作MCP管理工作区文件');
         
@@ -394,10 +379,11 @@ export class MCPConfigService implements IMCPConfigService {
       throw error; // 首次初始化失败应该抛出错误
     }
 
-    // 工作区管理已移除，只保留PromptX和文件操作
-    const fileOpsServer = this.createDefaultFileOperationsServer();
+    // 🎯 架构简化：只保留PromptX，移除重复的文件操作服务器
+    // PromptX的@file://协议已提供完整的文件操作能力
+    console.log('[MCP Config] 📦 文件操作功能已整合到PromptX @file:// 协议中');
     
-    const defaultServers = [promptxServer, fileOpsServer];
+    const defaultServers = [promptxServer];
 
     // 保存默认配置
     await this.saveAllConfigs(defaultServers);
@@ -471,36 +457,7 @@ export class MCPConfigService implements IMCPConfigService {
     return server;
   }
 
-  /**
-   * 创建默认的文件操作服务器配置
-   */
-  private createDefaultFileOperationsServer(): MCPServerEntity {
-    const now = new Date();
-    
-    console.log(`[MCP Config] 🔧 创建文件操作内置服务器配置`);
-    
-    // 🚀 使用内置类型配置，直接在进程内运行
-    const server = new MCPServerEntity({
-      id: 'file-operations-builtin',
-      name: '文件操作 (内置)',
-      description: 'DeeChat内置文件操作工具 - 支持文件读写、目录管理、文件搜索等功能',
-      type: 'builtin', // 标识为内置服务器
-      isEnabled: true,
-      command: 'internal', // 内置服务器不需要外部命令
-      args: [],
-      workingDirectory: process.cwd(),
-      env: {
-        FILE_OPS_MODE: 'deechat-builtin' // 标识DeeChat内置模式
-      },
-      timeout: 5000, // 内置服务器启动很快
-      retryCount: 1,
-      createdAt: now,
-      updatedAt: now
-    });
-
-    console.log(`[MCP Config] ✅ 创建文件操作内置服务器配置完成`);
-    return server;
-  }
+  // 📦 文件操作服务器已移除 - 功能已整合到PromptX的@file://协议中
 
   // 工作区管理服务器已移除，统一使用文件操作MCP
 

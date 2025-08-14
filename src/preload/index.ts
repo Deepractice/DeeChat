@@ -156,31 +156,25 @@ const electronAPI = {
     resetSystemRole: () => ipcRenderer.invoke('debug:resetSystemRole')
   },
 
-  // 📁 文件管理API
+  // 📁 PromptX资源管理API（保留与PromptX资源管理相关的功能）
   file: {
-    // 新的附件API
-    upload: (fileBuffer: ArrayBuffer, metadata: { name: string; mimeType: string }) => 
-      ipcRenderer.invoke('file:upload', Buffer.from(fileBuffer), metadata),
-    get: (fileId: string) => ipcRenderer.invoke('file:get', fileId),
-    getContent: (fileId: string) => ipcRenderer.invoke('file:getContent', fileId),
-    delete: (fileId: string) => ipcRenderer.invoke('file:delete', fileId),
-    
-    // 保留原有的资源管理API
+    // PromptX资源管理API - 保留
     list: (filters?: any) => ipcRenderer.invoke('file:list', filters),
     read: (fileId: string) => ipcRenderer.invoke('file:read', fileId),
     stats: () => ipcRenderer.invoke('file:stats'),
-    save: (fileData: any) => ipcRenderer.invoke('file:save', fileData),
-    export: (fileId: string, targetPath: string) => ipcRenderer.invoke('file:export', fileId, targetPath),
     tree: (category?: string) => ipcRenderer.invoke('file:tree', category),
     updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content)
+    // 📁 以下附件管理API已移除，请使用PromptX的@file://协议:
+    // - upload: 文件上传
+    // - get: 文件获取
+    // - getContent: 文件内容读取
+    // - delete: 文件删除
+    // - save: 文件保存
+    // - export: 文件导出
   },
 
-  // 🗄️ 统一文件操作API
-  fileOp: {
-    read: (filePath: string) => ipcRenderer.invoke('fileOp:read', filePath),
-    write: (filePath: string, content: any) => ipcRenderer.invoke('fileOp:write', filePath, content),
-    isEditable: (filePath: string) => ipcRenderer.invoke('fileOp:isEditable', filePath)
-  },
+  // 🔧 文件操作API已移除，请使用PromptX的@file://协议
+  // fileOp API已全部移除：read, write, isEditable
 
   // 🪟 窗口管理API
   window: {

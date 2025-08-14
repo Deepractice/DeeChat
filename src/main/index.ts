@@ -284,144 +284,20 @@ function registerIPCHandlers(): void {
     return app.getVersion()
   })
 
-  // 文件操作API - 使用统一的FileOperationService
-  console.log('🔧 [调试] 注册文件操作API...')
+  // 🔧 文件操作API已移除，请使用PromptX的@file://协议
+  console.log('🔧 [调试] 文件操作功能已整合到PromptX...')
+
+  // 📁 文件写入API已移除，请使用PromptX的@file://协议
+
+  // ✏️ 文件编辑检查API已移除，请使用PromptX的@file://协议
   
-  // 统一文件读取接口
-  ipcMain.handle('fileOp:read', async (_event, filePath: string) => {
-    try {
-      if (!serviceManager?.isReady()) {
-        throw new Error('ServiceManager未初始化')
-      }
-      
-      const fileOpService = serviceManager.getFileOperationService()
-      const fileContent = await fileOpService.readFile(filePath)
-      
-      console.log(`✅ [主进程] 文件读取成功: ${filePath}`)
-      return fileContent
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : '读取文件失败'
-      console.error(`❌ [主进程] 文件读取失败: ${filePath}`, error)
-      throw new Error(errorMsg)
-    }
-  })
+  // 📁 文件上传API已移除，请使用PromptX的@file://协议
 
-  // 统一文件写入接口
-  ipcMain.handle('fileOp:write', async (_event, filePath: string, content: any) => {
-    try {
-      if (!serviceManager?.isReady()) {
-        throw new Error('ServiceManager未初始化')
-      }
-      
-      const fileOpService = serviceManager.getFileOperationService()
-      await fileOpService.writeFile(filePath, content)
-      
-      console.log(`✅ [主进程] 文件写入成功: ${filePath}`)
-      return { success: true }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : '写入文件失败'
-      console.error(`❌ [主进程] 文件写入失败: ${filePath}`, error)
-      throw new Error(errorMsg)
-    }
-  })
+  // 📂 文件获取API已移除，请使用PromptX的@file://协议
 
-  // 检查文件是否可编辑
-  ipcMain.handle('fileOp:isEditable', async (_event, filePath: string) => {
-    try {
-      if (!serviceManager?.isReady()) {
-        throw new Error('ServiceManager未初始化')
-      }
-      
-      const fileOpService = serviceManager.getFileOperationService()
-      return {
-        isEditable: fileOpService.isEditable(filePath),
-        editorType: fileOpService.getEditorType(filePath)
-      }
-    } catch (error) {
-      console.error(`❌ [主进程] 检查文件可编辑性失败: ${filePath}`, error)
-      return { isEditable: false, editorType: 'text' }
-    }
-  })
-  
-  ipcMain.handle('file:upload', async (_event, fileBuffer: Buffer, metadata: { name: string; mimeType: string }) => {
-    try {
-      if (!serviceManager || !serviceManager.isReady()) {
-        return { success: false, error: '服务管理器未初始化' }
-      }
-      
-      // 使用新的工作区服务保存文件
-      const workspaceService = serviceManager.getWorkspaceService()
-      
-      // 首先保存文件到临时位置
-      const { app } = require('electron')
-      const path = require('path')
-      const fs = require('fs').promises
-      
-      const tempDir = path.join(app.getPath('userData'), 'temp')
-      await fs.mkdir(tempDir, { recursive: true })
-      
-      const tempFilePath = path.join(tempDir, metadata.name)
-      await fs.writeFile(tempFilePath, fileBuffer)
-      
-      // 添加文件引用到工作区
-      const workspaceFile = await workspaceService.addUserFile(tempFilePath, metadata.name)
-      
-      return { success: true, data: { fileId: workspaceFile.id, filePath: workspaceFile.originalPath } }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
+  // 📜 文件内容读取API已移除，请使用PromptX的@file://协议
 
-  ipcMain.handle('file:get', async (_event, fileId: string) => {
-    try {
-      if (!serviceManager || !serviceManager.isReady()) {
-        return { success: false, error: '服务管理器未初始化' }
-      }
-      
-      // 使用新的工作区服务获取文件引用
-      const workspaceService = serviceManager.getWorkspaceService()
-      const fileReferences = await workspaceService.listFileReferences()
-      const fileRef = fileReferences.find(ref => ref.id === fileId)
-      
-      if (!fileRef) {
-        return { success: false, error: '文件未找到' }
-      }
-      
-      return { success: true, data: { path: fileRef.originalPath, name: fileRef.displayName } }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('file:getContent', async (_event, fileId: string) => {
-    try {
-      if (!serviceManager || !serviceManager.isReady()) {
-        return { success: false, error: '服务管理器未初始化' }
-      }
-      
-      // 使用新的工作区服务读取文件内容
-      const workspaceService = serviceManager.getWorkspaceService()
-      const content = await workspaceService.readFileContent(fileId)
-      return { success: true, data: content }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
-
-  ipcMain.handle('file:delete', async (_event, fileId: string) => {
-    try {
-      if (!serviceManager || !serviceManager.isReady()) {
-        return { success: false, error: '服务管理器未初始化' }
-      }
-      
-      // 使用新的工作区服务删除文件引用
-      const workspaceService = serviceManager.getWorkspaceService()
-      await workspaceService.removeFileReference(fileId)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
-    }
-  })
+  // 🗑️ 文件删除API已移除，请使用PromptX的@file://协议
 
   // ResourcesPage需要的PromptX文件管理API - 委托给PromptXResourceService
   ipcMain.handle('file:list', async (_event, options?: { category?: string }) => {

@@ -19,8 +19,7 @@ import {
   MCPEventType
 } from '../../../../shared/interfaces/IMCPProvider'
 import { InProcessMCPServer } from '../servers/InProcessMCPServer'
-import { FileOperationsMCPServer } from '../servers/FileOperationsMCPServer'
-// WorkspaceMCPServer已移除，统一使用FileOperationsMCPServer
+// 🎯 文件操作服务器已移除，功能已整合到PromptX
 
 /**
  * MCP客户端管理器
@@ -31,7 +30,7 @@ export class SimpleMCPClientManager {
   private pendingClients: Map<string, Promise<Client>> = new Map()
   private eventListeners: ((event: MCPEvent) => void)[] = []
   private inProcessServers: Map<string, InProcessMCPServer> = new Map()
-  private nativeBuiltinServers: Map<string, FileOperationsMCPServer> = new Map()
+  // 内置服务器已简化为只有PromptX
 
   constructor() {
     log.info('[Simple MCP] 🚀 智能客户端管理器初始化完成 (进程内 > Electron内置)')
@@ -74,41 +73,11 @@ export class SimpleMCPClientManager {
       return {} as Client
     }
 
-    // 🔧 原生内置模式：DeeChat内置服务器
+    // 🎯 内置服务器已简化：现在只支持PromptX
     if (executionMode === 'native-builtin') {
-      log.info(`[Simple MCP] 🔧 原生内置模式，创建DeeChat内置服务器: ${server.name}`)
-      
-      const serverKey = this.getServerKey(server)
-      let nativeServer = this.nativeBuiltinServers.get(serverKey)
-      
-      if (!nativeServer) {
-        log.info(`[Simple MCP] 🔧 创建DeeChat内置服务器: ${server.name}`)
-        
-        // 根据服务器ID创建对应的内置服务器
-        if (server.id === 'file-operations-builtin') {
-          // 🔥 支持环境变量配置沙箱模式
-          const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
-          const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
-          
-          nativeServer = new FileOperationsMCPServer({
-            sandboxMode,
-            allowSystemAccess
-          })
-          
-          if (!sandboxMode) {
-            log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
-          }
-        // workspace-builtin已移除，统一使用file-operations-builtin
-        } else {
-          throw new Error(`未知的内置服务器类型: ${server.id}`)
-        }
-        
-        await nativeServer.start()
-        this.nativeBuiltinServers.set(serverKey, nativeServer)
-      }
-      
-      // 返回一个假的客户端对象（避免调用方出错）
-      return {} as Client
+      log.error(`[Simple MCP] ❌ 内置服务器已停用: ${server.name}`)
+      log.error(`[Simple MCP] 💡 建议: 使用PromptX工具替代，功能更强大且统一`)
+      throw new Error(`内置服务器已停用: ${server.id}，请使用PromptX工具`)
     }
     
     // 🚀 标准模式：创建外部客户端
@@ -444,56 +413,11 @@ export class SimpleMCPClientManager {
   /**
    * DeeChat内置服务器工具调用
    */
-  private async callToolNativeBuiltin(server: MCPServerEntity, request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
-    const serverKey = this.getServerKey(server)
+  private async callToolNativeBuiltin(server: MCPServerEntity, _request: MCPToolCallRequest): Promise<MCPToolCallResponse> {
+    log.error(`[Simple MCP] ❌ 内置服务器已停用: ${server.name}`)
+    log.error(`[Simple MCP] 💡 建议: 使用PromptX工具替代，功能更强大且统一`)
     
-    // 获取或创建内置服务器
-    let nativeServer = this.nativeBuiltinServers.get(serverKey)
-    if (!nativeServer) {
-      log.info(`[Simple MCP] 🔧 创建DeeChat内置服务器: ${server.name}`)
-      
-      // 根据服务器ID创建对应的内置服务器
-      if (server.id === 'file-operations-builtin') {
-        // 🔥 支持环境变量配置沙箱模式
-        const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
-        const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
-        
-        nativeServer = new FileOperationsMCPServer({
-          sandboxMode,
-          allowSystemAccess
-        })
-        
-        if (!sandboxMode) {
-          log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
-        }
-      // workspace-builtin已移除，统一使用file-operations-builtin
-      } else {
-        throw new Error(`未知的内置服务器类型: ${server.id}`)
-      }
-      
-      await nativeServer.start()
-      this.nativeBuiltinServers.set(serverKey, nativeServer)
-      
-      // 发送连接成功事件
-      this.emitEvent({
-        type: MCPEventType.SERVER_CONNECTED,
-        serverId: server.id,
-        timestamp: new Date()
-      })
-    }
-    
-    // 直接调用内置服务器工具
-    const startTime = Date.now()
-    const result = await nativeServer.callTool(request.toolName, request.arguments || {})
-    const duration = Date.now() - startTime
-    
-    log.info(`[Simple MCP] ✅ 内置服务器工具调用成功: ${request.toolName} (${duration}ms)`)
-    
-    return {
-      success: true,
-      result: result.content || [result], // 如果result已包含content数组则直接使用，否则包装
-      duration
-    }
+    throw new Error(`内置服务器已停用: ${server.id}，请使用PromptX工具`)
   }
 
   /**
@@ -538,37 +462,11 @@ export class SimpleMCPClientManager {
         
         tools = await inProcessServer.listTools()
       } else if (executionMode === 'native-builtin') {
-        // 🔧 DeeChat内置服务器
-        const serverKey = this.getServerKey(server)
-        let nativeServer = this.nativeBuiltinServers.get(serverKey)
+        // 🔧 内置服务器已停用，使用PromptX替代
+        log.error(`[Simple MCP] ❌ 内置服务器已停用: ${server.name}`)
+        log.error(`[Simple MCP] 💡 建议: 使用PromptX的@file://协议替代，功能更强大且统一`)
         
-        if (!nativeServer) {
-          log.info(`[Simple MCP] 🔧 为工具发现创建DeeChat内置服务器: ${server.name}`)
-          
-          // 根据服务器ID创建对应的内置服务器
-          if (server.id === 'file-operations-builtin') {
-            // 🔥 支持环境变量配置沙箱模式
-            const sandboxMode = process.env.FILE_OPS_SANDBOX !== 'false' // 默认启用沙箱
-            const allowSystemAccess = process.env.FILE_OPS_SYSTEM_ACCESS === 'true' // 默认不允许系统访问
-            
-            nativeServer = new FileOperationsMCPServer({
-              sandboxMode,
-              allowSystemAccess
-            })
-            
-            if (!sandboxMode) {
-              log.warn(`[Simple MCP] ⚠️  文件操作服务器：沙箱模式已禁用`)
-            }
-          // workspace-builtin已移除，统一使用file-operations-builtin
-          } else {
-            throw new Error(`未知的内置服务器类型: ${server.id}`)
-          }
-          
-          await nativeServer.start()
-          this.nativeBuiltinServers.set(serverKey, nativeServer)
-        }
-        
-        tools = nativeServer.getToolDefinitions()
+        throw new Error(`内置服务器已停用: ${server.id}，请使用PromptX工具`)
       } else {
         // 🚀 标准客户端
         const client = await this.initClient(server)
@@ -678,7 +576,18 @@ export class SimpleMCPClientManager {
     this.clients.clear()
     this.pendingClients.clear()
     
-    log.info('[Simple MCP] 所有客户端已清理')
+    // 清理进程内服务器
+    for (const [serverKey, inProcessServer] of this.inProcessServers.entries()) {
+      try {
+        await inProcessServer.stop()
+        log.info(`[Simple MCP] 已停止进程内服务器: ${serverKey}`)
+      } catch (error) {
+        log.error(`[Simple MCP] 停止进程内服务器失败: ${serverKey}`, error)
+      }
+    }
+    this.inProcessServers.clear()
+    
+    log.info('[Simple MCP] 所有客户端和服务器已清理')
   }
 
 }

@@ -17,31 +17,8 @@ declare global {
         updateContent: (fileId: string, content: string) => Promise<void>;
       };
 
-      // 统一文件操作API
-      fileOp: {
-        read: (filePath: string) => Promise<{
-          type: 'text' | 'binary' | 'structured';
-          content: string | Buffer | any;
-          metadata?: {
-            encoding?: string;
-            format?: string;
-            [key: string]: any;
-          };
-        }>;
-        write: (filePath: string, content: {
-          type: 'text' | 'binary' | 'structured';
-          content: string | Buffer | any;
-          metadata?: {
-            encoding?: string;
-            format?: string;
-            [key: string]: any;
-          };
-        }) => Promise<{ success: boolean }>;
-        isEditable: (filePath: string) => Promise<{
-          isEditable: boolean;
-          editorType: 'text' | 'markdown' | 'code' | 'word' | 'excel' | 'powerpoint' | 'pdf';
-        }>;
-      };
+      // 🔧 文件操作API已移除，请使用PromptX的@file://协议
+      // fileOp API已全部移除
       
       // Model API
       model: {

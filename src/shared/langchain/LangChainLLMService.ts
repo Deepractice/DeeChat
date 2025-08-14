@@ -230,7 +230,7 @@ export class LangChainLLMService {
    */
   private isWorkspaceTool(toolName: string): boolean {
     const workspaceTools = [
-      'discover_workspace', 'read_file', 'write_file', 'list_directory',
+      'read_file', 'write_file', 'list_directory',
       'create_directory', 'delete_file', 'move_file', 'copy_file',
       'get_file_info', 'search_files'
     ];
@@ -480,7 +480,7 @@ export class LangChainLLMService {
           
           // 直接通过MCP服务调用工具
           const mcpResponse = await this.mcpService?.callTool({
-            serverId: toolCall.name.startsWith('promptx_') ? 'promptx-builtin' : 'file-operations-builtin',
+            serverId: 'promptx-builtin', // 统一使用PromptX，已集成所有文件操作功能
             toolName: toolCall.name,
             arguments: toolCall.args
           });
