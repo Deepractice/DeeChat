@@ -576,67 +576,8 @@ export class LangChainLLMService {
       console.log('⚠️ [DeeChat调试] 工具调用达到最大迭代次数，停止循环');
     }
     
-    if (toolExecutions.length > 0) {
-
-      // 🔥 检查是否有角色激活工具，如果有则进行内容注入
-      log.info(`🔍 [工具调用检查] 检查 ${toolExecutions.length} 个工具调用结果`);
-      toolExecutions.forEach((tool, index) => {
-        log.info(`🔍 [工具详情${index}] 工具名: ${tool.toolName}, 有结果: ${!!tool.result}, 结果类型: ${typeof tool.result}`);
-        if (tool.result && typeof tool.result === 'string' && tool.result.length > 100) {
-          log.info(`🔍 [工具结果${index}] 结果长度: ${tool.result.length}, 前100字符: ${tool.result.substring(0, 100)}`);
-        }
-      });
-      
-      const roleActivationTool = toolExecutions.find(tool => tool.toolName === 'promptx_action');
-      log.info(`🎭 [角色激活检测] 查找promptx_action工具: ${roleActivationTool ? '找到' : '未找到'}`);
-      console.log('🎭 [DeeChat调试] 角色激活工具查找结果:', roleActivationTool ? '找到' : '未找到');
-      
-      if (roleActivationTool && roleActivationTool.result) {
-        log.info(`🎭 [角色激活检测] 发现角色激活工具调用，开始内容重新注入流程`);
-        log.info(`🎭 [角色内容长度] 角色内容大小: ${JSON.stringify(roleActivationTool.result).length} 字符`);
-        console.log('🎭 [DeeChat调试] 发现角色激活工具，角色内容大小:', JSON.stringify(roleActivationTool.result).length, '字符');
-        
-        // 🔥 使用工具调用结果重新构建消息（关键步骤）
-        const enhancedPromptResponse = await this.smartPromptSystem.buildMessagesWithToolResults(
-          message,
-          conversationContext,
-          toolExecutions, // 传递实际的工具执行结果
-          baseSystemPrompt || '',
-          mcpTools,
-          uiInjectionContext
-        );
-        
-        log.info(`🔄 [重新注入] 角色内容已注入，重新调用模型生成真正的角色化响应`);
-        log.info(`🔄 [重新注入] 增强后系统提示词长度: ${enhancedPromptResponse.messages[0] ? (enhancedPromptResponse.messages[0].content as string).length : 0} 字符`);
-        
-        // 🔥 流式更新：生成最终响应
-        onStreamUpdate?.({
-          type: 'generating',
-          stage: 'AI正在生成最终回复...',
-          metadata: { roleActivated: true }
-        });
-
-        // 🔥 第二次调用模型（这次AI具有真正的角色身份）
-        log.info(`🚀 [第二次模型调用] 开始调用模型，使用角色增强上下文`);
-        console.log('🚀 [DeeChat调试] 第二次模型调用开始！使用角色增强上下文');
-        console.log('🚀 [DeeChat调试] 增强后系统提示词长度:', enhancedPromptResponse.messages[0] ? (enhancedPromptResponse.messages[0].content as string).length : 0, '字符');
-        
-        currentResponse = await model.invoke(enhancedPromptResponse.messages);
-        finalAIResponse = currentResponse.content as string;
-        
-        log.info(`✅ [第二次模型调用] 完成，最终响应长度: ${finalAIResponse.length} 字符`);
-        console.log('✅ [DeeChat调试] 第二次模型调用完成！最终响应长度:', finalAIResponse.length, '字符');
-        
-        // 更新会话状态
-        const existingContext = this.sessionContexts.get(finalSessionId);
-        if (existingContext) {
-          existingContext.activeRole = roleActivationTool.params?.role || activeRole;
-          existingContext.lastRoleActivationTime = new Date();
-          this.sessionContexts.set(finalSessionId, existingContext);
-          log.info(`✅ [会话更新] 角色激活并重新注入完成 - 角色: ${existingContext.activeRole}`);
-        }
-      }
-    } else {
+    // 🔥 新架构：角色内容已在第一次调用前直接注入，无需二次调用
+    if (toolExecutions.length === 0) {
       // 没有工具调用，提取旧的工具执行信息（用于显示）
       toolExecutions = this.extractToolExecutions(currentResponse);
       log.info(`📝 [标准响应] 没有工具调用，直接返回AI响应`);

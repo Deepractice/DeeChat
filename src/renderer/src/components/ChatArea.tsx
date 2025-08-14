@@ -187,15 +187,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         // 新方案：直接使用模型ID，不需要解析
         const modelId = currentSession.selectedModelId
         
-        // 使用默认配置（ChatAnywhere）
-        const defaultConfig = new ModelConfigEntity({
+        // 使用ChatAnywhere内置配置 - 支持多种模型包括kimi
+        const config = new ModelConfigEntity({
           ...DEFAULT_CONFIG,
-          model: modelId  // 使用实际的模型ID
+          model: modelId  // 使用用户选择的模型ID
         })
         
         setSelectedModel({
           id: modelId,
-          config: defaultConfig
+          config: config
         })
       } else {
         // 新会话或未设置模型的会话 - 加载用户的默认模型配置
@@ -215,15 +215,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 console.log('🔍 [ChatArea] 用户默认模型ID:', defaultModelId)
                 
                 if (defaultModelId) {
-                  // 新方案：直接使用模型ID
-                  const defaultConfig = new ModelConfigEntity({
+                  // 使用ChatAnywhere内置配置
+                  const config = new ModelConfigEntity({
                     ...DEFAULT_CONFIG,
                     model: defaultModelId
                   })
                   
                   setSelectedModel({
                     id: defaultModelId,
-                    config: defaultConfig
+                    config: config
                   })
                   return
                 }

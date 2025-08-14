@@ -6,6 +6,7 @@ import { RootState, AppDispatch } from '../store'
 import { loadAvailableRoles, activateRole, clearRole, clearRoleError, refreshRoleCache } from '../store/slices/chatSlice'
 import { ParsedRole, getSourceDisplayName } from '../utils/promptxParser'
 import { useRoleStateManager } from '../hooks/useRoleStateManager'
+import { roleContentService } from '../services/RoleContentService'
 
 const { Text } = Typography
 
@@ -25,12 +26,14 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   const { roles } = useSelector((state: RootState) => state.chat)
   const [dropdownVisible, setDropdownVisible] = useState(false)
   
-  // 🎭 使用角色状态管理器获取状态信息
+  // 🎭 使用角色状态管理器获取状态信息，启用自动同步以确保UI及时更新
   const { roleStateInfo } = useRoleStateManager({
-    enableAutoSync: false,        // RoleSelector只读取状态，不参与同步
+    enableAutoSync: true,         // 启用自动同步确保UI及时反映状态变化
     enableNewSessionReset: false, // 由ChatArea统一处理
-    enableConsistencyCheck: false // 由ChatArea统一处理
+    enableConsistencyCheck: true  // 启用一致性检查
   })
+  
+  // 角色状态信息已通过useRoleStateManager获取
 
   // 组件挂载时加载角色列表
   useEffect(() => {
@@ -40,13 +43,14 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     }
   }, [dispatch, roles.initialized, roles.loading, roles.error])
 
-  // 错误处理
+  // 错误处理 - 静默记录
   useEffect(() => {
     if (roles.error) {
-      message.error(`角色操作失败: ${roles.error}`)
+      console.error('角色操作错误:', roles.error)
       dispatch(clearRoleError())
+      // 不显示错误提示，保持界面简洁
     }
-  }, [roles.error, dispatch])
+  }, [roles.error, dispatch, message])
 
   // 获取来源图标和颜色
   const getSourceInfo = (source: 'system' | 'project' | 'user') => {
@@ -73,39 +77,49 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     return sourceMap[source] || sourceMap.system
   }
 
-  // 处理角色选择
+  // 处理角色选择 - 立即预加载角色内容
   const handleRoleSelect = async (role: ParsedRole) => {
     try {
+      console.log(`[RoleSelector] 🎯 角色选择: ${role.name} (${role.id})`)
+      
+      // 1. 立即预加载角色内容（异步进行，不阻塞UI更新）
+      roleContentService.preloadRole(role.id, role.name).catch(error => {
+        console.error('[RoleSelector] 角色内容预加载失败:', error)
+      })
+      
+      // 2. 更新UI状态（立即完成）
       await dispatch(activateRole(role.id)).unwrap()
       setDropdownVisible(false)
-      message.success(`已激活角色: ${role.name}`)
+      
+      console.log(`[RoleSelector] ✅ 角色选择完成，内容预加载中: ${role.name}`)
+      
     } catch (error) {
-      console.error('角色激活失败:', error)
-      // 错误已通过 useEffect 处理
+      console.error('角色切换失败:', error)
+      message.error(`角色切换失败`)
     }
   }
 
-  // 处理清除角色选择
+  // 处理清除角色选择 - 静默操作
   const handleClearRole = async () => {
     try {
       await dispatch(clearRole()).unwrap()
       setDropdownVisible(false)
-      message.info('已清除角色选择')
+      // 静默清除，不显示任何提示
     } catch (error) {
       console.error('清除角色失败:', error)
-      // 错误已通过 useEffect 处理
+      message.error(`清除角色失败`)
     }
   }
 
-  // 处理刷新角色列表
+  // 处理刷新角色列表 - 静默操作
   const handleRefreshRoles = async () => {
     try {
       dispatch(refreshRoleCache())
       await dispatch(loadAvailableRoles(true)).unwrap()
-      message.success('角色列表已更新')
+      // 静默刷新，不显示提示
     } catch (error) {
       console.error('刷新角色列表失败:', error)
-      // 错误已通过 useEffect 处理
+      message.error('刷新角色列表失败')
     }
   }
 

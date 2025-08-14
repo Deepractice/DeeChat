@@ -123,7 +123,39 @@ export function registerPromptXHandlers(): void {
   ipcMain.handle('promptx:learn', async (_, resourceUrl: string) => {
     try {
       const result = await promptxService.learn(resourceUrl);
-      return { success: true, data: result };
+      
+      // 🔥 修复：使用安全序列化处理，避免对象克隆错误
+      const safeSerialize = (obj: any): any => {
+        if (obj === null || obj === undefined) return obj;
+        if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') return obj;
+        if (Array.isArray(obj)) return obj.map(item => safeSerialize(item));
+        if (typeof obj === 'object') {
+          const serialized: any = {};
+          for (const [key, value] of Object.entries(obj)) {
+            try {
+              // 跳过函数、symbol等不可序列化的属性
+              if (typeof value === 'function' || typeof value === 'symbol') continue;
+              if (value instanceof Error) {
+                serialized[key] = value.message;
+                continue;
+              }
+              serialized[key] = safeSerialize(value);
+            } catch (e) {
+              console.warn(`[IPC] learn跳过不可序列化的属性: ${key}`);
+            }
+          }
+          return serialized;
+        }
+        return obj;
+      };
+      
+      const serializedResult = safeSerialize(result);
+      console.log(`[IPC] learn资源成功，类型: ${typeof serializedResult}, 内容预览:`, 
+        typeof serializedResult.content === 'string' ? 
+        `字符串长度${serializedResult.content.length}` : 
+        '非字符串内容');
+        
+      return { success: true, data: serializedResult };
     } catch (error) {
       console.error('[IPC] 学习资源失败:', error);
       return { 

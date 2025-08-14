@@ -184,14 +184,11 @@ export class SmartLayeredPromptSystem {
         this.layer1.recordRoleActivation(conversationContext.sessionId, activeRole);
       }
 
-      // 🔥 构建角色状态跟踪信息
+      // 🔥 构建角色状态跟踪信息（简化版：无工具调用）
       const previousRole = conversationContext.activeRole;
       const currentRole = uiContext?.selectedRole || conversationContext.activeRole;
-      const activatedRole = conversationContext.toolActivationContext?.roleId;
-      const roleChanged = !!(
-        (currentRole && currentRole !== previousRole) ||
-        (activatedRole && activatedRole !== currentRole)
-      );
+      const activatedRole = currentRole; // 现在角色选择即激活
+      const roleChanged = !!(currentRole && currentRole !== previousRole);
 
       // 构建3层架构响应
       const response: SmartPromptResponse = {
@@ -341,57 +338,7 @@ export class SmartLayeredPromptSystem {
 
 
 
-  /**
-   * 🔥 核心方法：带工具调用结果的智能消息构建（动态内容注入）
-   * 解决角色激活后内容丢失的关键问题
-   * @param userInput 用户输入
-   * @param conversationContext 对话上下文
-   * @param toolResults 工具调用结果数组
-   * @param baseSystemPrompt 基础系统提示词
-   * @param availableTools 可用工具列表
-   * @param uiContext UI意图注入上下文
-   * @returns 智能构建的消息数组和元数据
-   */
-  async buildMessagesWithToolResults(
-    userInput: string,
-    conversationContext: ConversationContext,
-    toolResults: any[], // ToolExecution[]类型
-    baseSystemPrompt: string = '',
-    availableTools?: MCPTool[] | MCPToolEntity[],
-    uiContext?: UIInjectionContext
-  ): Promise<SmartPromptResponse> {
-    
-    log.info(`🔥 [工具结果注入] 开始处理 ${toolResults.length} 个工具调用结果 - 会话: ${conversationContext.sessionId.slice(0, 8)}`);
-    
-    // 🔥 检测角色激活工具并注入内容到上下文
-    const roleActivationResult = toolResults.find(tool => tool.toolName === 'promptx_action');
-    if (roleActivationResult && roleActivationResult.result) {
-      log.info(`🎭 [角色内容注入] 检测到角色激活工具调用，注入内容长度: ${JSON.stringify(roleActivationResult.result).length} 字符`);
-      
-      // 将角色内容注入到会话上下文 - 关键修复点
-      const enhancedContext: ConversationContext = {
-        ...conversationContext,
-        roleContent: roleActivationResult.result, // 🔥 注入15891字符的角色内容
-        activeRole: roleActivationResult.params?.role || conversationContext.activeRole,
-        lastRoleActivationTime: new Date(),
-        toolActivationContext: {
-          toolName: roleActivationResult.toolName,
-          activatedAt: new Date(),
-          contentLength: JSON.stringify(roleActivationResult.result).length,
-          roleId: roleActivationResult.params?.role
-        }
-      };
-      
-      log.info(`✅ [角色内容注入] 角色内容已注入上下文 - 角色: ${enhancedContext.activeRole}, 内容长度: ${enhancedContext.toolActivationContext?.contentLength}`);
-      
-      // 使用增强后的上下文重新构建消息
-      return await this.buildMessages(userInput, enhancedContext, baseSystemPrompt, availableTools, uiContext);
-    }
-    
-    // 如果没有角色激活工具，执行标准流程
-    log.info(`📝 [标准流程] 未检测到角色激活工具，执行标准消息构建`);
-    return await this.buildMessages(userInput, conversationContext, baseSystemPrompt, availableTools, uiContext);
-  }
+  // buildMessagesWithToolResults 方法已删除，因为角色内容现在直接注入，无需工具调用结果处理
 
   /**
    * 添加AI响应到历史记录

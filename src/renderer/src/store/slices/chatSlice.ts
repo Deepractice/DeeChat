@@ -520,24 +520,7 @@ const chatSlice = createSlice({
           state.currentSession.messages.push(assistantMessage)
           state.currentSession.updatedAt = Date.now()
           
-          // 🔥 新增：处理角色状态同步
-          const roleStatus = action.payload.data.roleStatus
-          if (roleStatus && roleStatus.roleChanged) {
-            console.log('[Redux] 🎭 检测到角色状态变化:', roleStatus)
-            
-            // 如果AI激活了不同的角色，同步到前端状态
-            if (roleStatus.activatedRole && roleStatus.activatedRole !== state.roles.currentRole?.id) {
-              const activatedRole = state.roles.availableRoles.find(r => r.id === roleStatus.activatedRole)
-              if (activatedRole) {
-                console.log('[Redux] 🎯 同步AI激活的角色到UI:', activatedRole.name)
-                state.roles.currentRole = activatedRole
-                // 更新角色激活状态
-                state.roles.availableRoles.forEach(role => {
-                  role.isActive = role.id === activatedRole.id
-                })
-              }
-            }
-          }
+          // 角色状态同步逻辑已简化，因为角色内容直接注入，无需检测工具调用结果
         }
       })
       .addCase(sendMessage.rejected, (state, action) => {

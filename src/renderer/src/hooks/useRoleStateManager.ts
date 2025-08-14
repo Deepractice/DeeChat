@@ -64,10 +64,7 @@ export const useRoleStateManager = (options: UseRoleStateManagerOptions = {}) =>
         console.log('[RoleStateManager] 🔄 新会话创建，重置角色状态')
         dispatch(clearCurrentRole())
         
-        // 用户友好提示
-        if (roles.currentRole) {
-          message.info(`新对话已创建，角色选择已重置。如需使用 ${roles.currentRole.name} 角色，请重新选择。`)
-        }
+        // 静默重置，不显示提示
       }
 
       // 更新引用
@@ -101,19 +98,11 @@ export const useRoleStateManager = (options: UseRoleStateManagerOptions = {}) =>
         // 🔥 角色选择 - 提供激活指导
         console.log('[RoleStateManager] ✅ 角色已选择，等待下次对话时激活:', roles.currentRole?.name)
         
-        // 延时检查：如果用户选择角色后一段时间内没有发送消息，提供提示
-        roleSyncTimeoutRef.current = setTimeout(() => {
-          if (roles.currentRole && !isRoleActivatedInCurrentSession()) {
-            message.info(
-              `已选择 ${roles.currentRole.name} 角色。发送消息时AI将根据需要自动激活角色。`,
-              3
-            )
-          }
-        }, 2000)
+        // 延时检查已移除，保持界面简洁
       } else if (previousRoleId) {
         // 🔄 角色清除
         console.log('[RoleStateManager] 🗑️ 角色选择已清除')
-        message.info('角色选择已清除，下次对话将使用默认AI模式')
+        // 静默清除，不显示提示
       }
 
       // 更新引用
@@ -121,55 +110,14 @@ export const useRoleStateManager = (options: UseRoleStateManagerOptions = {}) =>
     }
   }, [roles.currentRole?.id, currentSession?.id, enableAutoSync, message, roles.currentRole?.name])
 
-  /**
-   * 🔥 核心功能3：一致性检查 - 监听消息更新，检测角色激活状态
-   */
-  useEffect(() => {
-    if (!enableConsistencyCheck || !currentSession?.messages) return
-
-    const latestMessage = currentSession.messages[currentSession.messages.length - 1]
-    
-    // 检查最新的AI消息是否包含工具执行结果
-    if (latestMessage?.role === 'assistant' && latestMessage.toolExecutions) {
-      const roleActivationTool = latestMessage.toolExecutions.find(
-        (tool: any) => tool.toolName === 'promptx_action'
-      )
-
-      if (roleActivationTool && roleActivationTool.result) {
-        const activatedRoleId = roleActivationTool.params?.role
-        console.log('[RoleStateManager] 🎯 检测到AI角色激活:', {
-          toolRole: activatedRoleId,
-          uiRole: roles.currentRole?.id,
-          isConsistent: activatedRoleId === roles.currentRole?.id
-        })
-
-        // 🔥 同步AI激活的角色到UI状态
-        if (activatedRoleId && activatedRoleId !== roles.currentRole?.id) {
-          const matchingRole = roles.availableRoles.find(r => r.id === activatedRoleId)
-          if (matchingRole) {
-            console.log('[RoleStateManager] 🔄 同步AI激活的角色到UI:', matchingRole.name)
-            dispatch(setCurrentRole(matchingRole))
-            message.success(`AI已激活 ${matchingRole.name} 角色`)
-          }
-        }
-      }
-    }
-  }, [currentSession?.messages, roles.currentRole?.id, roles.availableRoles, dispatch, message, enableConsistencyCheck])
+  // 🔥 核心功能3：一致性检查 - 已简化，因为角色内容直接注入，无需检测工具调用
 
   /**
-   * 检查当前会话中角色是否已激活
+   * 检查当前会话中角色是否已激活（简化版：角色选择即激活）
    */
   const isRoleActivatedInCurrentSession = (): boolean => {
-    if (!currentSession?.messages || !roles.currentRole) return false
-
-    // 检查消息中是否有该角色的激活记录
-    return currentSession.messages.some(message => 
-      message.role === 'assistant' && 
-      message.toolExecutions?.some((tool: any) => 
-        tool.toolName === 'promptx_action' && 
-        tool.params?.role === roles.currentRole?.id
-      )
-    )
+    // 现在角色内容直接注入，选择即激活
+    return !!roles.currentRole
   }
 
   /**
@@ -197,14 +145,12 @@ export const useRoleStateManager = (options: UseRoleStateManagerOptions = {}) =>
   }
 
   /**
-   * 获取状态描述
+   * 获取状态描述（简化版：选择即激活）
    */
   const getStateDescription = (hasSelected: boolean, isActivated: boolean): string => {
-    if (!hasSelected && !isActivated) return '默认AI模式'
-    if (hasSelected && !isActivated) return '角色已选择，等待激活'
+    if (!hasSelected) return '默认AI模式'
     if (hasSelected && isActivated) return '角色已激活'
-    if (!hasSelected && isActivated) return '状态异常：已激活但未选择'
-    return '未知状态'
+    return '角色准备中'
   }
 
   /**
@@ -213,7 +159,7 @@ export const useRoleStateManager = (options: UseRoleStateManagerOptions = {}) =>
   const resetRoleState = () => {
     console.log('[RoleStateManager] 🔄 手动重置角色状态')
     dispatch(clearCurrentRole())
-    message.info('角色状态已重置')
+    // 静默重置，不显示提示
   }
 
   /**

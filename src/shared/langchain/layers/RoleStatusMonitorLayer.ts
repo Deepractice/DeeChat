@@ -13,6 +13,8 @@
 import log from 'electron-log';
 import { TokenCounter } from '../components/TokenCounter';
 import { ModelContextManager, ContextAnalysisResult } from '../components/ModelContextManager';
+// 移除跨进程导入，改为在主进程中直接使用PromptXLocalService
+import { getPromptXLocalService } from '../../../main/services/promptx/PromptXLocalService';
 
 
 
@@ -53,14 +55,7 @@ export interface ConversationContext {
   lastUserInput?: string;
   lastAIResponse?: string;
   
-  // 🔥 新增：工具调用结果注入支持
-  roleContent?: any;              // 角色激活工具返回的完整内容 
-  toolActivationContext?: {       // 工具激活上下文
-    toolName: string;
-    activatedAt: Date;
-    contentLength: number;
-    roleId?: string;
-  };
+  // （已删除）工具调用结果注入支持，现在使用直接内容注入
 }
 
 // 角色状态监控结果（增强版：包含角色渲染信息）
@@ -143,16 +138,31 @@ export class RoleStatusMonitorLayer {
   ): Promise<RoleStatusResult> {
     log.info(`🎭 [角色监控Enhanced] 开始增强分析 - 会话: ${context.sessionId.slice(0, 8)}, UI角色: ${uiContext?.selectedRole || '未选择'}, 上下文角色: ${context.activeRole || '未选择'}`);
     
-    // **步骤1**：检测角色选择，准备角色激活引导
+    // **步骤1**：检测角色选择，直接获取角色内容
     let finalSystemPrompt = systemPrompt;
     let roleRendered = false;
-    let roleContentSource: 'promptx' | 'fallback' = 'fallback';
+    let roleContentSource: 'direct' | 'fallback' = 'fallback';
+    let roleContent: string | null = null;
     
     const targetRole = uiContext?.selectedRole || context.activeRole;
     if (targetRole) {
       log.info(`🎭 [角色检测] 检测到角色选择: ${targetRole}`);
-      roleRendered = false; // 等待AI主动激活
-      roleContentSource = 'promptx';
+      
+      // 🔥 直接使用PromptXLocalService获取完整角色激活内容
+      try {
+        const promptxService = getPromptXLocalService();
+        const result = await promptxService.execute('action', [targetRole]);
+        if (result && typeof result.toString === 'function') {
+          roleContent = result.toString();
+          roleRendered = true;
+          roleContentSource = 'direct';
+          log.info(`✅ [角色内容获取] 成功获取角色激活内容: ${targetRole}, 长度: ${roleContent?.length || 0}字符`);
+        } else {
+          log.warn(`⚠️ [角色内容获取] 未能获取角色内容: ${targetRole}`);
+        }
+      } catch (error) {
+        log.error(`❌ [角色内容获取] 角色激活异常: ${targetRole}`, error);
+      }
     } else {
       log.info(`❓ [角色检测] 未检测到角色选择`);
     }
@@ -180,14 +190,15 @@ export class RoleStatusMonitorLayer {
     const finalRecommendations = this.generateFinalRecommendations(contextAnalysis);
     log.info(`💡 [系统建议] 动作: ${finalRecommendations.action}, 紧急度: ${finalRecommendations.urgency}`);
 
-    // **步骤6**：构建增强的系统提示词（加入UI意图注入）
+    // **步骤6**：构建增强的系统提示词（加入角色内容直接注入）
     const enhancedSystemPrompt = this.buildEnhancedSystemPrompt(
       finalSystemPrompt,
       context,
       contextAnalysis,
       roleAnalysis,
       finalRecommendations,
-      uiContext
+      uiContext,
+      roleContent
     );
     log.info(`📝 [最终提示词] 构建完成，长度: ${enhancedSystemPrompt.length} 字符`);
 
@@ -215,7 +226,7 @@ export class RoleStatusMonitorLayer {
       systemPrompt: enhancedSystemPrompt,
       metadata: {
         uiInjectionProcessed: !!uiContext,
-        roleContentSource: roleContentSource === 'promptx' ? 'cache' : 'fallback'
+        roleContentSource: roleContentSource === 'direct' ? 'cache' : 'fallback'
       }
     };
 
@@ -326,7 +337,7 @@ export class RoleStatusMonitorLayer {
   }
 
   /**
-   * 构建增强的系统提示词（增强版：支持UI意图注入，智能判断角色激活需求）
+   * 构建增强的系统提示词（新版：直接注入角色内容，无需工具调用）
    */
   private buildEnhancedSystemPrompt(
     baseSystemPrompt: string,
@@ -334,7 +345,8 @@ export class RoleStatusMonitorLayer {
     contextAnalysis: ContextAnalysisResult,
     roleAnalysis: any,
     _recommendations: any,
-    uiContext?: UIInjectionContext
+    uiContext?: UIInjectionContext,
+    roleContent?: string | null
   ): string {
     const sections: string[] = [];
 
@@ -343,77 +355,43 @@ export class RoleStatusMonitorLayer {
 当前角色: ${context.activeRole || '通用助手'} | 上下文使用率: ${Math.round(contextAnalysis.usage.percentage * 100)}% (${roleAnalysis.totalTokens} tokens) | 角色存在感: ${roleAnalysis.rolePresence}
 模型级别: ${contextAnalysis.usage.level} | 状态: ${roleAnalysis.reason}`);
 
-    // 2. 角色切换通知和激活引导（智能检测角色状态变化）
-    const currentUIRole = uiContext?.selectedRole; // UI当前选择的角色
-    const previousSessionRole = context.activeRole; // 会话中之前的角色
-    const isExplicitRoleRequest = uiContext?.roleActivationRequest === true; // 是否是明确的角色激活请求
+    // 2. 🔥 角色内容直接注入（新架构：无需工具调用）
+    const currentUIRole = uiContext?.selectedRole || context.activeRole;
     
-    log.info(`🔍 [角色检测] UI角色: ${currentUIRole || '无'}, 会话角色: ${previousSessionRole || '无'}, 明确请求: ${isExplicitRoleRequest}`);
-    
-    if (currentUIRole && isExplicitRoleRequest) {
-      // 🔥 关键修复：只有明确的角色激活请求才触发工具调用
-      if (previousSessionRole && previousSessionRole !== currentUIRole) {
-        // 场景1：角色切换 - 从一个角色切换到另一个角色
-        const roleSwitchNotice = `# 🔄 ROLE_SWITCH_NOTIFICATION
-🎭 **重要：用户已从 \`${previousSessionRole}\` 切换到 \`${currentUIRole}\` 角色**
-💡 **需要调用工具切换角色**
+    if (currentUIRole && roleContent) {
+      // 场景1：有角色且已获取到角色内容 - 直接注入
+      const roleSection = `# 🎭 ROLE_DEFINITION
+🚀 **当前激活角色：\`${currentUIRole}\`**
 
-🔧 **建议操作**：
-如果用户的问题需要专业角色知识，请调用 promptx_action 工具：
-- role: "${currentUIRole}"
+📋 **完整角色定义内容**：
+${roleContent}
 
-📝 激活后，你将以 \`${currentUIRole}\` 角色身份提供专业服务。
-💬 如果是简单问候或常规对话，可以先正常回答，后续需要时再激活角色。`;
-        sections.push(roleSwitchNotice);
-        log.info(`🔄 [角色切换] 检测到角色切换: ${previousSessionRole} → ${currentUIRole}`);
-      } else if (!previousSessionRole || this.shouldTriggerRoleActivation(context, currentUIRole)) {
-        // 场景2：首次激活 - 之前没有角色或需要重新激活
-        const activationGuidance = `# 🎯 ROLE_ACTIVATION_GUIDANCE
-🚀 用户已选择角色：${currentUIRole}
-💡 **可以根据需要激活角色**
+✅ **重要指示**：
+- 你现在完全具备了该角色的所有能力和知识
+- 请严格按照上述角色定义来回答问题
+- 体现角色的专业特征、思维方式和行为模式
+- 保持角色的一致性和专业性`;
+      
+      sections.push(roleSection);
+      log.info(`✅ [角色内容注入] 已直接注入角色内容: ${currentUIRole}, 长度: ${roleContent.length}字符`);
+    } else if (currentUIRole && !roleContent) {
+      // 场景2：有角色但内容还在加载中 - 添加临时提示
+      const loadingNotice = `# 🎭 ROLE_LOADING
+🎯 **选择角色：\`${currentUIRole}\`**
+⏳ **角色内容加载中...**
 
-🔧 **建议操作**：
-- 如果用户问题需要专业知识，请调用 promptx_action 工具激活角色
-- 如果是简单问候("你好"、"hi"等)或常规对话，可以先正常回答
-- 参数：role: "${currentUIRole}"
-
-📝 激活后，你将自动获得该角色的完整专业定义和能力。
-💬 请根据用户实际需求决定是否立即激活角色。`;
-        sections.push(activationGuidance);
-        log.info(`🎯 [角色激活] 已添加角色激活引导: ${currentUIRole}`);
-      } else {
-        // 场景3：角色已激活 - 添加角色身份提醒
-        const roleReminder = `# 🎭 CURRENT_ROLE_REMINDER
-✅ **当前激活角色：\`${currentUIRole}\`**
-💡 请继续以 \`${currentUIRole}\` 角色身份提供专业服务。`;
-        sections.push(roleReminder);
-        log.info(`😊 [角色状态] 角色${currentUIRole}已激活，添加身份提醒`);
-      }
-    } else if (currentUIRole && !isExplicitRoleRequest) {
-      // 🔥 新增：角色存在但不是明确请求时的处理
-      const roleContextNotice = `# 🎭 ROLE_CONTEXT_NOTICE
-📋 **会话中有角色上下文：\`${currentUIRole}\`**
-💡 **智能判断原则**：
-- 简单问候和日常对话：以通用AI身份回答
-- 专业问题和复杂任务：可考虑激活 \`${currentUIRole}\` 角色
-- 用户明确要求专业服务时：调用 promptx_action 工具
-
-🎯 请根据用户问题的复杂程度和专业性需求，智能决定回答方式。`;
-      sections.push(roleContextNotice);
-      log.info(`🎭 [智能角色] 角色${currentUIRole}存在但非明确请求，使用智能判断模式`);
+💡 请先以通用AI身份回答，角色能力将在下次对话中生效。`;
+      
+      sections.push(loadingNotice);
+      log.info(`⏳ [角色加载中] 角色${currentUIRole}内容还在加载，使用临时提示`);
     } else {
-      // 用户没有选择角色
-      if (previousSessionRole) {
-        // 场景4：角色清除 - 从有角色状态切换到无角色状态
-        const roleClearNotice = `# 🔄 ROLE_CLEAR_NOTIFICATION
-🔄 **用户已清除角色选择，从 \`${previousSessionRole}\` 恢复到默认AI模式**
-💡 请忘记之前的 \`${previousSessionRole}\` 角色身份，恢复为通用AI助手。`;
-        sections.push(roleClearNotice);
-        log.info(`🔄 [角色清除] 检测到角色清除: ${previousSessionRole} → 默认模式`);
-      } else {
-        // 场景5：默认状态 - 没有角色选择
-        log.info(`❓ [角色提醒] 未选择角色，使用默认AI模式`);
-      }
+      // 场景3：无角色选择 - 默认模式
+      const defaultNotice = `# 🤖 DEFAULT_AI_MODE
+💬 **当前模式：通用AI助手**
+🎯 请以友好、专业的AI助手身份回答用户问题。`;
+      
+      sections.push(defaultNotice);
+      log.info(`🤖 [默认模式] 未选择角色，使用默认AI模式`);
     }
 
     // 3. 上下文压力预警（重要）
@@ -424,28 +402,7 @@ export class RoleStatusMonitorLayer {
 💡 建议：优先处理重要信息，保持回复精准简洁`);
     }
 
-    // 4. 🔥 动态角色内容注入（关键修复）
-    if (context.roleContent && context.toolActivationContext) {
-      log.info(`🔥 [角色内容注入] 检测到已激活的角色内容 - 角色: ${context.toolActivationContext.roleId}, 内容长度: ${context.toolActivationContext.contentLength}`);
-      
-      const roleContentSection = `# 🎭 ACTIVATED_ROLE_CONTENT
-✅ **角色已激活：\`${context.toolActivationContext.roleId}\`** (激活时间: ${context.toolActivationContext.activatedAt.toISOString()})
-📊 **角色定义内容长度**: ${context.toolActivationContext.contentLength} 字符
-
-🔥 **完整角色定义**：
-${JSON.stringify(context.roleContent, null, 2)}
-
-⚠️ **重要指示**：
-- 你现在完全具备了该角色的所有能力和知识
-- 请严格按照上述角色定义来回答问题
-- 体现角色的专业特征、思维方式和行为模式
-- 不要提及"工具调用"，直接以角色身份回答`;
-      
-      sections.push(roleContentSection);
-      log.info(`✅ [角色内容注入] 已将${context.toolActivationContext.contentLength}字符的角色内容注入系统提示词`);
-    } else if (currentUIRole && !context.roleContent) {
-      log.info(`⚠️ [角色内容缺失] UI选择了角色${currentUIRole}但缺少注入内容，等待工具调用结果`);
-    }
+    // 4. （已删除）老的动态角色内容注入逻辑，现在直接在步骤2中处理
 
     // 5. UI驱动的意图注入（原有）
     if (uiContext) {
@@ -462,41 +419,7 @@ ${JSON.stringify(context.roleContent, null, 2)}
     return sections.join('\n\n');
   }
 
-  /**
-   * 检查是否应该触发角色激活
-   * @param context 对话上下文
-   * @param roleId 角色ID
-   * @returns 是否应该激活角色
-   */
-  private shouldTriggerRoleActivation(context: ConversationContext, roleId: string): boolean {
-    const roleKey = `${context.sessionId}_${roleId}`;
-    const hasActivatedInMemory = this.roleActivationHistory.has(roleKey);
-    
-    // 🔥 核心修复：主要依赖工具激活上下文来判断是否真正激活
-    const isCurrentSessionRole = context.activeRole === roleId;
-    const hasToolActivationContext = context.toolActivationContext?.roleId === roleId;
-    const hasRoleContent = !!(context.roleContent && context.toolActivationContext);
-    
-    // 🎯 精确判断：只有真正通过工具激活并获得角色内容时才认为已激活
-    const isTrulyActivated = hasToolActivationContext && hasRoleContent;
-    
-    // 🔄 防重复激活：同一会话中已激活过的角色，如果工具上下文丢失，允许重新激活
-    const shouldReactivate = hasActivatedInMemory && isCurrentSessionRole && !isTrulyActivated;
-    
-    // 最终决策：未真正激活 OR 需要重新激活
-    const shouldActivate = !isTrulyActivated || shouldReactivate;
-    
-    log.info(`🔍 [激活检查优化] 角色: ${roleId}`);
-    log.info(`  - 内存记录: ${hasActivatedInMemory}`);
-    log.info(`  - 会话角色: ${isCurrentSessionRole} (当前: ${context.activeRole})`);
-    log.info(`  - 工具上下文: ${hasToolActivationContext} (工具角色: ${context.toolActivationContext?.roleId})`);
-    log.info(`  - 角色内容: ${hasRoleContent}`);
-    log.info(`  - 真正激活: ${isTrulyActivated}`);
-    log.info(`  - 需要重激活: ${shouldReactivate}`);
-    log.info(`  - 最终决策: ${shouldActivate ? '需要激活' : '已激活，跳过'}`);
-    
-    return shouldActivate;
-  }
+  // shouldTriggerRoleActivation 方法已删除，因为不再需要工具调用激活逻辑
 
   /**
    * 记录角色激活
@@ -620,10 +543,10 @@ ${JSON.stringify(context.roleContent, null, 2)}
   private buildUIIntentSection(uiContext: UIInjectionContext): string {
     const intentions: string[] = [];
 
-    // 角色激活请求
+    // 角色激活请求（已简化：角色内容已直接注入，无需工具调用）
     if (uiContext.roleActivationRequest && uiContext.selectedRole) {
-      intentions.push(`🎭 用户通过UI明确选择激活角色：${uiContext.selectedRole}`);
-      intentions.push(`请立即调用promptx_action工具激活此角色。`);
+      intentions.push(`🎭 用户已通过UI选择角色：${uiContext.selectedRole}`);
+      intentions.push(`角色能力已自动激活，请以该角色身份提供专业服务。`);
     }
 
     // 特殊模式
