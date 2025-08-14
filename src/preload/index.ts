@@ -163,7 +163,14 @@ const electronAPI = {
     read: (fileId: string) => ipcRenderer.invoke('file:read', fileId),
     stats: () => ipcRenderer.invoke('file:stats'),
     tree: (category?: string) => ipcRenderer.invoke('file:tree', category),
-    updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content)
+    updateContent: (fileId: string, content: string) => ipcRenderer.invoke('file:updateContent', fileId, content),
+    
+    // 工作区文件操作API - 用于直接写入PromptX目录
+    write: (filePath: string, content: string) => ipcRenderer.invoke('file:write', filePath, content),
+    readFile: (filePath: string) => ipcRenderer.invoke('file:readFile', filePath),
+    ensureDir: (dirPath: string) => ipcRenderer.invoke('file:ensureDir', dirPath),
+    getPromptXWorkspacePath: () => ipcRenderer.invoke('file:getPromptXWorkspacePath'),
+    getAppDataPath: () => ipcRenderer.invoke('file:getAppDataPath')
     // 📁 以下附件管理API已移除，请使用PromptX的@file://协议:
     // - upload: 文件上传
     // - get: 文件获取

@@ -417,6 +417,82 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // 工作区文件操作API
+  ipcMain.handle('file:write', async (_event, filePath: string, content: string) => {
+    try {
+      console.log(`📝 [工作区文件] 写入文件: ${filePath}，长度: ${content.length} 字符`)
+      
+      if (!serviceManager || !serviceManager.isReady()) {
+        throw new Error('ServiceManager未初始化')
+      }
+      
+      const fileService = serviceManager.getFileService()
+      await fileService.saveFile(Buffer.from(content, 'utf-8'), filePath)
+      
+      console.log(`✅ [工作区文件] 成功写入文件: ${filePath}`)
+      return { success: true }
+    } catch (error) {
+      console.error(`❌ [工作区文件] 写入失败: ${filePath}`, error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:readFile', async (_event, filePath: string) => {
+    try {
+      console.log(`📖 [工作区文件] 读取文件: ${filePath}`)
+      
+      if (!serviceManager || !serviceManager.isReady()) {
+        throw new Error('ServiceManager未初始化')
+      }
+      
+      const fileService = serviceManager.getFileService()
+      const content = await fileService.readFile(filePath)
+      
+      console.log(`✅ [工作区文件] 成功读取文件: ${filePath}，长度: ${content.length} 字符`)
+      return content
+    } catch (error) {
+      console.error(`❌ [工作区文件] 读取失败: ${filePath}`, error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:ensureDir', async (_event, dirPath: string) => {
+    try {
+      console.log(`📁 [工作区目录] 确保目录存在: ${dirPath}`)
+      
+      await require('fs').promises.mkdir(dirPath, { recursive: true })
+      
+      console.log(`✅ [工作区目录] 目录已存在: ${dirPath}`)
+      return { success: true }
+    } catch (error) {
+      console.error(`❌ [工作区目录] 创建失败: ${dirPath}`, error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:getPromptXWorkspacePath', async () => {
+    try {
+      const promptxPath = process.env.PROMPTX_WORKSPACE || 
+                          require('path').join(require('os').homedir(), '.promptx')
+      console.log(`📍 [工作区路径] PromptX工作区: ${promptxPath}`)
+      return promptxPath
+    } catch (error) {
+      console.error('❌ [工作区路径] 获取PromptX路径失败:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:getAppDataPath', async () => {
+    try {
+      const appDataPath = app.getPath('userData')
+      console.log(`📍 [应用路径] 应用数据目录: ${appDataPath}`)
+      return appDataPath
+    } catch (error) {
+      console.error('❌ [应用路径] 获取应用数据路径失败:', error)
+      throw error
+    }
+  })
+
   // 服务管理API
   console.log('🔧 [调试] 注册服务管理API...')
   ipcMain.handle('service:getStatus', async () => {

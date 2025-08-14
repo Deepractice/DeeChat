@@ -188,54 +188,7 @@ export class LangChainLLMService {
     return shouldActivate;
   }
 
-  /**
-   * 判断是否应该包含工作区工具
-   */
-  private shouldIncludeWorkspaceTools(message: string, uiContext?: any): boolean {
-    // 🎯 关键词检测：明确提到文件、工作区相关操作
-    const workspaceKeywords = [
-      '文件', '目录', '工作区', '读取', '写入', '创建', '删除', '查看',
-      'file', 'directory', 'workspace', 'read', 'write', 'create', 'delete',
-      '分析', '处理', '生成', '保存', '打开', '浏览'
-    ];
-    
-    const messageHasWorkspaceIntent = workspaceKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
-    // 🎯 UI上下文检测：用户是否在工作区模式
-    const uiWorkspaceMode = uiContext?.workspaceMode === true;
-    
-    // 🎯 简单问候检测：排除简单的问候语
-    const simpleGreetings = ['你好', 'hi', 'hello', '嗨', '您好', 'hey'];
-    const isSimpleGreeting = simpleGreetings.some(greeting => 
-      message.toLowerCase().trim() === greeting.toLowerCase()
-    );
-    
-    // 决策逻辑：简单问候时不提供工作区工具
-    if (isSimpleGreeting) {
-      log.info(`🚫 [工具过滤] 检测到简单问候"${message}"，排除工作区工具`);
-      return false;
-    }
-    
-    // 有明确工作区意图或UI处于工作区模式时提供工具
-    const shouldInclude = messageHasWorkspaceIntent || uiWorkspaceMode;
-    log.info(`🎯 [工具过滤] 消息"${message}" -> 工作区工具${shouldInclude ? '包含' : '排除'} (关键词:${messageHasWorkspaceIntent}, UI模式:${uiWorkspaceMode})`);
-    
-    return shouldInclude;
-  }
-
-  /**
-   * 判断是否为工作区相关工具
-   */
-  private isWorkspaceTool(toolName: string): boolean {
-    const workspaceTools = [
-      'read_file', 'write_file', 'list_directory',
-      'create_directory', 'delete_file', 'move_file', 'copy_file',
-      'get_file_info', 'search_files'
-    ];
-    return workspaceTools.includes(toolName);
-  }
+  // 移除硬编码的工具过滤逻辑，让AI自主判断是否需要工具
 
   /**
    * 获取工具描述信息
@@ -329,15 +282,10 @@ export class LangChainLLMService {
     );
     log.info(`🎯 [LangChain] 会话上下文已构建 - sessionId: ${finalSessionId.slice(0, 8)}, 角色: ${activeRole || '未选择'}, 模型: ${modelConfig.model}`);
 
-    // 🔥 智能获取MCP工具（根据上下文决定是否包含工作区工具）
-    const allMcpTools = this.mcpService ? await this.mcpService.getAllTools() : [];
+    // 🔥 获取所有可用MCP工具（让AI智能决定使用）
+    const mcpTools = this.mcpService ? await this.mcpService.getAllTools() : [];
     
-    // 🎯 智能过滤：只有在需要时才提供工作区工具
-    const needWorkspaceTools = this.shouldIncludeWorkspaceTools(message, uiContext);
-    const mcpTools = needWorkspaceTools ? allMcpTools : 
-      allMcpTools.filter(tool => !this.isWorkspaceTool(tool.name));
-    
-    log.info(`🔧 [MCP工具] 获取到 ${allMcpTools.length} 个工具，过滤后 ${mcpTools.length} 个（工作区工具: ${needWorkspaceTools ? '包含' : '排除'}）`);
+    log.info(`🔧 [MCP工具] 提供 ${mcpTools.length} 个工具供AI智能选择`);
     if (mcpTools.length > 0) {
       log.info(`🔧 [MCP工具列表] ${mcpTools.map(tool => tool.name).join(', ')}`);
     }

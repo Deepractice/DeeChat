@@ -108,12 +108,57 @@ export class MCPToolDescriptions {
 </use_mcp_tool>
 \`\`\`
 
-## 重要使用原则：
-1. **环境初始化**: 首次使用时优先调用promptx_init()初始化环境
-2. **主动激活角色**: 当任务需要专业能力时，立即使用promptx_action激活对应角色
-3. **角色匹配**: 根据任务性质选择最合适的角色（开发→luban，学习→noface，决策→sean等）
-4. **按需查询**: 仅在用户明确询问可用角色时才调用promptx_welcome()
-5. **持续专业性**: 激活角色后保持该角色的专业思维和工作方式
+## promptx_tool - 执行专业工具
+**用途**: 执行JavaScript工具，包括文件操作、计算等专业工具
+**使用格式**:
+\`\`\`xml
+<use_mcp_tool>
+<server_name>promptx-builtin</server_name>
+<tool_name>promptx_tool</tool_name>
+<arguments>
+{
+  "tool_resource": "@tool://filesystem",
+  "parameters": {
+    "method": "write_file",
+    "path": "workspace/temp/example.txt",
+    "content": "文件内容"
+  }
+}
+</arguments>
+</use_mcp_tool>
+\`\`\`
+
+## 📁 PROMPTX_RESOURCE_ACCESS
+**重要权限声明**: 你可以通过filesystem工具完全操控PromptX的资源系统：
+- **resource/** - 角色、工具、知识库等系统资源
+- **workspace/** - 用户协作工作区文件  
+- **完整文件访问** - 读取、修改、创建任何~/.promptx范围内的文件
+
+**关键使用指引**: 
+- **当用户询问工作区文件时**: 立即使用filesystem工具的directory_tree或read_text_file方法访问workspace/目录
+- **当用户询问"能否读取工作区文件"时**: 直接回答"可以"并主动使用filesystem工具演示读取能力
+- **文件操作请求**: 直接使用对应的filesystem工具方法执行，无需询问权限
+
+**使用原则**: 具体如何使用这些权限，由相应的专业角色提示词指导。
+
+## 🎯 工具使用原则（关键）：
+
+**什么时候使用工具：**
+- 用户明确要求专业帮助（开发、设计、分析等）
+- 需要文件操作（读取、创建、修改工作区文件）
+- 任务需要特定专业角色的能力
+- 用户询问可用功能或角色列表
+
+**什么时候不使用工具：**
+- ❌ 简单问候和闲聊（"你好"、"怎么样"、"谢谢"等）
+- ❌ 一般性问题已知答案（基础概念解释等）
+- ❌ 用户只是在进行日常对话
+
+**核心原则：**
+1. 🧠 **智能判断**: 根据用户意图决定是否需要工具，不要预设规则
+2. 🎯 **按需使用**: 只在绝对必要时调用工具，避免不必要的工具调用
+3. 💰 **效率优先**: 工具调用有成本，如果能直接回答就直接回答
+4. 🎭 **角色导向**: 需要专业能力时才激活专业角色
 
 `;
   }

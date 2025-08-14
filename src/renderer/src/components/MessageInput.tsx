@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react'
-import { Input, Button, Space, message, Divider } from 'antd'
-import { SendOutlined, PaperClipOutlined, RobotOutlined } from '@ant-design/icons'
+import React, { useState, useRef, useEffect } from 'react'
+import { Input, Button, Space, message, Divider, Tag } from 'antd'
+import { SendOutlined, PaperClipOutlined, RobotOutlined, CloseOutlined, FileTextOutlined, SelectOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { addUserMessage, addAIMessage, sendMessage, saveCurrentSession, setLoading } from '../store/slices/chatSlice'
@@ -9,6 +9,7 @@ import FileUploadWithProgress, { FileUploadItem, FileUploadWithProgressRef } fro
 import DragDropOverlay from './DragDropOverlay'
 import ModelSelectionModal from './ModelSelectionModal'
 import RoleSelector from './RoleSelector'
+import { FileReferenceService, FileReference } from '../../../shared/services/FileReferenceService'
 
 const { TextArea } = Input
 
@@ -32,6 +33,55 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
   const fileUploadRef = useRef<FileUploadWithProgressRef>(null)
   const [showModelSelection, setShowModelSelection] = useState(false)
   const textAreaRef = useRef<any>(null)
+  
+  // 工作区文件引用状态
+  const [referencedFiles, setReferencedFiles] = useState<FileReference[]>([])
+  const fileReferenceService = FileReferenceService.getInstance()
+
+  // 监听工作区文件引用事件
+  useEffect(() => {
+    const handleFileReference = (event: CustomEvent) => {
+      const { referenceMessage, reference } = event.detail
+      
+      // 将引用消息插入到输入框中
+      setInputValue(prev => {
+        const currentValue = prev.trim()
+        return currentValue ? `${referenceMessage}\n${currentValue}` : referenceMessage
+      })
+      
+      // 添加到引用文件列表
+      setReferencedFiles(prev => {
+        // 避免重复添加同一文件
+        if (!prev.find(f => f.fileId === reference.fileId)) {
+          return [...prev, reference]
+        }
+        return prev
+      })
+      
+      // 聚焦到输入框
+      setTimeout(() => {
+        textAreaRef.current?.focus()
+      }, 100)
+    }
+
+    window.addEventListener('insertChatReference', handleFileReference as EventListener)
+    
+    return () => {
+      window.removeEventListener('insertChatReference', handleFileReference as EventListener)
+    }
+  }, [])
+
+  // 移除引用文件
+  const handleRemoveReference = (fileId: string) => {
+    setReferencedFiles(prev => prev.filter(f => f.fileId !== fileId))
+    
+    // 同时从输入框中移除对应的引用内容
+    const removedReference = referencedFiles.find(f => f.fileId === fileId)
+    if (removedReference) {
+      const referenceMessage = fileReferenceService.generateChatMessage(removedReference)
+      setInputValue(prev => prev.replace(referenceMessage, '').trim())
+    }
+  }
 
   const handleSend = async () => {
     const trimmedValue = inputValue.trim()
@@ -71,6 +121,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
     setInputValue('')
     setAttachedFiles([])
     setUploadedFileIds([])
+    setReferencedFiles([])
     setShowFileUpload(false)
 
     // 如果有父组件回调，使用父组件处理
@@ -279,6 +330,37 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
 
         {/* 消息输入区域 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* 工作区文件引用显示 */}
+          {referencedFiles.length > 0 && (
+            <div style={{
+              padding: 8,
+              backgroundColor: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <div style={{ fontSize: '12px', color: '#52c41a', fontWeight: 'bold' }}>
+                📎 引用的工作区文件：
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {referencedFiles.map(ref => (
+                  <Tag
+                    key={ref.fileId}
+                    icon={ref.selectedText ? <SelectOutlined /> : <FileTextOutlined />}
+                    closable
+                    onClose={() => handleRemoveReference(ref.fileId)}
+                    color={ref.selectedText ? "blue" : "green"}
+                    title={ref.selectedText ? `选中文字：${ref.selectedText.substring(0, 100)}...` : `完整文件：${ref.fileName}`}
+                  >
+                    {ref.selectedText ? `${ref.fileName} (选中文字)` : ref.fileName}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* 输入框 */}
           <div style={{ 
             border: '1px solid #d9d9d9', 

@@ -90,6 +90,24 @@ const AppContent: React.FC = () => {
     }
   }
 
+  // 处理AI文件生成请求
+  const handleAIFileRequest = async (prompt: string) => {
+    try {
+      message.info('AI文件生成功能正在开发中...')
+      // 这里将来可以集成PromptX工具调用
+      // 1. 如果工作区未展开，先展开工作区
+      if (!workspaceState.isExpanded) {
+        await toggleWorkspace(true)
+      }
+      // 2. 切换到聊天视图并发送AI请求
+      setCurrentView('chat')
+      // 3. 这里可以自动在聊天区域发送消息触发AI生成文件
+    } catch (error) {
+      console.error('AI文件请求失败:', error)
+      message.error('AI文件请求失败')
+    }
+  }
+
 
 
   return (
@@ -136,7 +154,7 @@ const AppContent: React.FC = () => {
                   backgroundColor: '#f5f5f5',
                   animation: workspaceState.isTransitioning ? 'none' : 'slideInRight 0.15s ease'
                 }}>
-                  <WorkspaceArea />
+                  <WorkspaceArea onAIFileRequest={handleAIFileRequest} />
                 </Content>
               )}
             </Layout>

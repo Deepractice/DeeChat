@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
-import { Layout, Tabs, Empty, message } from 'antd'
-import { FileTextOutlined, CloudUploadOutlined } from '@ant-design/icons'
+import { Layout, Tabs, Empty, message, Button } from 'antd'
+import { FileTextOutlined, CloudUploadOutlined, SaveOutlined, RobotOutlined, MessageOutlined, SelectOutlined } from '@ant-design/icons'
 import DocumentViewer from './DocumentViewer'
 import useDragDrop from '../../hooks/useDragDrop'
+import { WorkspaceFileManager } from '../../services/WorkspaceFileManager'
+import { WorkspaceFile } from '../../../../shared/types/WorkspaceFile'
+import { FileReferenceService } from '../../../../shared/services/FileReferenceService'
 
 const { Content } = Layout
 
@@ -15,70 +18,43 @@ interface DocumentTab {
   label: string
   content: React.ReactNode
   type: 'document' | 'browser'
-  filePath?: string
-  fileName?: string
+  workspaceFile?: WorkspaceFile  // 关联的工作区文件
+  isEditing?: boolean
 }
 
 const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
   const [activeKey, setActiveKey] = useState<string>()
   const [documents, setDocuments] = useState<DocumentTab[]>([])
+  const [selectedText, setSelectedText] = useState<string>('')
+  const [selectedTextFromFile, setSelectedTextFromFile] = useState<string>('')
+  
+  // 获取文件管理器实例
+  const fileManager = WorkspaceFileManager.getInstance()
+  const fileReferenceService = FileReferenceService.getInstance()
 
-  // 处理文件加载 - 将拖拽文件保存到工作区以便编辑
+  // 处理文件加载 - 使用新的WorkspaceFileManager
   const handleFileLoad = async (file: File) => {
     try {
-      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+      // 通过WorkspaceFileManager保存文件到PromptX
+      const workspaceFile = await fileManager.addUserFile(file)
       
-      // 将拖拽的文件保存到工作区目录，这样就可以编辑了
-      const arrayBuffer = await file.arrayBuffer()
-      const fileBuffer = new Uint8Array(arrayBuffer)
-      
-      // 调用后端API上传文件到工作区
-      const result = await window.electronAPI.file.upload(fileBuffer, {
-        name: file.name,
-        mimeType: file.type || 'text/plain'
-      })
-      
-      if (result.success && result.data) {
-        // 获取上传后的文件信息
-        const fileData = await window.electronAPI.file.get(result.data.fileId)
-        
-        if (fileData.success && fileData.data) {
-          const filePath = fileData.data.path // 使用实际文件路径
-          
-          const documentViewer = (
-            <DocumentViewer
-              filePath={filePath}
-              fileName={file.name}
-              fileType={fileExtension}
-              // 不传递 fileContent，这样就可以编辑了
-              onError={(error) => {
-                console.error('文档加载错误:', error)
-                message.error(`加载 ${file.name} 失败: ${error}`)
-              }}
-            />
-          )
-
-          const newTab: DocumentTab = {
-            key: `doc-${Date.now()}-${file.name}`,
-            label: `📝 ${file.name}`, // 添加标识表示这是可编辑的
-            content: documentViewer,
-            type: 'document',
-            filePath: filePath,
-            fileName: file.name
-          }
-          
-          setDocuments(prev => [...prev, newTab])
-          setActiveKey(newTab.key)
-          message.success(`已加载文档并可编辑: ${file.name}`)
-        } else {
-          throw new Error('无法获取文件信息')
-        }
-      } else {
-        throw new Error(result.error || '文件保存失败')
+      // 创建标签页
+      const tabKey = `ws-${workspaceFile.id}`
+      const newTab: DocumentTab = {
+        key: tabKey,
+        label: `📁 ${workspaceFile.name}`, // 工作区文件标识
+        content: null, // 稍后动态渲染
+        type: 'document',
+        workspaceFile: workspaceFile,
+        isEditing: false
       }
+      
+      setDocuments(prev => [...prev, newTab])
+      setActiveKey(newTab.key)
+      
     } catch (error) {
       console.error('处理拖拽文件失败:', error)
-      message.error(`处理 ${file.name} 失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      // 错误已在fileManager中显示，这里不重复显示
     }
   }
 
@@ -129,6 +105,140 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
     if (targetKey === activeKey) {
       setActiveKey(newDocs.length > 0 ? newDocs[newDocs.length - 1].key : undefined)
     }
+  }
+
+  // 处理文件保存到永久目录
+  const handleSaveFilePermanent = async (fileId: string) => {
+    try {
+      await fileManager.markFileAsSaved(fileId)
+      
+      // 更新文档标签显示状态
+      setDocuments(prev => prev.map(doc => {
+        if (doc.workspaceFile?.id === fileId) {
+          return {
+            ...doc,
+            label: `💾 ${doc.workspaceFile.name}`, // 更新标签显示已保存状态
+            workspaceFile: {
+              ...doc.workspaceFile,
+              type: 'saved' as const
+            }
+          }
+        }
+        return doc
+      }))
+      
+    } catch (error) {
+      console.error('保存文件到永久目录失败:', error)
+      message.error('保存失败，请重试')
+    }
+  }
+
+  // 处理文档内容变化（文档编辑时调用）
+  const handleDocumentContentChange = async (workspaceFile: WorkspaceFile, newContent: string) => {
+    try {
+      // 直接保存到PromptX物理文件，用户和AI都能访问
+      await fileManager.saveFile(workspaceFile, newContent)
+      
+      // 更新本地缓存
+      setDocuments(prev => prev.map(doc => {
+        if (doc.workspaceFile?.id === workspaceFile.id) {
+          return {
+            ...doc,
+            workspaceFile: {
+              ...doc.workspaceFile,
+              content: newContent,
+              lastAccessed: new Date()
+            }
+          }
+        }
+        return doc
+      }))
+
+      // 更新文件管理器中的内容
+      const file = fileManager.getFile(workspaceFile.id)
+      if (file) {
+        file.content = newContent
+        file.lastAccessed = new Date()
+      }
+      
+    } catch (error) {
+      console.error('保存文档内容失败:', error)
+      message.error('保存失败，请重试')
+    }
+  }
+
+  // 处理引用文件到聊天
+  const handleReferenceToChat = (workspaceFile: WorkspaceFile) => {
+    try {
+      // 创建文件引用
+      const reference = fileReferenceService.createWorkspaceReference(workspaceFile)
+      
+      // 生成引用消息
+      const referenceMessage = fileReferenceService.generateChatMessage(reference)
+      
+      // 这里需要与聊天组件通信，暂时用事件方式
+      // TODO: 后续可以考虑使用全局状态管理或者父组件通信
+      window.dispatchEvent(new CustomEvent('insertChatReference', {
+        detail: { referenceMessage, reference }
+      }))
+      
+      message.success(`已引用文件到聊天：${workspaceFile.name}`)
+      
+    } catch (error) {
+      console.error('引用文件到聊天失败:', error)
+      message.error('引用失败，请重试')
+    }
+  }
+
+  // 处理引用选中文字到聊天
+  const handleReferenceSelectionToChat = (workspaceFile: WorkspaceFile, selectedText: string) => {
+    try {
+      if (!selectedText.trim()) {
+        message.warning('请先选中要引用的文字')
+        return
+      }
+
+      // 更新选中文字状态
+      setSelectedText(selectedText)
+      setSelectedTextFromFile(workspaceFile.name)
+
+      // 创建选中文字引用
+      const reference = fileReferenceService.createWorkspaceSelectionReference(workspaceFile, selectedText)
+      
+      // 生成引用消息
+      const referenceMessage = fileReferenceService.generateChatMessage(reference)
+      
+      // 发送事件通知聊天组件
+      window.dispatchEvent(new CustomEvent('insertChatReference', {
+        detail: { referenceMessage, reference }
+      }))
+      
+      message.success(`已引用选中文字到聊天：${workspaceFile.name}`)
+      
+    } catch (error) {
+      console.error('引用选中文字到聊天失败:', error)
+      message.error('引用失败，请重试')
+    }
+  }
+
+  // 手动引用选中的文字（通过按钮）
+  const handleManualReferenceSelection = () => {
+    const activeDoc = documents.find(doc => doc.key === activeKey)
+    if (!activeDoc?.workspaceFile) {
+      message.error('无法找到当前文档')
+      return
+    }
+
+    // 获取当前选中的文字
+    const selection = window.getSelection()
+    const currentSelectedText = selection?.toString().trim() || ''
+    
+    if (!currentSelectedText) {
+      message.warning('请先选中要引用的文字')
+      return
+    }
+
+    handleReferenceSelectionToChat(activeDoc.workspaceFile, currentSelectedText)
   }
 
   // 渲染空状态
@@ -277,6 +387,65 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
                 flexShrink: 0
               }}
               className="workspace-tabs"
+              tabBarExtraContent={{
+                right: (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 16 }}>
+                    {/* 当前活动文件的操作按钮 */}
+                    {activeKey && (() => {
+                      const activeDoc = documents.find(doc => doc.key === activeKey)
+                      if (activeDoc?.workspaceFile) {
+                        return (
+                          <>
+                            {/* AI可访问状态指示器 */}
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<RobotOutlined style={{ color: '#52c41a' }} />}
+                              title="AI可直接访问此文件"
+                              disabled
+                            >
+                              AI可访问
+                            </Button>
+                            {/* 引用到聊天 */}
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<MessageOutlined />}
+                              title="引用文件内容到聊天"
+                              onClick={() => handleReferenceToChat(activeDoc.workspaceFile!)}
+                            >
+                              引用到聊天
+                            </Button>
+                            {/* 引用选中文字 */}
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<SelectOutlined />}
+                              title="引用选中文字到聊天"
+                              onClick={handleManualReferenceSelection}
+                            >
+                              引用选中文字
+                            </Button>
+                            {/* 保存到永久目录 */}
+                            {activeDoc.workspaceFile.type === 'temp' && (
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<SaveOutlined />}
+                                title="保存到永久目录"
+                                onClick={() => handleSaveFilePermanent(activeDoc.workspaceFile!.id)}
+                              >
+                                保存
+                              </Button>
+                            )}
+                          </>
+                        )
+                      }
+                      return null
+                    })()}
+                  </div>
+                )
+              }}
               items={documents.map(doc => ({
                 key: doc.key,
                 label: doc.label,
@@ -286,7 +455,21 @@ const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
                     overflow: 'auto',
                     padding: '16px'
                   }}>
-                    {doc.content}
+                    {doc.workspaceFile ? (
+                      <DocumentViewer
+                        filePath={doc.workspaceFile.path}
+                        fileName={doc.workspaceFile.name}
+                        fileType={doc.workspaceFile.fileType}
+                        workspaceFile={doc.workspaceFile}
+                        onContentChange={handleDocumentContentChange}
+                        onSelectionReference={handleReferenceSelectionToChat}
+                        onError={(error) => {
+                          console.error('文档加载错误:', error)
+                        }}
+                      />
+                    ) : (
+                      doc.content
+                    )}
                   </div>
                 )
               }))}
