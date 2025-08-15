@@ -4,17 +4,29 @@ declare global {
       getVersion: () => Promise<string>;
       generateUUID: () => string;
       
-      // File API
+      // File API - DeeChat工作区和PromptX资源管理
       file: {
+        // PromptX资源管理API - 保留
         list: (filters?: any) => Promise<any[]>;
-        get: (fileId: string) => Promise<any>;
-        read: (fileId: string) => Promise<string>;
+        read: (fileId: string) => Promise<any>;
         stats: () => Promise<any>;
-        save: (fileData: any) => Promise<any>;
-        delete: (fileId: string) => Promise<void>;
-        export: (fileId: string, targetPath: string) => Promise<void>;
         tree: (category?: string) => Promise<any[]>;
         updateContent: (fileId: string, content: string) => Promise<void>;
+        
+        // 工作区文件操作API - 用于直接写入PromptX目录
+        write: (filePath: string, content: string) => Promise<void>;
+        readFile: (filePath: string) => Promise<string>;
+        ensureDir: (dirPath: string) => Promise<void>;
+        getPromptXWorkspacePath: () => Promise<string>;
+        getAppDataPath: () => Promise<string>;
+        
+        // 文件对话框API - 用于导出功能
+        showSaveDialog: (options: any) => Promise<any>;
+        showOpenDialog: (options: any) => Promise<any>;
+        
+        // DeeChat工作区文件操作API
+        delete: (filePath: string) => Promise<void>;
+        showInFolder: (filePath: string) => Promise<void>;
       };
 
       // 🔧 文件操作API已移除，请使用PromptX的@file://协议

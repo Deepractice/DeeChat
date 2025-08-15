@@ -170,7 +170,15 @@ const electronAPI = {
     readFile: (filePath: string) => ipcRenderer.invoke('file:readFile', filePath),
     ensureDir: (dirPath: string) => ipcRenderer.invoke('file:ensureDir', dirPath),
     getPromptXWorkspacePath: () => ipcRenderer.invoke('file:getPromptXWorkspacePath'),
-    getAppDataPath: () => ipcRenderer.invoke('file:getAppDataPath')
+    getAppDataPath: () => ipcRenderer.invoke('file:getAppDataPath'),
+    
+    // 文件对话框API - 用于导出功能
+    showSaveDialog: (options: any) => ipcRenderer.invoke('file:showSaveDialog', options),
+    showOpenDialog: (options: any) => ipcRenderer.invoke('file:showOpenDialog', options),
+    
+    // DeeChat工作区文件操作API
+    delete: (filePath: string) => ipcRenderer.invoke('file:delete', filePath),
+    showInFolder: (filePath: string) => ipcRenderer.invoke('file:showInFolder', filePath)
     // 📁 以下附件管理API已移除，请使用PromptX的@file://协议:
     // - upload: 文件上传
     // - get: 文件获取

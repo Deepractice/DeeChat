@@ -493,6 +493,62 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // 文件对话框API - 用于导出功能
+  ipcMain.handle('file:showSaveDialog', async (_event, options) => {
+    try {
+      const { dialog } = require('electron')
+      console.log(`💾 [文件对话框] 显示保存对话框:`, options)
+      
+      const result = await dialog.showSaveDialog(mainWindow, options)
+      console.log(`💾 [文件对话框] 保存对话框结果:`, result)
+      
+      return result
+    } catch (error) {
+      console.error('❌ [文件对话框] 保存对话框失败:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:showOpenDialog', async (_event, options) => {
+    try {
+      const { dialog } = require('electron')
+      console.log(`📂 [文件对话框] 显示打开对话框:`, options)
+      
+      const result = await dialog.showOpenDialog(mainWindow, options)
+      console.log(`📂 [文件对话框] 打开对话框结果:`, result)
+      
+      return result
+    } catch (error) {
+      console.error('❌ [文件对话框] 打开对话框失败:', error)
+      throw error
+    }
+  })
+
+  // DeeChat工作区文件操作API
+  ipcMain.handle('file:delete', async (_event, filePath: string) => {
+    try {
+      const fs = require('fs/promises')
+      await fs.unlink(filePath)
+      console.log(`🗑️ [DeeChat] 删除文件: ${filePath}`)
+      return true
+    } catch (error) {
+      console.error('❌ [DeeChat] 删除文件失败:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:showInFolder', async (_event, filePath: string) => {
+    try {
+      const { shell } = require('electron')
+      shell.showItemInFolder(filePath)
+      console.log(`📂 [DeeChat] 在文件夹中显示: ${filePath}`)
+      return true
+    } catch (error) {
+      console.error('❌ [DeeChat] 在文件夹中显示失败:', error)
+      throw error
+    }
+  })
+
   // 服务管理API
   console.log('🔧 [调试] 注册服务管理API...')
   ipcMain.handle('service:getStatus', async () => {
@@ -799,14 +855,14 @@ function registerIPCHandlers(): void {
         systemPrompt 
       } = config || {}
       
-      // 🔥 创建流式更新回调函数
-      const onStreamUpdate = (update: any) => {
-        console.log('📡 [流式更新]', update.type, ':', update.stage)
-        event.sender.send('llm:stream-update', {
-          sessionId,
-          update
-        })
-      }
+      // 🔥 创建流式更新回调函数 (暂时注释)
+      // const _onStreamUpdate = (update: any) => {
+      //   console.log('📡 [流式更新]', update.type, ':', update.stage)
+      //   event.sender.send('llm:stream-update', {
+      //     sessionId,
+      //     update
+      //   })
+      // }
       
       // 构建LLMRequest对象
       const llmRequest = {
@@ -826,7 +882,7 @@ function registerIPCHandlers(): void {
         configId,                   // configId: string
         true,                       // enableMCPTools: boolean
         [],                         // chatHistory?: ChatMessage[]
-        onStreamUpdate              // onStreamUpdate?: (update: any) => void
+        sessionId                   // sessionId?: string
       )
       
       console.log('✅ [IPC] MCP工具消息发送成功')
@@ -1180,6 +1236,18 @@ app.whenReady().then(async () => {
     
     // 初始化ServiceManager
     await serviceManager.initialize()
+    
+    // 🏗️ 初始化DeeChat独立目录服务
+    console.log('🏗️ [主进程] 初始化DeeChat独立目录结构...')
+    try {
+      const { DeeChatDirectoryService } = await import('../shared/services/DeeChatDirectoryService')
+      const deechatDirService = DeeChatDirectoryService.getInstance()
+      await deechatDirService.initialize()
+      console.log('✅ [主进程] DeeChat目录服务初始化完成')
+    } catch (error) {
+      console.error('❌ [主进程] DeeChat目录服务初始化失败:', error)
+      // 不抛出错误，允许应用继续运行
+    }
     
     // ServiceManager已初始化完成
     

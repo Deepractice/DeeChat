@@ -139,10 +139,25 @@ export class MCPConfigService implements IMCPConfigService {
           console.log('[MCP Config] PromptX配置已存在，跳过初始化');
         }
 
-        // 📦 文件操作功能已整合到PromptX，无需单独配置
-        console.log('[MCP Config] 📦 文件操作功能已整合到PromptX @file:// 协议中，无需单独服务器');
+        // 🏗️ 添加DeeChat独立工作区MCP服务器
+        const deechatWorkspaceExists = servers.some(s => s.id === 'deechat-workspace-builtin');
+        if (!deechatWorkspaceExists) {
+          console.log(`[MCP Config] ➕ 首次运行，添加DeeChat工作区MCP服务器`);
+          
+          try {
+            const deechatWorkspaceServer = this.createDefaultDeeChatWorkspaceServer();
+            servers.push(deechatWorkspaceServer); // 添加DeeChat工作区服务器
+            await this.saveAllConfigs(servers);
+            
+            console.log('✅ [MCP Config] DeeChat工作区MCP服务器配置添加成功');
+          } catch (error) {
+            console.error('[MCP Config] DeeChat工作区MCP服务器配置添加失败:', error);
+          }
+        } else {
+          console.log('[MCP Config] DeeChat工作区MCP服务器配置已存在，跳过初始化');
+        }
 
-        console.log('[MCP Config] 工作区管理已移除，统一使用文件操作MCP管理工作区文件');
+        console.log('[MCP Config] 🎯 架构解耦：PromptX专注AI能力增强，DeeChat专注工作区文件管理');
         
         // 🔥 标记为已初始化，防止后续重复检查
         MCPConfigService._builtinServersInitialized = true;
@@ -457,9 +472,49 @@ export class MCPConfigService implements IMCPConfigService {
     return server;
   }
 
-  // 📦 文件操作服务器已移除 - 功能已整合到PromptX的@file://协议中
+  /**
+   * 创建默认的DeeChat工作区MCP服务器配置
+   */
+  private createDefaultDeeChatWorkspaceServer(): MCPServerEntity {
+    const now = new Date();
+    
+    // 🔥 动态获取DeeChat工作区MCP服务器脚本路径
+    const path = require('path');
+    const isDev = process.env.NODE_ENV === 'development';
+    
+    let deechatWorkspaceMCPPath: string;
+    
+    if (isDev) {
+      // 开发环境：从编译后的dist目录到源码目录
+      deechatWorkspaceMCPPath = path.resolve(__dirname, '../DeeChatWorkspaceMCPServer.js');
+    } else {
+      // 生产环境：使用打包后的资源
+      deechatWorkspaceMCPPath = path.join(process.resourcesPath, 'dist/main/main/services/mcp/DeeChatWorkspaceMCPServer.js');
+    }
+    
+    const server = new MCPServerEntity({
+      id: 'deechat-workspace-builtin',
+      name: 'DeeChat工作区 (内置)',
+      description: 'DeeChat独立工作区文件管理MCP服务器 - 提供read/write/diff/list工具',
+      type: 'stdio',
+      isEnabled: true,
+      command: 'node',
+      args: [deechatWorkspaceMCPPath],
+      env: {
+        NODE_ENV: process.env.NODE_ENV || 'production',
+        DEECHAT_WORKSPACE_MODE: 'mcp-server'
+      },
+      timeout: 8000,
+      retryCount: 2,
+      createdAt: now,
+      updatedAt: now
+    });
 
-  // 工作区管理服务器已移除，统一使用文件操作MCP
+    console.log(`[MCP Config] ✅ 创建DeeChat工作区MCP服务器配置:`);
+    console.log(`[MCP Config]   - 脚本路径: ${deechatWorkspaceMCPPath}`);
+    console.log(`[MCP Config]   - 服务器ID: ${server.id}`);
+    return server;
+  }
 
   /**
    * 初始化PromptX服务器配置（优先传统模式，沙箱将在运行时自动检测）

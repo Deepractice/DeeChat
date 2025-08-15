@@ -15,10 +15,11 @@ import { TokenCounter } from '../components/TokenCounter';
 import { ModelContextManager, ContextAnalysisResult } from '../components/ModelContextManager';
 // 移除跨进程导入，改为在主进程中直接使用PromptXLocalService
 import { getPromptXLocalService } from '../../../main/services/promptx/PromptXLocalService';
+import { WorkspaceFile } from '../../types/WorkspaceFile';
 
 
 
-// UI意图注入上下文（新增：支持UI驱动的角色激活）
+// UI意图注入上下文（新增：支持UI驱动的角色激活和工作区感知）
 export interface UIInjectionContext {
   selectedRole?: string;           // UI选择的角色ID
   roleActivationRequest?: boolean; // 是否请求激活角色
@@ -29,6 +30,11 @@ export interface UIInjectionContext {
     creativeMode?: boolean;        // 创意模式
   };
   customInstructions?: string[];   // 用户自定义指令
+  // 🔥 新增：工作区UI状态
+  workspaceState?: {
+    isOpen: boolean;               // 工作区是否打开（打开就注入提示词）
+    files: WorkspaceFile[];        // 工作区文件列表
+  };
 }
 
 // 动态注入变量接口（从第四层移入）
@@ -547,6 +553,19 @@ ${roleContent}
     if (uiContext.roleActivationRequest && uiContext.selectedRole) {
       intentions.push(`🎭 用户已通过UI选择角色：${uiContext.selectedRole}`);
       intentions.push(`角色能力已自动激活，请以该角色身份提供专业服务。`);
+    }
+
+    // 🔥 工作区状态处理（核心逻辑：工作区打开 = 注入提示词）
+    if (uiContext.workspaceState?.isOpen) {
+      const { files } = uiContext.workspaceState;
+      
+      intentions.push(`📁 工作区已打开，您可以使用以下工具操作文件：`);
+      intentions.push(`  📖 deechat_workspace_read - 读取文件内容`);
+      intentions.push(`  ✏️ deechat_workspace_write - 写入/修改文件`);
+      intentions.push(`  📊 deechat_workspace_diff - 比较文件差异`);
+      intentions.push(`  📋 deechat_workspace_list - 列出所有文件`);
+      intentions.push(`  📈 deechat_workspace_stats - 获取工作区统计信息`);
+      intentions.push(`  🗑️ deechat_workspace_delete - 删除指定文件`);
     }
 
     // 特殊模式
