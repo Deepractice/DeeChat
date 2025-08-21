@@ -64,7 +64,6 @@ if (!gotTheLock) {
   process.exit(0)
 } else {
   console.log('✅ [单实例] 获得单实例锁，继续启动')
-  console.log('🔧 [调试] 开始进入else分支逻辑...')
   
   // 🔥 关键改进：所有初始化代码都在else分支内
   let mainWindow: BrowserWindow | null = null
@@ -78,20 +77,13 @@ if (!gotTheLock) {
   let langChainService: LLMService
   let modelManagementService: ModelService
 
-  console.log('🔧 [调试] 服务变量声明完成...')
 
   /**
    * 创建主窗口
    */
-  console.log('🔧 [调试] 开始定义createWindow函数...')
   // @ts-ignore TS6133
   function createWindow(): void {
     console.log('🖼️ [主进程] 创建主窗口...')
-    console.log('🔍 [窗口调试] 当前窗口状态检查:')
-    console.log(`  - isCreatingWindow: ${isCreatingWindow}`)
-    console.log(`  - mainWindow: ${mainWindow ? 'exists' : 'null'}`)
-    console.log(`  - 所有窗口数量: ${BrowserWindow.getAllWindows().length}`)
-    console.log(`  - 调用栈:`, new Error().stack?.split('\n').slice(1, 4).join('\n'))
 
     // 🔥 防止重复创建窗口
     if (isCreatingWindow || mainWindow) {
@@ -100,7 +92,6 @@ if (!gotTheLock) {
     }
 
     isCreatingWindow = true // 🔥 设置创建状态
-    console.log('🔥 [窗口调试] 开始创建窗口，设置isCreatingWindow=true')
 
     mainWindow = new BrowserWindow({
       width: 1200,
@@ -167,7 +158,6 @@ if (!gotTheLock) {
    */
   // @ts-ignore TS6133
   async function initializeBasicServices(): Promise<void> {
-    console.log('🔧 [主进程] 初始化基础服务...')
 
     try {
       // 🔥 旧的SystemRoleManager初始化已删除，使用智能分层提示词系统代替
@@ -292,19 +282,14 @@ async function initializePromptXWorkspace(): Promise<void> {
 /**
  * 注册IPC处理器
  */
-console.log('🔧 [调试] 开始定义registerIPCHandlers函数...')
 function registerIPCHandlers(): void {
-  console.log('🔧 [主进程] 注册IPC处理器...')
-  console.log('🔧 [调试] registerIPCHandlers函数内部开始执行...')
 
   // 基础应用API
-  console.log('🔧 [调试] 注册基础应用API...')
   ipcMain.handle('app:getVersion', () => {
     return app.getVersion()
   })
 
   // 🔧 文件操作API已移除，请使用PromptX的@file://协议
-  console.log('🔧 [调试] 文件操作功能已整合到PromptX...')
 
   // 📁 文件写入API已移除，请使用PromptX的@file://协议
 
@@ -491,9 +476,10 @@ function registerIPCHandlers(): void {
 
   ipcMain.handle('file:getPromptXWorkspacePath', async () => {
     try {
-      const promptxPath = process.env.PROMPTX_WORKSPACE || 
-                          require('path').join(require('os').homedir(), '.promptx')
-      console.log(`📍 [工作区路径] PromptX工作区: ${promptxPath}`)
+      // 返回PromptX的全局资源目录，前端可以用来显示资源信息
+      const { PROMPTX_HOME_DIR } = require('../shared/constants/promptx')
+      const promptxPath = process.env.PROMPTX_WORKSPACE || PROMPTX_HOME_DIR
+      console.log(`📍 [工作区路径] PromptX全局资源目录: ${promptxPath}`)
       return promptxPath
     } catch (error) {
       console.error('❌ [工作区路径] 获取PromptX路径失败:', error)
@@ -583,7 +569,6 @@ function registerIPCHandlers(): void {
   })
 
   // 服务管理API
-  console.log('🔧 [调试] 注册服务管理API...')
   ipcMain.handle('service:getStatus', async () => {
     if (!serviceManager) {
       return { success: false, error: '服务管理器未初始化' }
@@ -888,34 +873,38 @@ function registerIPCHandlers(): void {
         systemPrompt 
       } = config || {}
       
-      // 🔥 创建流式更新回调函数
-      const onStreamUpdate = (update: any) => {
-        console.log('📡 [流式更新]', update.type, ':', update.stage)
-        event.sender.send('llm:stream-update', {
-          sessionId,
-          update
-        })
-      }
+      // 🎯 移除未使用的onStreamUpdate变量（已在下面的callback中内联处理）
       
       // ✅ 直接传递参数，不需要构建 LLMRequest对象
       
       // 🔥 发送开始事件
       event.sender.send('llm:stream-start', { sessionId })
       
-      // 构建 LLMRequest对象（LLMService需要）
+      // 移除未使用的llmRequest对象
+      
+      // 🎯 使用LLMService的正确3参数streamMessage方法
       const llmRequest = {
         message: message,
         sessionId: sessionId,
         activeRole: currentRole?.id,
         systemPrompt: systemPrompt,
-        attachmentIds: []
+        uiContext: undefined,
+        chatHistory: undefined
       }
       
-      // ✅ 使用统一的流式方法替代已删除的sendMessageWithMCPTools
       const response = await langChainService.streamMessage(
         llmRequest,                 // request: LLMRequest
         configId,                   // configId: string
-        onStreamUpdate              // onChunk?: (chunk: string) => void
+        // 🌊 简化回调：接收简单的chunk字符串
+        (chunk: string) => {
+          // 发送流式更新到前端
+          event.sender.send('ai:streamChunk', {
+            type: 'generating',
+            partialContent: chunk,
+            sessionId: sessionId,
+            stage: 'AI正在生成回复...'
+          });
+        }
       )
       
       console.log('✅ [IPC] MCP工具消息发送成功')
@@ -1063,6 +1052,10 @@ function registerIPCHandlers(): void {
   // AI服务流式消息API - 修复流式输出问题的关键处理器！
   ipcMain.handle('ai:streamMessage', async (event, request: any) => {
     try {
+      console.log('🚨 [DEBUG-IPC] ai:streamMessage 被调用!');
+      console.log('🚨 [DEBUG-IPC] request结构:', Object.keys(request));
+      console.log('🚨 [DEBUG-IPC] llmRequest存在:', !!request.llmRequest);
+      console.log('🚨 [DEBUG-IPC] enableMCPTools:', request.enableMCPTools);
       console.log('🌊 IPC: AI流式消息发送:', request.llmRequest?.message?.substring(0, 50) + '...');
       console.log('🌊 IPC: 配置ID:', request.configId);
       console.log('🌊 IPC: 启用MCP工具:', request.enableMCPTools);
@@ -1083,18 +1076,24 @@ function registerIPCHandlers(): void {
         activeRole: request.llmRequest?.activeRole  // 🔥 修复：确保角色传递
       };
       
-      console.log('🔥 [调试] enhancedRequest.activeRole:', enhancedRequest.activeRole); // 🔥 调试增强请求
       
+      // 🎯 奥卡姆剃刀优化：使用LLMService的正确3参数streamMessage调用
+      console.log('🚨 [DEBUG-IPC] 准备调用 langChainService.streamMessage');
+      console.log('🚨 [DEBUG-IPC] enhancedRequest:', enhancedRequest);
+      console.log('🚨 [DEBUG-IPC] langChainService存在:', !!langChainService);
       const response = await langChainService.streamMessage(
-        enhancedRequest,  // request: LLMRequest - 恢复正确：传递完整请求对象
-        request.configId, // configId: string
-        // 🌊 流式回调函数 - 接收每个内容chunk
-        (partialContent: string) => {
-          // 发送实时token更新
+        enhancedRequest,                          // request: LLMRequest (正确的第一个参数)
+        request.configId,                         // configId: string
+        // 🌊 简化的流式回调函数 - 接收chunk字符串
+        (chunk: string) => {
+          console.log('🌊 [IPC-流式回调] 收到chunk:', chunk?.slice(0, 50) + '...');
+          
+          // 发送流式更新到前端
           event.sender.send('ai:streamChunk', {
-            type: 'token',
-            content: partialContent,
-            sessionId: request.sessionId
+            type: 'generating',
+            partialContent: chunk,
+            sessionId: request.sessionId,
+            stage: 'AI正在生成回复...'
           });
         }
       );
@@ -1251,7 +1250,6 @@ function registerIPCHandlers(): void {
 /**
  * 应用启动流程
  */
-console.log('🔧 [调试] 准备注册app.whenReady回调...')
 app.whenReady().then(async () => {
   console.log('🚀 [主进程] 应用启动流程开始...')
   console.log(`🔧 [主进程] 环境: ${isDev ? '开发' : '生产'}`)
@@ -1274,7 +1272,6 @@ app.whenReady().then(async () => {
   console.log(`🎯 [主进程] 预设PromptX项目根目录: ${projectRoot}`)
 
   // 0. 初始化ServiceManager和核心服务（现在app已准备就绪）
-  console.log('🔧 [主进程] 通过ServiceManager初始化核心服务...')
   
   try {
     // 创建ServiceManager并初始化基础设施

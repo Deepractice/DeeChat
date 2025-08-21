@@ -1,5 +1,6 @@
 import * as path from 'path';
 import { IPromptXService, PromptXCommand } from '../../../shared/interfaces/IPromptXService';
+import { DEECHAT_PROJECT_DIR } from '../../../shared/constants/promptx';
 
 /**
  * PromptX本地调用服务
@@ -98,25 +99,17 @@ export class PromptXLocalService implements IPromptXService {
         console.log('[PromptXLocalService] CLI ServerEnvironment初始化成功');
       }
 
-      // 3. 🔥 新增：初始化PromptX项目环境
+      // 3. 🔥 设置DeeChat项目工作目录：初始化PromptX项目环境
       try {
-        // 获取正确的工作目录
-        let workingDirectory: string;
-        
-        if (process.env.NODE_ENV === 'development') {
-          // 开发环境：使用项目根目录
-          workingDirectory = path.resolve(__dirname, '../../../..');
-        } else {
-          // 生产环境：使用用户数据目录，PromptX会在init时创建自己的.promptx资源
-          const { app } = require('electron');
-          workingDirectory = app.getPath('userData');
-        }
+        // 使用DeeChat项目目录作为PromptX的项目工作目录
+        // PromptX会将此目录注册为当前项目，同时全局资源仍存储在~/.promptx
+        const workingDirectory = DEECHAT_PROJECT_DIR;
           
-        console.log(`[PromptXLocalService] 正在初始化PromptX项目环境: ${workingDirectory}`);
+        console.log(`[PromptXLocalService] 正在设置DeeChat为PromptX项目: ${workingDirectory}`);
         
-        // 调用init命令初始化项目
+        // 调用init命令设置项目工作目录
         const initResult = await this.promptxCLI.execute('init', [workingDirectory]);
-        console.log('[PromptXLocalService] PromptX项目环境初始化成功:', initResult);
+        console.log('[PromptXLocalService] PromptX项目环境设置成功:', initResult);
       } catch (initError) {
         console.warn('[PromptXLocalService] PromptX项目初始化警告:', initError);
         // 项目初始化失败不阻止整个服务启动，某些功能可能会受限

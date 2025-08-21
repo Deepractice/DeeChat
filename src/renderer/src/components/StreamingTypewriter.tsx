@@ -27,7 +27,7 @@ interface StreamingTypewriterProps {
 const StreamingTypewriter: React.FC<StreamingTypewriterProps> = ({
   currentText,
   isComplete,
-  speed = 80,
+  speed = 20,
   onComplete,
   className,
   style

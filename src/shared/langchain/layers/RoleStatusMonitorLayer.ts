@@ -213,7 +213,17 @@ export class RoleStatusMonitorLayer {
     const finalRecommendations = this.generateFinalRecommendations(contextAnalysis);
     log.info(`💡 [系统建议] 动作: ${finalRecommendations.action}, 紧急度: ${finalRecommendations.urgency}`);
 
-    // **步骤6**：构建增强的系统提示词（加入角色内容直接注入）
+    // **步骤6**：构建动态注入变量（如果有可用工具）
+    console.log(`🔧 [DEBUG-工具检测] availableTools状态:`, availableTools ? `发现${availableTools.length}个工具` : '无可用工具');
+    const injectedVariables = availableTools ? this.buildInjectionVariables(context, availableTools) : undefined;
+    if (injectedVariables && availableTools) {
+      console.log(`🔧 [DEBUG-工具注入] 工具详情:`, injectedVariables.AVAILABLE_TOOLS_DETAILED?.substring(0, 200) + '...');
+      log.info(`🔧 [工具注入] 准备注入 ${availableTools.length} 个工具到系统提示词`);
+    } else {
+      console.log(`⚠️ [DEBUG-工具注入] 未检测到可用工具，将不会注入工具信息`);
+    }
+
+    // **步骤7**：构建增强的系统提示词（加入角色内容直接注入）
     const enhancedSystemPrompt = this.buildEnhancedSystemPrompt(
       finalSystemPrompt,
       context,
@@ -221,12 +231,10 @@ export class RoleStatusMonitorLayer {
       roleAnalysis,
       finalRecommendations,
       uiContext,
-      roleContent
+      roleContent,
+      injectedVariables  // 🔥 传入注入变量
     );
     log.info(`📝 [最终提示词] 构建完成，长度: ${enhancedSystemPrompt.length} 字符`);
-
-    // **步骤7**：构建动态注入变量（如果有可用工具）
-    const injectedVariables = availableTools ? this.buildInjectionVariables(context, availableTools) : undefined;
 
     // **步骤8**：构建增强结果
     const result: RoleStatusResult = {
@@ -369,7 +377,8 @@ export class RoleStatusMonitorLayer {
     roleAnalysis: any,
     _recommendations: any,
     uiContext?: UIInjectionContext,
-    roleContent?: string | null
+    roleContent?: string | null,
+    injectedVariables?: Partial<InjectionVariables>
   ): string {
     const sections: string[] = [];
 
@@ -438,7 +447,35 @@ ${roleContent}
       }
     }
 
-    // 6. 基础系统提示词
+    // 6. 🔧 工具信息注入（如果有可用工具）
+    if (injectedVariables?.AVAILABLE_TOOLS_DETAILED) {
+      const toolsSection = `# 🔧 AVAILABLE_TOOLS
+
+你现在有以下工具可以使用。请根据用户的需求智能选择合适的工具来完成任务。
+
+${injectedVariables.AVAILABLE_TOOLS_DETAILED}
+
+## 工具调用格式
+工具调用使用XML格式。工具名称作为XML标签名，每个参数都封装在自己的标签中：
+
+<工具名称>
+<参数1>参数值1</参数1>
+<参数2>参数值2</参数2>
+</工具名称>
+
+⚠️ **重要**：当你需要调用工具时，请使用上述XML格式，不要只是描述要执行的操作。`;
+      sections.push(toolsSection);
+      console.log(`🔧 [DEBUG-工具注入到提示词] 工具section已添加，长度: ${toolsSection.length}字符`);
+      console.log(`🔧 [DEBUG-工具注入到提示词] 工具section前200字符: ${toolsSection.substring(0, 200)}...`);
+      log.info(`🔧 [工具注入] 已将工具信息注入到系统提示词中`);
+    } else {
+      console.log(`⚠️ [DEBUG-工具注入到提示词] injectedVariables?.AVAILABLE_TOOLS_DETAILED 为空，未注入工具信息`);
+      if (injectedVariables) {
+        console.log(`📊 [DEBUG-注入变量] injectedVariables的keys:`, Object.keys(injectedVariables));
+      }
+    }
+
+    // 7. 基础系统提示词
     sections.push(`# 📝 BASE_SYSTEM_PROMPT\n${baseSystemPrompt}`);
 
     const finalPrompt = sections.join('\n\n');
@@ -653,23 +690,45 @@ ${roleContent}
    * 格式化工具详细信息
    */
   private formatToolsDetailed(tools: any[]): string {
+    console.log(`🔧 [DEBUG-格式化工具] 开始格式化工具，输入工具数量: ${tools?.length || 0}`);
+    
     if (!tools || tools.length === 0) {
+      console.log(`⚠️ [DEBUG-格式化工具] 工具列表为空，返回默认消息`);
       return '暂无可用工具';
     }
 
-    return tools.map(tool => {
+    const formattedTools = tools.map((tool, index) => {
       const name = tool.name || '未知工具';
       const description = tool.description || '无描述';
       
-      return `**${name}**: ${description}
+      console.log(`🔧 [DEBUG-格式化工具] 处理第${index + 1}个工具: ${name}`);
+      
+      // 获取输入参数schema信息
+      const schema = tool.inputSchema || tool.schema;
+      let paramsList: string[] = [];
+      if (schema?.properties) {
+        const required = schema.required || [];
+        paramsList = Object.keys(schema.properties).map(param => {
+          const isRequired = required.includes(param);
+          return `<${param}>${isRequired ? '必需参数' : '可选参数'}</${param}>`;
+        });
+        console.log(`🔧 [DEBUG-格式化工具] 工具${name}的参数:`, paramsList);
+      }
+      
+      const paramsExample = paramsList.length > 0 ? `\n${paramsList.join('\n')}` : '\n<!-- 根据具体工具填写参数 -->';
+      
+      const formatted = `**${name}**: ${description}
 XML调用格式:
-<tool_call>
-<tool_name>${name}</tool_name>
-<parameters>
-  <!-- 根据具体工具填写参数 -->
-</parameters>
-</tool_call>`;
-    }).join('\n\n');
+<${name}>${paramsExample}
+</${name}>`;
+      
+      console.log(`🔧 [DEBUG-格式化工具] 工具${name}格式化完成，长度: ${formatted.length}字符`);
+      return formatted;
+    });
+    
+    const result = formattedTools.join('\n\n');
+    console.log(`🔧 [DEBUG-格式化工具] 所有工具格式化完成，总长度: ${result.length}字符`);
+    return result;
   }
 
   /**

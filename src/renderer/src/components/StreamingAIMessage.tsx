@@ -234,7 +234,7 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
             <StreamingTypewriter
               currentText={displayContent}
               isComplete={isCompleted}
-              speed={80}
+              speed={20}
               onComplete={onComplete}
               style={{
                 margin: 0,

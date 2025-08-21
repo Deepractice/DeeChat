@@ -6,7 +6,7 @@
 import log from 'electron-log'
 import { MCPServerEntity } from '../../../../shared/entities/MCPServerEntity'
 import * as path from 'path'
-import { app } from 'electron'
+import { DEECHAT_PROJECT_DIR } from '../../../../shared/constants/promptx'
 
 export class InProcessMCPServer {
   private promptxServer: any = null
@@ -15,10 +15,10 @@ export class InProcessMCPServer {
   private workingDirectory: string
   
   constructor(private server: MCPServerEntity) {
-    // 🔥 动态设置PromptX工作目录
-    this.workingDirectory = server.workingDirectory || path.join(app.getPath('userData'), 'promptx-workspace')
+    // 🔥 使用DeeChat项目目录作为MCP服务器工作目录
+    this.workingDirectory = server.workingDirectory || DEECHAT_PROJECT_DIR
     log.info(`[InProcess MCP] 初始化进程内MCP服务器: ${server.name}`)
-    log.info(`[InProcess MCP] 工作目录: ${this.workingDirectory}`)
+    log.info(`[InProcess MCP] DeeChat项目工作目录: ${this.workingDirectory}`)
   }
 
   /**

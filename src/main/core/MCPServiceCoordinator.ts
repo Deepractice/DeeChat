@@ -253,10 +253,9 @@ export class MCPServiceCoordinator extends EventEmitter {
     }
 
     try {
-      const { app } = require('electron')
-      const path = require('path')
-      
-      const workingDirectory = path.join(app.getPath('userData'), 'promptx-workspace')
+      // 使用DeeChat项目目录
+      const { DEECHAT_PROJECT_DIR } = require('../../shared/constants/promptx')
+      const workingDirectory = DEECHAT_PROJECT_DIR
 
       // TODO: 调用PromptX初始化工具
       log.info(`🔧 [MCPCoordinator] PromptX工作目录: ${workingDirectory}`)

@@ -278,17 +278,24 @@ export class ServiceManager extends EventEmitter {
       const path = require('path')
 
       const userDataPath = app.getPath('userData')
+      // PromptX会自动管理~/.promptx目录，我们只需要确保DeeChat的目录存在
+      const { DEECHAT_PROJECT_DIR, PLATFORM_INFO } = require('../../shared/constants/promptx')
       const requiredDirs = [
         path.join(userDataPath, 'logs'),
         path.join(userDataPath, 'cache'),
-        path.join(userDataPath, 'promptx-workspace'),
+        DEECHAT_PROJECT_DIR, // 确保DeeChat项目目录存在
         path.join(userDataPath, 'temp')
       ]
 
       for (const dir of requiredDirs) {
         if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true, mode: 0o755 })
-          console.log(`📁 [ServiceManager] 创建目录: ${dir}`)
+          // Windows系统不需要mode参数，Unix系统使用0o755
+          const mkdirOptions = PLATFORM_INFO.isWindows 
+            ? { recursive: true } 
+            : { recursive: true, mode: 0o755 }
+          
+          fs.mkdirSync(dir, mkdirOptions)
+          console.log(`📁 [ServiceManager] 创建${PLATFORM_INFO.platform}目录: ${dir}`)
         }
       }
 

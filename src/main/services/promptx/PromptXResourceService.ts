@@ -1,10 +1,10 @@
-import { app } from 'electron'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { createHash } from 'crypto'
 import { BaseService, ServiceEvent } from '../../core/BaseService'
 import { FileService } from '../FileService'
 import log from 'electron-log'
+import { PROMPTX_USER_RESOURCE_DIR } from '../../../shared/constants/promptx'
 
 // 重用原有的接口定义
 export interface BaseFileMetadata {
@@ -55,7 +55,8 @@ export class PromptXResourceService extends BaseService {
   constructor(_fileService: FileService) {
     super('PromptXResourceService')
     // this.fileService = fileService // 预留，未来可能需要
-    this.promptxResourceDir = path.join(app.getPath('userData'), 'promptx-workspace', '.promptx', 'resource')
+    // 统一使用PromptX实际的资源目录：~/.promptx/resource
+    this.promptxResourceDir = PROMPTX_USER_RESOURCE_DIR
   }
 
   async initialize(): Promise<void> {

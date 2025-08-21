@@ -19,7 +19,9 @@ import {
 } from '../interfaces/AIStateProtocol';
 import log from 'electron-log';
 
-// 流式更新接口 - 扩展支持AI状态机
+// 保持原有流式接口，不引入未使用的类型
+
+// 保持原有的StreamUpdate接口以兼容AI状态机等功能
 export interface StreamUpdate {
   type: 'thinking' | 'tool_calling' | 'tool_result' | 'generating' | 'complete' | 'state_machine';
   stage: string;
@@ -30,7 +32,7 @@ export interface StreamUpdate {
   };
   toolResults?: ToolExecution[];
   partialContent?: string;
-  // 🔥 新增：AI状态机相关字段
+  // 🔥 保持：AI状态机相关字段
   aiState?: AIStateOutput;
   conversationIteration?: number;
   totalIterations?: number;
@@ -334,12 +336,7 @@ export class LangChainLLMService {
     const startTime = Date.now();
     
     try {
-      console.log('🔧 [统一消息发送] 方法被调用');
-      console.log('🔧 [统一消息发送] mcpService存在:', !!this.mcpService);
-
-    console.log('🔧 [统一消息发送] 开始获取模型和配置');
     const modelConfig = await this.getModelConfig(configId);
-    console.log('🔧 [统一消息发送] 模型和配置获取完成');
 
     // 构建会话上下文
     const conversationContext: ConversationContext = this.buildConversationContext(
@@ -446,7 +443,6 @@ export class LangChainLLMService {
         log.info(`🎯 [会话缓存] 新建会话模型: ${finalSessionId.slice(0, 8)}`);
         log.info(`🔧 [直接转换] 成功转换并绑定 ${langchainTools.length} 个工具到模型`);
       }
-      console.log(`🔧 [统一消息发送] 使用带 ${mcpTools.length} 个已过滤MCP工具的模型`);
     } else {
       // 没有MCP工具时，使用普通模型（也进行会话级缓存）
       const sessionKey = `${finalSessionId}_${configId}_no_tools`;
@@ -459,7 +455,6 @@ export class LangChainLLMService {
         this.sessionModelCache.set(sessionKey, model);
         log.info(`🎯 [会话缓存] 新建普通会话模型: ${finalSessionId.slice(0, 8)}`);
       }
-      console.log('🔧 [统一消息发送] 使用普通模型');
     }
 
     // 🔥 实现完整的LangChain工具调用循环
@@ -468,8 +463,6 @@ export class LangChainLLMService {
     log.info(`🚀 [第一次模型调用] 开始调用模型，消息数: ${messages.length}`);
     log.info(`🚀 [第一次模型调用] 系统提示词长度: ${messages[0] ? (messages[0].content as string).length : 0} 字符`);
     
-    console.log('🚀 [DeeChat调试] 第一次模型调用开始，消息数:', messages.length);
-    console.log('🚀 [DeeChat调试] 系统提示词长度:', messages[0] ? (messages[0].content as string).length : 0, '字符');
     
     // 🔥 流式更新：开始思考阶段
     onStreamUpdate?.({
@@ -478,12 +471,56 @@ export class LangChainLLMService {
       metadata: { messageCount: messages.length }
     });
     
-    let currentResponse = await model.invoke(messages);
-    let finalAIResponse = currentResponse.content as string;
+    // 🌊 流式更新：开始生成阶段
+    onStreamUpdate?.({
+      type: 'generating',
+      stage: '正在生成回复...',
+      partialContent: '',
+      metadata: { messageCount: messages.length }
+    });
+    
+    // 🔥 使用流式API实现真正的逐字符输出
+    let currentResponse: any = null;
+    let finalAIResponse = '';
     let toolExecutions: any[] = [];
     
+    try {
+      const streamResponse = await model.stream(messages);
+      
+      for await (const chunk of streamResponse) {
+        // 累积内容
+        if (chunk.content) {
+          finalAIResponse += chunk.content;
+          
+          // 🌊 发送流式更新
+          onStreamUpdate?.({
+            type: 'generating',
+            stage: '正在生成回复...',
+            partialContent: finalAIResponse,
+            metadata: { 
+              chunkLength: chunk.content.length,
+              totalLength: finalAIResponse.length 
+            }
+          });
+        }
+        
+        // 保存最后一个chunk作为完整响应（包含tool_calls等元数据）
+        currentResponse = chunk;
+      }
+      
+      // 如果没有收到任何chunk，使用invoke作为备选
+      if (!currentResponse) {
+        log.warn('⚠️ [流式输出] 没有收到流式chunk，使用invoke备选方案');
+        currentResponse = await model.invoke(messages);
+        finalAIResponse = currentResponse.content as string;
+      }
+    } catch (error) {
+      log.error('❌ [流式输出] 流式调用失败，使用invoke备选方案:', error);
+      currentResponse = await model.invoke(messages);
+      finalAIResponse = currentResponse.content as string;
+    }
+    
     log.info(`✅ [第一次模型调用] 完成，响应长度: ${finalAIResponse.length} 字符`);
-    console.log('✅ [DeeChat调试] 第一次模型调用完成，响应长度:', finalAIResponse.length, '字符');
 
     // 🔥 实现完整的工具调用循环机制
     let toolCallIteration = 0;
@@ -492,7 +529,6 @@ export class LangChainLLMService {
     while (currentResponse.tool_calls && currentResponse.tool_calls.length > 0 && toolCallIteration < maxToolCallIterations) {
       toolCallIteration++;
       log.info(`🔧 [工具调用循环] 第${toolCallIteration}轮工具调用，检测到 ${currentResponse.tool_calls.length} 个工具调用请求`);
-      console.log(`🔧 [DeeChat调试] 第${toolCallIteration}轮工具调用，数量:`, currentResponse.tool_calls.length);
       
       // 🔥 流式更新：工具调用阶段
       for (let i = 0; i < currentResponse.tool_calls.length; i++) {
@@ -574,7 +610,6 @@ export class LangChainLLMService {
 
       // 🔥 关键：将工具结果反馈给模型，让AI继续决定后续操作
       log.info(`🔄 [工具结果反馈] 将 ${toolResults.length} 个工具结果反馈给模型，等待下一步决策`);
-      console.log(`🔄 [DeeChat调试] 工具结果反馈给模型，等待AI继续决策`);
       
       // 构建工具结果消息（LangChain标准格式）
       const toolResultMessages = currentResponse.tool_calls.map((toolCall: any, index: number) => {
@@ -597,20 +632,62 @@ export class LangChainLLMService {
         metadata: { iteration: toolCallIteration + 1 }
       });
       
-      // 🔥 继续调用模型，让AI基于工具结果决定下一步
-      log.info(`🚀 [第${toolCallIteration + 1}次模型调用] 基于工具结果继续对话`);
-      console.log(`🚀 [DeeChat调试] 第${toolCallIteration + 1}次模型调用，基于工具结果继续`);
+      // 🌊 流式更新：开始生成下一轮回复
+      onStreamUpdate?.({
+        type: 'generating',
+        stage: '正在生成基于工具结果的回复...',
+        partialContent: '',
+        metadata: { iteration: toolCallIteration + 1 }
+      });
       
-      currentResponse = await model.invoke(messages);
-      finalAIResponse = currentResponse.content as string;
+      // 🔥 继续调用模型，让AI基于工具结果决定下一步（使用流式）
+      log.info(`🚀 [第${toolCallIteration + 1}次模型调用] 基于工具结果继续对话`);
+      
+      // 重置响应内容为累积模式
+      finalAIResponse = '';
+      
+      try {
+        const streamResponse = await model.stream(messages);
+        
+        for await (const chunk of streamResponse) {
+          // 累积内容
+          if (chunk.content) {
+            finalAIResponse += chunk.content;
+            
+            // 🌊 发送流式更新
+            onStreamUpdate?.({
+              type: 'generating',
+              stage: '正在生成基于工具结果的回复...',
+              partialContent: finalAIResponse,
+              metadata: { 
+                iteration: toolCallIteration + 1,
+                chunkLength: chunk.content.length,
+                totalLength: finalAIResponse.length 
+              }
+            });
+          }
+          
+          // 保存最后一个chunk
+          currentResponse = chunk;
+        }
+        
+        // 如果没有收到任何chunk，使用invoke作为备选
+        if (!currentResponse) {
+          log.warn('⚠️ [工具调用流式输出] 没有收到流式chunk，使用invoke备选方案');
+          currentResponse = await model.invoke(messages);
+          finalAIResponse = currentResponse.content as string;
+        }
+      } catch (error) {
+        log.error('❌ [工具调用流式输出] 流式调用失败，使用invoke备选方案:', error);
+        currentResponse = await model.invoke(messages);
+        finalAIResponse = currentResponse.content as string;
+      }
       
       log.info(`✅ [第${toolCallIteration + 1}次模型调用] 完成，响应长度: ${finalAIResponse.length} 字符，是否有新工具调用: ${!!(currentResponse.tool_calls && currentResponse.tool_calls.length > 0)}`);
-      console.log(`✅ [DeeChat调试] 第${toolCallIteration + 1}次模型调用完成，有新工具调用:`, !!(currentResponse.tool_calls && currentResponse.tool_calls.length > 0));
     }
     
     if (toolCallIteration >= maxToolCallIterations) {
       log.warn(`⚠️ [工具调用循环] 达到最大迭代次数 ${maxToolCallIterations}，停止工具调用`);
-      console.log('⚠️ [DeeChat调试] 工具调用达到最大迭代次数，停止循环');
     }
     
     // 🔥 新架构：角色内容已在第一次调用前直接注入，无需二次调用
@@ -618,7 +695,6 @@ export class LangChainLLMService {
       // 没有工具调用，提取旧的工具执行信息（用于显示）
       toolExecutions = this.extractToolExecutions(currentResponse);
       log.info(`📝 [标准响应] 没有工具调用，直接返回AI响应`);
-      console.log('📝 [DeeChat调试] 没有工具调用，直接返回AI响应');
     }
     
     // 如果没有角色激活工具调用，更新普通会话状态
@@ -985,13 +1061,13 @@ export class LangChainLLMService {
     chatHistory?: any[]
   ): Promise<string> {
     // 🔥 添加详细的参数日志
-    console.log('🌊 [streamMessage] 接收到的参数:');
-    console.log('🌊 [streamMessage]   - message:', typeof message, message?.slice(0, 50));
-    console.log('🌊 [streamMessage]   - configId:', configId);
-    console.log('🌊 [streamMessage]   - sessionId:', sessionId);
-    console.log('🌊 [streamMessage]   - activeRole:', activeRole, '类型:', typeof activeRole);
-    console.log('🌊 [streamMessage]   - uiContext:', !!uiContext);
-    console.log('🌊 [streamMessage]   - chatHistory length:', chatHistory?.length || 0);
+    console.log(`🚨 [DEBUG-LangChain入口] streamMessage被调用:`);
+    console.log(`🚨 [DEBUG-LangChain入口] - message长度: ${message.length}`);
+    console.log(`🚨 [DEBUG-LangChain入口] - configId: ${configId}`);
+    console.log(`🚨 [DEBUG-LangChain入口] - sessionId: ${sessionId}`);
+    console.log(`🚨 [DEBUG-LangChain入口] - activeRole: ${activeRole}`);
+    console.log(`🚨 [DEBUG-LangChain入口] - uiContext存在: ${!!uiContext}`);
+    
     const finalSessionId = sessionId || `stream_${Date.now()}`;
     
     log.info(`🌊 [流式输出] 开始流式对话 - 会话: ${finalSessionId.slice(0, 8)}, 模型: ${configId}`);
@@ -1062,6 +1138,7 @@ export class LangChainLLMService {
       let fullContent = '';
       let buffer = '';
       const BUFFER_SIZE = 1; // 🔥 改为每1个字符发送一次更新，实现真正的逐字显示
+      const STREAM_DELAY = 0; // 🚀 正常速度：无延迟的真实流式输出
       
       // 获取LangChain模型的流式输出
       const stream = await model.stream(promptResponse.messages);
@@ -1069,21 +1146,30 @@ export class LangChainLLMService {
       for await (const chunk of stream) {
         const chunkContent = chunk.content || '';
         if (chunkContent) {
-          buffer += chunkContent;
-          fullContent += chunkContent;
-          
-          // 当缓冲区达到一定大小时发送更新
-          if (buffer.length >= BUFFER_SIZE) {
-            onStreamUpdate({
-              type: 'generating',
-              stage: 'AI正在生成回复...',
-              partialContent: fullContent,
-              metadata: { 
-                sessionId: finalSessionId,
-                currentChunk: buffer
+          // 🎭 逐字符处理，添加延迟效果
+          for (let i = 0; i < chunkContent.length; i++) {
+            const char = chunkContent[i];
+            buffer += char;
+            fullContent += char;
+            
+            // 当缓冲区达到一定大小时发送更新
+            if (buffer.length >= BUFFER_SIZE) {
+              onStreamUpdate({
+                type: 'generating',
+                stage: 'AI正在生成回复...',
+                partialContent: fullContent,
+                metadata: { 
+                  sessionId: finalSessionId,
+                  currentChunk: buffer
+                }
+              });
+              buffer = '';
+              
+              // 🎭 添加延迟以便观察流式效果
+              if (STREAM_DELAY > 0) {
+                await new Promise(resolve => setTimeout(resolve, STREAM_DELAY));
               }
-            });
-            buffer = '';
+            }
           }
         }
       }
@@ -1166,12 +1252,7 @@ export class LangChainLLMService {
     modelName: string,
     activeRole?: string
   ): ConversationContext {
-    // 🔥 调试上下文构建
-    console.log('🔍 [buildConversationContext] 参数:');
-    console.log('🔍 [buildConversationContext]   - sessionId:', sessionId);
-    console.log('🔍 [buildConversationContext]   - modelName:', modelName);
-    console.log('🔍 [buildConversationContext]   - activeRole:', activeRole, '类型:', typeof activeRole);
-    
+      
     const existing = this.sessionContexts.get(sessionId);
     
     const context: ConversationContext = {
