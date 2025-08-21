@@ -2,6 +2,14 @@
  * Jest测试环境设置
  */
 
+// 全局Mock设置 - 必须在其他导入之前
+jest.mock('electron-log', () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn()
+}));
+
 // 设置测试超时时间
 jest.setTimeout(30000);
 

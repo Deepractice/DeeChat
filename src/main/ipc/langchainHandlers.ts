@@ -9,17 +9,27 @@ import { ModelConfigEntity } from '../../shared/entities/ModelConfigEntity.js';
 import { ProviderConfigEntity } from '../../shared/entities/ProviderConfigEntity.js';
 import { LLMRequest } from '../../shared/interfaces/IModelProvider.js';
 import { ChatSessionEntity } from '../../shared/entities/ChatSessionEntity.js';
-import { LocalStorageService } from '../services/core/LocalStorageService.js';
+import { MinimalDatabaseService } from '../services/core/MinimalDatabaseService.js';
+import { SqliteChatSessionRepository } from '../repositories/SqliteChatSessionRepository.js';
 
 // 创建服务实例
 const langChainService = new LLMService();
-const storageService = new LocalStorageService();
+const databaseService = new MinimalDatabaseService();
+const sessionRepository = new SqliteChatSessionRepository(databaseService);
 
 /**
  * 注册所有LangChain相关的IPC处理器
  */
-export function registerLangChainHandlers() {
+export async function registerLangChainHandlers() {
   console.log('注册LangChain IPC处理器...');
+  
+  // 初始化SQLite Repository
+  try {
+    await sessionRepository.initialize();
+    console.log('✅ SQLite聊天会话仓储初始化完成');
+  } catch (error) {
+    console.error('❌ SQLite聊天会话仓储初始化失败:', error);
+  }
 
   // 获取所有配置
   ipcMain.handle('langchain:getAllConfigs', async () => {
@@ -167,29 +177,7 @@ export function registerLangChainHandlers() {
     }
   });
 
-  // 新架构：AI服务API
-  console.log('注册 ai:sendMessage 处理器...');
-  ipcMain.handle('ai:sendMessage', async (_, request: any) => {
-    try {
-      console.log('IPC: AI发送消息:', request.llmRequest?.message?.substring(0, 50) + '...');
-      console.log('IPC: 配置ID:', request.configId);
-      console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
-      console.log('IPC: 会话ID:', request.sessionId || '未提供'); // 🎯 新增日志
-      
-      const response = await langChainService.sendMessage(
-        request.llmRequest, 
-        request.configId, 
-        request.chatHistory,
-        request.sessionId  // 🎯 新增参数：传递会话ID
-      );
-      console.log('IPC: AI消息发送成功');
-      return { success: true, data: response };
-    } catch (error) {
-      console.error('IPC: AI消息发送失败:', error);
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' };
-    }
-  });
-  console.log('ai:sendMessage 处理器注册完成');
+  // 🗑️ [已删除] ai:sendMessage - 旧的非流式API，已统一使用ai:streamMessage
 
   ipcMain.handle('ai:testProvider', async (_, configId: string) => {
     try {
@@ -203,30 +191,7 @@ export function registerLangChainHandlers() {
     }
   });
 
-  // 支持MCP工具的AI消息发送
-  ipcMain.handle('ai:sendMessageWithMCPTools', async (_, request: any) => {
-    try {
-      console.log('IPC: AI发送消息(启用MCP工具):', request.llmRequest?.message?.substring(0, 50) + '...');
-      console.log('IPC: 配置ID:', request.configId);
-      console.log('IPC: 启用MCP工具:', request.enableMCPTools);
-      console.log('IPC: 历史消息数量:', request.chatHistory?.length || 0);
-      console.log('IPC: 会话ID:', request.sessionId || '未提供'); // 🎯 新增日志
-
-      const response = await langChainService.sendMessageWithMCPTools(
-        request.llmRequest,
-        request.configId,
-        request.enableMCPTools || false,
-        request.chatHistory,
-        request.sessionId  // 🎯 新增参数：传递会话ID
-      );
-
-      console.log('IPC: AI消息发送成功(MCP工具)');
-      return { success: true, data: response };
-    } catch (error) {
-      console.error('IPC: AI消息发送失败(MCP工具):', error);
-      return { success: false, error: error instanceof Error ? error.message : '未知错误' };
-    }
-  });
+  // 🗑️ [已删除] ai:sendMessageWithMCPTools - 旧的非流式MCP API，已统一使用ai:streamMessage
 
 
   // 获取可用模型列表 (AI API)
@@ -265,7 +230,7 @@ export function registerLangChainHandlers() {
   ipcMain.handle('langchain:getAllSessions', async () => {
     try {
       // console.log('IPC: 获取所有聊天会话');
-      const sessions = await storageService.loadChatSessions();
+      const sessions = await sessionRepository.findAll();
       // console.log(`IPC: 返回 ${sessions.length} 个会话`);
       return {
         success: true,
@@ -294,22 +259,8 @@ export function registerLangChainHandlers() {
 
       const session = new ChatSessionEntity(normalizedData);
 
-      // 获取现有会话列表
-      const existingSessions = await storageService.loadChatSessions();
-
-      // 查找是否已存在该会话
-      const existingIndex = existingSessions.findIndex((s: ChatSessionEntity) => s.id === session.id);
-
-      if (existingIndex >= 0) {
-        // 更新现有会话
-        existingSessions[existingIndex] = session;
-      } else {
-        // 添加新会话
-        existingSessions.unshift(session);
-      }
-
-      // 保存到存储
-      await storageService.saveChatSessions(existingSessions);
+      // 直接保存到SQLite（Repository会处理插入或更新逻辑）
+      await sessionRepository.save(session);
 
       console.log('IPC: 会话保存成功');
       return {
@@ -330,14 +281,8 @@ export function registerLangChainHandlers() {
     try {
       console.log('IPC: 删除聊天会话:', sessionId);
 
-      // 获取现有会话列表
-      const existingSessions = await storageService.loadChatSessions();
-
-      // 过滤掉要删除的会话
-      const filteredSessions = existingSessions.filter((s: ChatSessionEntity) => s.id !== sessionId);
-
-      // 保存更新后的会话列表
-      await storageService.saveChatSessions(filteredSessions);
+      // 直接从SQLite删除会话（外键约束会自动删除相关消息）
+      await sessionRepository.delete(sessionId);
 
       console.log('IPC: 会话删除成功');
       return {
@@ -377,10 +322,9 @@ export function unregisterLangChainHandlers() {
     'langchain:getAllSessions',
     'langchain:saveSession',
     'langchain:deleteSession',
-    'ai:sendMessage',
+    // 🗑️ 已删除: 'ai:sendMessage', 'ai:sendMessageWithMCPTools' - 统一使用ai:streamMessage
     'ai:testProvider',
-    'ai:getAvailableModels',
-    'ai:sendMessageWithMCPTools'
+    'ai:getAvailableModels'
   ];
 
   handlers.forEach(handler => {

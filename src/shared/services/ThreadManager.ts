@@ -3,6 +3,8 @@
  * 负责管理会话级线程的生命周期、状态监控和资源分配
  */
 
+import { EventEmitter } from 'events';
+
 export enum ThreadStatus {
   IDLE = 'idle',           // 空闲
   BUSY = 'busy',           // 繁忙处理中
@@ -85,7 +87,7 @@ export interface TaskRequest {
  * - 🔧 异常恢复和容错处理
  * - 📈 详细的运行时统计报告
  */
-export class ThreadManager {
+export class ThreadManager extends EventEmitter {
   private static instance: ThreadManager
   private threads: Map<string, ThreadInfo> = new Map()
   private taskQueue: TaskRequest[] = []
@@ -95,6 +97,7 @@ export class ThreadManager {
   private eventListeners: Map<string, Function[]> = new Map()
 
   private constructor(config: Partial<ThreadManagerConfig> = {}) {
+    super();
     this.config = {
       maxConcurrentThreads: 5,
       defaultTimeout: 120000, // 2分钟
@@ -156,7 +159,7 @@ export class ThreadManager {
     }
 
     this.threads.set(sessionId, thread)
-    this.emit('thread:created', thread)
+    this.emitEvent('thread:created', thread)
     this.log('info', `✅ 创建线程: ${sessionId}`)
     
     return thread
@@ -199,7 +202,7 @@ export class ThreadManager {
       thread.stats.failedRequests++
     }
 
-    this.emit('thread:status_changed', { thread, oldStatus, newStatus: status })
+    this.emitEvent('thread:status_changed', { thread, oldStatus, newStatus: status })
     this.log('debug', `🔄 线程 ${sessionId}: ${oldStatus} → ${status}`)
   }
 
@@ -249,7 +252,7 @@ export class ThreadManager {
       thread.resources.activeConnections = stats.activeConnections
     }
 
-    this.emit('thread:stats_updated', { sessionId, stats: thread.stats })
+    this.emitEvent('thread:stats_updated', { sessionId, stats: thread.stats })
   }
 
   /**
@@ -268,7 +271,7 @@ export class ThreadManager {
     // 从映射中移除
     this.threads.delete(sessionId)
 
-    this.emit('thread:destroyed', { sessionId, reason })
+    this.emitEvent('thread:destroyed', { sessionId, reason })
     this.log('info', `🗑️ 销毁线程: ${sessionId} (原因: ${reason})`)
   }
 
@@ -287,7 +290,7 @@ export class ThreadManager {
     }
 
     this.log('debug', `📝 任务入队: ${task.id} (会话: ${task.sessionId}, 优先级: ${task.priority})`)
-    this.emit('task:enqueued', task)
+    this.emitEvent('task:enqueued', task)
     
     // 尝试处理队列
     this.processTaskQueue()
@@ -338,7 +341,7 @@ export class ThreadManager {
 
     try {
       this.log('debug', `🔥 开始执行任务: ${task.id}`)
-      this.emit('task:started', task)
+      this.emitEvent('task:started', task)
 
       // 设置超时
       const timeout = task.timeout || this.config.defaultTimeout
@@ -361,7 +364,7 @@ export class ThreadManager {
       })
 
       this.updateThreadStatus(task.sessionId, ThreadStatus.IDLE)
-      this.emit('task:completed', { task, responseTime })
+      this.emitEvent('task:completed', { task, responseTime })
       this.log('debug', `✅ 任务完成: ${task.id} (用时: ${responseTime}ms)`)
 
       task.onComplete?.({ taskId: task.id, responseTime })
@@ -375,7 +378,7 @@ export class ThreadManager {
       })
 
       this.updateThreadStatus(task.sessionId, ThreadStatus.ERROR, error as Error)
-      this.emit('task:failed', { task, error })
+      this.emitEvent('task:failed', { task, error })
       this.log('error', `❌ 任务失败: ${task.id} - ${(error as Error).message}`)
 
       task.onError?.(error as Error)
@@ -424,7 +427,7 @@ export class ThreadManager {
   /**
    * 🔧 处理工具任务
    */
-  private async processToolTask(task: TaskRequest): Promise<any> {
+  private async processToolTask(_task: TaskRequest): Promise<any> {
     await new Promise(resolve => setTimeout(resolve, Math.random() * 1500))
     return { toolResult: 'Mock tool result' }
   }
@@ -522,7 +525,7 @@ export class ThreadManager {
    */
   private performMonitoring(): void {
     const stats = this.getSystemStats()
-    this.emit('monitoring:stats', stats)
+    this.emitEvent('monitoring:stats', stats)
     
     if (this.config.logLevel === 'debug') {
       this.log('debug', `📊 系统统计: 活跃线程 ${stats.activeThreads}/${stats.totalThreads}, 队列长度 ${stats.queueLength}`)
@@ -606,7 +609,7 @@ ${thread.lastError ? `❌ 最近错误:
   /**
    * 📡 监听事件
    */
-  on(event: string, listener: Function): void {
+  addEventListener(event: string, listener: Function): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, [])
     }
@@ -616,7 +619,7 @@ ${thread.lastError ? `❌ 最近错误:
   /**
    * 📤 发射事件
    */
-  private emit(event: string, data: any): void {
+  public emitEvent(event: string, data: any): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach(listener => {

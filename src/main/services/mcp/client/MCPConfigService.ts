@@ -419,14 +419,11 @@ export class MCPConfigService implements IMCPConfigService {
     // 🔥 动态获取PromptX脚本路径
     const isDev = process.env.NODE_ENV === 'development';
     
-    // 🔥 使用DeeChat项目根目录作为PromptX工作目录，确保项目上下文正确
-    const deechatProjectPath = isDev 
-      ? path.resolve(__dirname, '../../../..') // 开发环境：从dist/main/main/services/mcp回到项目根目录
-      : process.cwd(); // 生产环境：使用当前工作目录
+    // 🔥 使用用户数据目录作为PromptX工作目录，确保用户配置统一
+    const { app } = require('electron');
+    const promptxWorkspace = app.getPath('userData');
     
-    const promptxWorkspace = deechatProjectPath;
-    
-    console.log(`[MCP Config] 🎯 PromptX工作目录设为DeeChat项目根目录: ${promptxWorkspace}`);
+    console.log(`[MCP Config] 🎯 PromptX工作目录设为用户数据目录: ${promptxWorkspace}`);
     
     // 确保.promptx目录存在
     const promptxConfigDir = path.join(promptxWorkspace, '.promptx');
@@ -492,13 +489,14 @@ export class MCPConfigService implements IMCPConfigService {
       deechatWorkspaceMCPPath = path.join(process.resourcesPath, 'dist/main/main/services/mcp/DeeChatWorkspaceMCPServer.js');
     }
     
+    // 🔥 修复双进程问题：改为进程内模式，避免启动第二个Electron实例
     const server = new MCPServerEntity({
       id: 'deechat-workspace-builtin',
       name: 'DeeChat工作区 (内置)',
-      description: 'DeeChat独立工作区文件管理MCP服务器 - 提供read/write/diff/list工具',
-      type: 'stdio',
+      description: 'DeeChat独立工作区文件管理MCP服务器 - 提供read/write/diff/list工具 (进程内模式)',
+      type: 'inprocess', // 🔥 改为进程内模式
       isEnabled: true,
-      command: 'node',
+      command: 'node', // 保留用于显示，实际不使用
       args: [deechatWorkspaceMCPPath],
       env: {
         NODE_ENV: process.env.NODE_ENV || 'production',

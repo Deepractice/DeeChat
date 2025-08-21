@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { Button, Space, Typography, Avatar, Dropdown, Spin, App, MenuProps } from 'antd'
 import { UserOutlined, DownOutlined, ReloadOutlined, ClearOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
@@ -26,6 +26,28 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   const { roles } = useSelector((state: RootState) => state.chat)
   const [dropdownVisible, setDropdownVisible] = useState(false)
   
+  // 防抖：避免频繁刷新
+  const REFRESH_DEBOUNCE_TIME = 5000 // 5秒内不重复刷新
+  const lastRefreshTimeRef = useRef(0)
+  
+  // 处理下拉框打开/关闭，打开时自动刷新角色列表
+  const handleDropdownChange = (open: boolean) => {
+    setDropdownVisible(open)
+    
+    if (open && !roles.loading) {
+      const now = Date.now()
+      const timeSinceLastRefresh = now - lastRefreshTimeRef.current
+      
+      if (timeSinceLastRefresh > REFRESH_DEBOUNCE_TIME) {
+        console.log('[RoleSelector] 下拉框打开，自动刷新角色列表（距上次刷新', timeSinceLastRefresh, 'ms）')
+        lastRefreshTimeRef.current = now
+        dispatch(loadAvailableRoles(true)) // 强制刷新
+      } else {
+        console.log('[RoleSelector] 下拉框打开，但跳过刷新（距上次刷新仅', timeSinceLastRefresh, 'ms）')
+      }
+    }
+  }
+  
   // 🎭 使用角色状态管理器获取状态信息，启用自动同步以确保UI及时更新
   const { roleStateInfo } = useRoleStateManager({
     enableAutoSync: true,         // 启用自动同步确保UI及时反映状态变化
@@ -35,13 +57,8 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   
   // 角色状态信息已通过useRoleStateManager获取
 
-  // 组件挂载时加载角色列表
-  useEffect(() => {
-    // 使用Redux中的initialized标志来防止重复加载
-    if (!roles.initialized && !roles.loading && !roles.error) {
-      dispatch(loadAvailableRoles())
-    }
-  }, [dispatch, roles.initialized, roles.loading, roles.error])
+  // 移除组件挂载时的自动加载，只在用户打开下拉框时才加载角色列表
+
 
   // 错误处理 - 静默记录
   useEffect(() => {
@@ -111,12 +128,13 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     }
   }
 
-  // 处理刷新角色列表 - 静默操作
+  // 处理刷新角色列表 - 用户主动操作，给予反馈
   const handleRefreshRoles = async () => {
     try {
+      console.log('[RoleSelector] 用户手动刷新角色列表')
       dispatch(refreshRoleCache())
       await dispatch(loadAvailableRoles(true)).unwrap()
-      // 静默刷新，不显示提示
+      message.success('角色列表已刷新')
     } catch (error) {
       console.error('刷新角色列表失败:', error)
       message.error('刷新角色列表失败')
@@ -193,9 +211,28 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     {
       key: 'refresh',
       label: (
-        <Space>
-          <ReloadOutlined />
-          <span>刷新角色列表</span>
+        <Space direction="vertical" size={0} style={{ lineHeight: '1.2' }}>
+          <Space>
+            <ReloadOutlined style={{ 
+              color: roles.currentRole?.id === 'nuwa' ? '#1890ff' : undefined 
+            }} />
+            <span style={{ 
+              color: roles.currentRole?.id === 'nuwa' ? '#1890ff' : undefined,
+              fontWeight: roles.currentRole?.id === 'nuwa' ? 500 : 'normal'
+            }}>
+              刷新角色列表
+            </span>
+          </Space>
+          <Text 
+            type={roles.currentRole?.id === 'nuwa' ? 'warning' : 'secondary'} 
+            style={{ 
+              fontSize: '11px', 
+              marginLeft: '16px',
+              fontWeight: roles.currentRole?.id === 'nuwa' ? 500 : 'normal'
+            }}
+          >
+            {roles.currentRole?.id === 'nuwa' ? '💡 使用女娲创建新角色后请点击此处' : '创建新角色后点击此处'}
+          </Text>
         </Space>
       ),
       onClick: handleRefreshRoles,
@@ -259,7 +296,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
         placement="bottomLeft"
         trigger={['click']}
         open={dropdownVisible}
-        onOpenChange={setDropdownVisible}
+        onOpenChange={handleDropdownChange}
         disabled={disabled}
       >
         <Button
@@ -295,7 +332,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
       placement="bottomLeft"
       trigger={['click']}
       open={dropdownVisible}
-      onOpenChange={setDropdownVisible}
+      onOpenChange={handleDropdownChange}
       disabled={disabled}
     >
       <Button

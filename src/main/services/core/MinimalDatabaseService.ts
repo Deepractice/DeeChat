@@ -55,6 +55,18 @@ export class MinimalDatabaseService {
         updated_at TEXT NOT NULL
       );
       
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        model_id TEXT,
+        tool_executions TEXT,
+        attachments TEXT,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+      );
+      
       CREATE TABLE IF NOT EXISTS mcp_servers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -75,6 +87,12 @@ export class MinimalDatabaseService {
       
       CREATE INDEX IF NOT EXISTS idx_configs_key 
       ON configs(key);
+      
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session 
+      ON chat_messages(session_id);
+      
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp 
+      ON chat_messages(timestamp);
       
       CREATE INDEX IF NOT EXISTS idx_mcp_servers_type 
       ON mcp_servers(type);
@@ -100,6 +118,7 @@ export class MinimalDatabaseService {
     const stmt = this.db.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM chat_sessions) as sessions_count,
+        (SELECT COUNT(*) FROM chat_messages) as messages_count,
         (SELECT COUNT(*) FROM model_configs) as configs_count,
         (SELECT COUNT(*) FROM mcp_servers) as mcp_servers_count
     `);

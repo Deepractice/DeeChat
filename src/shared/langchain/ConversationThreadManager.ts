@@ -9,6 +9,7 @@
  */
 
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ToolMessage } from "@langchain/core/messages";
 import { EventEmitter } from 'events';
 import log from 'electron-log';
 import { LangChainModelFactory } from './LangChainModelFactory';
@@ -51,7 +52,7 @@ export interface ConversationThread {
 
 export class ConversationThreadManager extends EventEmitter {
   private threads: Map<string, ConversationThread> = new Map();
-  private globalQueue: QueuedMessage[] = [];
+  // private _globalQueue: QueuedMessage[] = []; // Reserved for future global queue implementation
   private isProcessing = false;
   private maxConcurrentThreads = 5; // 最大并发线程数
   private threadTimeout = 30 * 60 * 1000; // 30分钟线程超时
@@ -123,7 +124,7 @@ export class ConversationThreadManager extends EventEmitter {
       const model = LangChainModelFactory.createChatModel(config);
       
       // 初始化智能分层提示词系统
-      const llmFactory = async (modelKey: string) => {
+      const llmFactory = async (_modelKey: string) => {
         return LangChainModelFactory.createChatModel(config);
       };
       const smartPromptSystem = new SmartLayeredPromptSystem({}, llmFactory);
@@ -263,7 +264,7 @@ export class ConversationThreadManager extends EventEmitter {
     thread: ConversationThread, 
     queuedMessage: QueuedMessage
   ): Promise<LLMResponse> {
-    const { message, config, activeRole, baseSystemPrompt, uiContext, chatHistory, onStreamUpdate } = queuedMessage;
+    const { message, config, baseSystemPrompt, uiContext, onStreamUpdate } = queuedMessage;
     
     // 🔥 关键：每个线程使用独立的模型实例和工具绑定
     let model = thread.model;
@@ -322,8 +323,7 @@ export class ConversationThreadManager extends EventEmitter {
       toolExecutions.push(...toolResults);
       
       // 构建工具结果消息
-      const toolResultMessages = currentResponse.tool_calls.map((toolCall: any, index: number) => ({
-        role: 'tool',
+      const toolResultMessages = currentResponse.tool_calls.map((toolCall: any, index: number) => new ToolMessage({
         tool_call_id: toolCall.id,
         content: JSON.stringify(toolResults[index]?.result || 'Tool execution failed')
       }));
@@ -426,7 +426,7 @@ export class ConversationThreadManager extends EventEmitter {
     
     // 转换MCP工具为LangChain格式
     const { tool } = require("@langchain/core/tools");
-    const { z } = require("zod");
+    // const { z } = require("zod"); // Unused for now
     
     const langchainTools = mcpTools.map((mcpTool: any) => 
       tool(
@@ -454,7 +454,7 @@ export class ConversationThreadManager extends EventEmitter {
       )
     );
     
-    return model.bindTools(langchainTools);
+    return model.bindTools(langchainTools) as BaseChatModel;
   }
 
   /**

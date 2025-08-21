@@ -109,7 +109,7 @@ export class ThreadMonitor {
 
     // 计算性能指标
     const recentMetrics = this.metricsHistory.filter(m => now - m.timestamp < 60000) // 最近1分钟
-    const requestsPerMinute = recentMetrics.reduce((sum, m) => 
+    const requestsPerMinute = recentMetrics.reduce((sum, _m) => 
       sum + threads.reduce((tSum, t) => tSum + t.stats.totalRequests, 0), 0
     )
 
@@ -159,7 +159,7 @@ export class ThreadMonitor {
     this.checkAlerts(metrics)
 
     // 触发事件
-    this.threadManager.emit?.('monitoring:metrics_collected', metrics)
+    this.threadManager.emitEvent('monitoring:metrics_collected', metrics)
   }
 
   /**
@@ -323,7 +323,7 @@ export class ThreadMonitor {
       `[ThreadMonitor] 🚨 ${alert.severity.toUpperCase()}: ${alert.message}`
     )
 
-    this.threadManager.emit?.('monitoring:alert_triggered', alert)
+    this.threadManager.emitEvent('monitoring:alert_triggered', alert)
   }
 
   /**
@@ -453,7 +453,7 @@ export class ThreadMonitor {
       summary: {
         avgResponseTime: responseTimes.reduce((sum, rt) => sum + rt, 0) / responseTimes.length,
         peakResponseTime: Math.max(...responseTimes),
-        totalRequests: recentMetrics.reduce((sum, m) => 
+        totalRequests: recentMetrics.reduce((sum, _m) => 
           sum + this.threadManager.getAllThreads().reduce((tSum, t) => tSum + t.stats.totalRequests, 0), 0
         ),
         successRate: successRates.reduce((sum, sr) => sum + sr, 0) / successRates.length,

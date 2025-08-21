@@ -8,14 +8,7 @@ export const mockElectronAPI = {
   // 工具函数
   generateUUID: () => 'mock-uuid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
 
-  // LLM API 相关
-  sendMessage: async (message: string, config: any) => {
-    console.log('Mock sendMessage:', { message, config })
-    return {
-      success: false,
-      error: 'Mock API - 需要在Electron环境中运行'
-    }
-  },
+  // 🗑️ [已删除] sendMessage - 统一使用ai.streamMessage
 
   // 配置管理
   getConfig: async () => {
@@ -164,20 +157,19 @@ export const mockElectronAPI = {
 
   // AI服务API
   ai: {
-    sendMessage: async (request: any) => {
-      console.log('Mock ai.sendMessage:', request)
+    // 🗑️ [已删除] sendMessage, sendMessageWithMCPTools - 统一使用streamMessage
+
+    streamMessage: async (request: any) => {
+      console.log('🚨 Mock ai.streamMessage被调用:', request)
       return {
         success: false,
         error: 'Mock API - 需要在Electron环境中运行'
       }
     },
 
-    sendMessageWithMCPTools: async (request: any) => {
-      console.log('Mock ai.sendMessageWithMCPTools:', request)
-      return {
-        success: false,
-        error: 'Mock API - 需要在Electron环境中运行'
-      }
+    onStreamChunk: (callback: (data: any) => void) => {
+      console.log('🚨 Mock ai.onStreamChunk被调用')
+      return () => console.log('Mock stream cleanup')
     },
 
     testProvider: async (configId: string) => {

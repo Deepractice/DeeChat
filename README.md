@@ -136,7 +136,11 @@ DeeChat支持主流AI模型：
 如果你是开发者，想要：
 - 📁 查看源代码：`npm install && npm run dev`
 - 🔧 贡献代码：请先阅读[贡献指南](CONTRIBUTING.md)
-- 📚 技术文档：查看[docs/](docs/)目录
+- 📚 技术文档：查看[文档中心](docs/README.md)
+- 🏗️ 架构说明：查看[架构文档](docs/ARCHITECTURE.md)
+- 👨‍💻 开发指南：查看[开发者指南](docs/DEVELOPER_GUIDE.md)
+- 📊 项目现状：查看[项目状态](docs/PROJECT_STATUS.md)
+- 📝 更新日志：查看[CHANGELOG.md](CHANGELOG.md)
 
 ## 📄 开源协议
 

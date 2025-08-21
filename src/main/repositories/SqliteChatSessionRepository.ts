@@ -24,7 +24,9 @@ export class SqliteChatSessionRepository implements IChatSessionRepository {
     updateSelectedModel: null as any,
     findByModelId: null as any,
     getStats: null as any,
-    updateTitle: null as any
+    updateTitle: null as any,
+    loadMessages: null as any,
+    saveMessage: null as any
   };
 
   constructor(private databaseService: MinimalDatabaseService) {}
@@ -77,6 +79,19 @@ export class SqliteChatSessionRepository implements IChatSessionRepository {
         UPDATE chat_sessions SET title = ?, updated_at = ? WHERE id = ?
       `);
       
+      // 🔥 新增：消息相关的预编译语句
+      this.statements.loadMessages = this.databaseService.getDatabase().prepare(`
+        SELECT * FROM chat_messages 
+        WHERE session_id = ? 
+        ORDER BY timestamp ASC
+      `);
+      
+      this.statements.saveMessage = this.databaseService.getDatabase().prepare(`
+        INSERT OR REPLACE INTO chat_messages 
+        (id, session_id, role, content, timestamp, model_id, tool_executions, attachments) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
       this.initialized = true;
       console.log('✅ SqliteChatSessionRepository初始化完成');
     } catch (error) {
@@ -94,32 +109,53 @@ export class SqliteChatSessionRepository implements IChatSessionRepository {
   async findAll(): Promise<ChatSessionEntity[]> {
     this.ensureInitialized();
     const rows = this.statements.findAll.all();
-    return rows.map((row: any) => this.rowToEntity(row));
+    return rows.map((row: any) => this.rowToEntity(row, false)); // 🔥 列表查询不加载消息，提升性能
   }
 
   async findById(id: string): Promise<ChatSessionEntity | null> {
     this.ensureInitialized();
     const row = this.statements.findById.get(id);
-    return row ? this.rowToEntity(row) : null;
+    return row ? this.rowToEntity(row, true) : null; // 🔥 详细查询加载完整消息
   }
 
   async findRecent(limit: number): Promise<ChatSessionEntity[]> {
     this.ensureInitialized();
     const rows = this.statements.findRecent.all(limit);
-    return rows.map((row: any) => this.rowToEntity(row));
+    return rows.map((row: any) => this.rowToEntity(row, false)); // 🔥 列表查询不加载消息，提升性能
   }
 
   async save(session: ChatSessionEntity): Promise<void> {
     this.ensureInitialized();
     
-    const timestamp = Date.now();
-    this.statements.insert.run(
-      session.id,
-      session.title,
-      session.selectedModelId,
-      session.createdAt.getTime(),
-      timestamp
-    );
+    // 🔥 事务保存：会话 + 消息
+    this.databaseService.transaction(() => {
+      // 1. 保存会话基本信息
+      const timestamp = Date.now();
+      this.statements.insert.run(
+        session.id,
+        session.title,
+        session.selectedModelId,
+        session.createdAt.getTime(),
+        timestamp
+      );
+      
+      // 2. 保存会话中的所有消息
+      const sessionData = session.toData();
+      if (sessionData.messages && sessionData.messages.length > 0) {
+        for (const message of sessionData.messages) {
+          this.statements.saveMessage.run(
+            message.id,
+            session.id,
+            message.role,
+            message.content,
+            message.timestamp,
+            message.modelId || null,
+            message.toolExecutions ? JSON.stringify(message.toolExecutions) : null,
+            message.attachments ? JSON.stringify(message.attachments) : null
+          );
+        }
+      }
+    });
   }
 
   async delete(id: string): Promise<void> {
@@ -185,14 +221,44 @@ export class SqliteChatSessionRepository implements IChatSessionRepository {
     this.databaseService.getDatabase().prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
   }
 
+  // 🔥 新增：保存单个消息（用于实时保存）
+  async saveMessage(sessionId: string, message: any): Promise<void> {
+    this.ensureInitialized();
+    this.statements.saveMessage.run(
+      message.id,
+      sessionId,
+      message.role,
+      message.content,
+      message.timestamp,
+      message.modelId || null,
+      message.toolExecutions ? JSON.stringify(message.toolExecutions) : null,
+      message.attachments ? JSON.stringify(message.attachments) : null
+    );
+  }
+
   // === 私有工具方法 ===
 
-  private rowToEntity(row: any): ChatSessionEntity {
+  private rowToEntity(row: any, loadMessages: boolean = true): ChatSessionEntity {
+    // 按需加载消息
+    let messages = [];
+    if (loadMessages) {
+      const messageRows = this.statements.loadMessages.all(row.id);
+      messages = messageRows.map((msgRow: any) => ({
+        id: msgRow.id,
+        role: msgRow.role,
+        content: msgRow.content,
+        timestamp: msgRow.timestamp,
+        modelId: msgRow.model_id,
+        toolExecutions: msgRow.tool_executions ? JSON.parse(msgRow.tool_executions) : undefined,
+        attachments: msgRow.attachments ? JSON.parse(msgRow.attachments) : undefined
+      }));
+    }
+
     const data: ChatSessionData = {
       id: row.id,
       title: row.title,
       selectedModelId: row.selected_model_id,
-      messages: [], // 按需加载消息
+      messages: messages, // 🔥 真正加载的消息
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString()
     };

@@ -111,6 +111,10 @@ declare global {
         export: (fileId: string, targetPath: string) => Promise<void>
         tree: (category?: string) => Promise<any>
         updateContent: (fileId: string, content: string) => Promise<any>
+        
+        // 🔥 系统路径API
+        getAppDataPath: () => Promise<string>
+        getProjectPath: () => Promise<string>
       }
     }
   }

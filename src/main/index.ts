@@ -69,6 +69,7 @@ if (!gotTheLock) {
   // 🔥 关键改进：所有初始化代码都在else分支内
   let mainWindow: BrowserWindow | null = null
   let serviceManager: ServiceManager | null = null
+  let isCreatingWindow = false // 🔥 添加窗口创建状态标志
 
   // 延迟初始化核心服务实例（避免在app.whenReady之前调用app.getPath）
   let localStorageService: LocalStorageService
@@ -86,7 +87,21 @@ if (!gotTheLock) {
   // @ts-ignore TS6133
   function createWindow(): void {
     console.log('🖼️ [主进程] 创建主窗口...')
-    
+    console.log('🔍 [窗口调试] 当前窗口状态检查:')
+    console.log(`  - isCreatingWindow: ${isCreatingWindow}`)
+    console.log(`  - mainWindow: ${mainWindow ? 'exists' : 'null'}`)
+    console.log(`  - 所有窗口数量: ${BrowserWindow.getAllWindows().length}`)
+    console.log(`  - 调用栈:`, new Error().stack?.split('\n').slice(1, 4).join('\n'))
+
+    // 🔥 防止重复创建窗口
+    if (isCreatingWindow || mainWindow) {
+      console.log('⚠️ [主进程] 窗口正在创建中或已存在，跳过创建')
+      return
+    }
+
+    isCreatingWindow = true // 🔥 设置创建状态
+    console.log('🔥 [窗口调试] 开始创建窗口，设置isCreatingWindow=true')
+
     mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -115,6 +130,8 @@ if (!gotTheLock) {
         console.log('⚠️ [开发模式] VITE_DEV_SERVER_URL未设置，使用默认URL:', fallbackUrl)
         mainWindow.loadURL(fallbackUrl)
       }
+      // 🔧 开发者工具可选打开（避免双窗口困扰）
+      // 如需开发者工具，可以手动按 Cmd+Option+I 或 F12 打开
       mainWindow.webContents.openDevTools()
     } else {
       const htmlPath = join(__dirname, '../../renderer/index.html')
@@ -126,11 +143,13 @@ if (!gotTheLock) {
     mainWindow.once('ready-to-show', () => {
       console.log('✅ [主进程] 窗口准备完成，显示窗口')
       mainWindow?.show()
+      isCreatingWindow = false // 🔥 窗口创建完成，重置状态
     })
 
     // 窗口关闭事件
     mainWindow.on('closed', () => {
       mainWindow = null
+      isCreatingWindow = false // 🔥 窗口关闭时重置状态
     })
   }
 
@@ -489,6 +508,20 @@ function registerIPCHandlers(): void {
       return appDataPath
     } catch (error) {
       console.error('❌ [应用路径] 获取应用数据路径失败:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('file:getProjectPath', async () => {
+    try {
+      const isDev = process.env.NODE_ENV === 'development'
+      const projectRoot = isDev 
+        ? path.resolve(__dirname, '../../..') // 开发环境：从dist/main/main回到项目根目录
+        : process.cwd() // 生产环境：使用当前工作目录
+      console.log(`📍 [应用路径] 项目根目录: ${projectRoot}`)
+      return projectRoot
+    } catch (error) {
+      console.error('❌ [应用路径] 获取项目根路径失败:', error)
       throw error
     }
   })
@@ -855,34 +888,34 @@ function registerIPCHandlers(): void {
         systemPrompt 
       } = config || {}
       
-      // 🔥 创建流式更新回调函数 (暂时注释)
-      // const _onStreamUpdate = (update: any) => {
-      //   console.log('📡 [流式更新]', update.type, ':', update.stage)
-      //   event.sender.send('llm:stream-update', {
-      //     sessionId,
-      //     update
-      //   })
-      // }
-      
-      // 构建LLMRequest对象
-      const llmRequest = {
-        message: message,
-        sessionId: sessionId,
-        activeRole: currentRole?.id, // 传递当前激活的角色ID
-        systemPrompt: systemPrompt,
-        attachmentIds: []
+      // 🔥 创建流式更新回调函数
+      const onStreamUpdate = (update: any) => {
+        console.log('📡 [流式更新]', update.type, ':', update.stage)
+        event.sender.send('llm:stream-update', {
+          sessionId,
+          update
+        })
       }
+      
+      // ✅ 直接传递参数，不需要构建 LLMRequest对象
       
       // 🔥 发送开始事件
       event.sender.send('llm:stream-start', { sessionId })
       
-      // 使用带MCP工具支持的方法（加上流式更新回调）
-      const response = await langChainService.sendMessageWithMCPTools(
+      // 构建 LLMRequest对象（LLMService需要）
+      const llmRequest = {
+        message: message,
+        sessionId: sessionId,
+        activeRole: currentRole?.id,
+        systemPrompt: systemPrompt,
+        attachmentIds: []
+      }
+      
+      // ✅ 使用统一的流式方法替代已删除的sendMessageWithMCPTools
+      const response = await langChainService.streamMessage(
         llmRequest,                 // request: LLMRequest
         configId,                   // configId: string
-        true,                       // enableMCPTools: boolean
-        [],                         // chatHistory?: ChatMessage[]
-        sessionId                   // sessionId?: string
+        onStreamUpdate              // onChunk?: (chunk: string) => void
       )
       
       console.log('✅ [IPC] MCP工具消息发送成功')
@@ -890,10 +923,10 @@ function registerIPCHandlers(): void {
       // 🔥 发送完成事件
       event.sender.send('llm:stream-complete', { 
         sessionId,
-        response: { content: response.content, model: response.model, toolExecutions: response.toolExecutions }
+        response: { content: response }
       })
       
-      return { success: true, data: { content: response.content, model: response.model, toolExecutions: response.toolExecutions } }
+      return { success: true, data: { content: response } }
     } catch (error) {
       console.error('❌ [IPC] MCP工具消息发送失败:', error)
       
@@ -1027,23 +1060,64 @@ function registerIPCHandlers(): void {
     }
   })
 
-  // AI服务流式消息API
-  ipcMain.handle('ai:streamMessage', async (_, request: any) => {
+  // AI服务流式消息API - 修复流式输出问题的关键处理器！
+  ipcMain.handle('ai:streamMessage', async (event, request: any) => {
     try {
+      console.log('🌊 IPC: AI流式消息发送:', request.llmRequest?.message?.substring(0, 50) + '...');
+      console.log('🌊 IPC: 配置ID:', request.configId);
+      console.log('🌊 IPC: 启用MCP工具:', request.enableMCPTools);
+      console.log('🌊 IPC: 历史消息数量:', request.chatHistory?.length || 0);
+      console.log('🌊 IPC: 会话ID:', request.sessionId || '未提供');
+      console.log('🌊 IPC: 激活角色:', request.llmRequest?.activeRole || '未选择'); // 🔥 新增角色日志
+
+      // 🔥 发送流式开始事件
+      event.sender.send('ai:streamChunk', {
+        type: 'start',
+        sessionId: request.sessionId
+      });
+
+      // 🌊 使用LLMService的流式方法，传递修正后的LLMRequest对象
+      const enhancedRequest = {
+        ...request.llmRequest,
+        sessionId: request.sessionId,        // 确保会话ID传递
+        activeRole: request.llmRequest?.activeRole  // 🔥 修复：确保角色传递
+      };
+      
+      console.log('🔥 [调试] enhancedRequest.activeRole:', enhancedRequest.activeRole); // 🔥 调试增强请求
+      
       const response = await langChainService.streamMessage(
-        request.llmRequest,
-        request.configId,
-        (chunk: string) => {
-          // 发送流式chunk到渲染进程
-          mainWindow?.webContents.send('ai:streamChunk', {
-            requestId: request.requestId,
-            chunk
-          })
+        enhancedRequest,  // request: LLMRequest - 恢复正确：传递完整请求对象
+        request.configId, // configId: string
+        // 🌊 流式回调函数 - 接收每个内容chunk
+        (partialContent: string) => {
+          // 发送实时token更新
+          event.sender.send('ai:streamChunk', {
+            type: 'token',
+            content: partialContent,
+            sessionId: request.sessionId
+          });
         }
-      )
+      );
+
+      // 🔥 发送完成事件 (streamMessage返回字符串)
+      event.sender.send('ai:streamChunk', {
+        type: 'complete',
+        content: response,
+        sessionId: request.sessionId
+      });
+
+      console.log('🌊 IPC: AI流式消息发送成功');
       return { success: true, data: { content: response } }
     } catch (error) {
-      console.error('LangChain流式消息失败:', error)
+      console.error('🌊 IPC: AI流式消息发送失败:', error)
+      
+      // 发送错误事件
+      event.sender.send('ai:streamChunk', {
+        type: 'error',
+        error: error instanceof Error ? error.message : '未知错误',
+        sessionId: request.sessionId
+      });
+      
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
@@ -1272,7 +1346,7 @@ app.whenReady().then(async () => {
   registerIPCHandlers()
   
   // 3. 注册旧的IPC处理器（兼容现有前端）
-  registerLangChainHandlers()
+  await registerLangChainHandlers()
   
   // 4. 注册PromptX本地调用处理器
   registerPromptXHandlers()
@@ -1308,10 +1382,44 @@ app.whenReady().then(async () => {
   //   })
   // }, 10000) // 延迟10秒，让用户先熟悉界面
 
-  // macOS 特有行为
+  // macOS 特有行为：只有当没有窗口且应用已完全启动时才创建新窗口
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+    console.log('🍎 [macOS] activate事件触发，当前窗口数量:', BrowserWindow.getAllWindows().length)
+    console.log('🍎 [macOS] mainWindow状态:', mainWindow ? 'exists' : 'null')
+    console.log('🍎 [macOS] isCreatingWindow状态:', isCreatingWindow)
+
+    // 🔥 修复双窗口问题：严格的窗口存在检查
+    // 只有在完全没有窗口的情况下才创建新窗口
+    const allWindows = BrowserWindow.getAllWindows()
+    const hasAnyWindow = allWindows.length > 0 || mainWindow !== null || isCreatingWindow
+
+    console.log('🍎 [macOS] 窗口状态详细检查:')
+    console.log(`  - BrowserWindow.getAllWindows().length: ${allWindows.length}`)
+    console.log(`  - mainWindow !== null: ${mainWindow !== null}`)
+    console.log(`  - isCreatingWindow: ${isCreatingWindow}`)
+    console.log(`  - hasAnyWindow: ${hasAnyWindow}`)
+
+    if (!hasAnyWindow) {
+      // 延迟500ms再次检查，确保不在启动过程中
+      setTimeout(() => {
+        const recheckAllWindows = BrowserWindow.getAllWindows()
+        const recheckHasAnyWindow = recheckAllWindows.length > 0 || mainWindow !== null || isCreatingWindow
+
+        console.log('🍎 [macOS] 延迟检查窗口状态:')
+        console.log(`  - BrowserWindow.getAllWindows().length: ${recheckAllWindows.length}`)
+        console.log(`  - mainWindow !== null: ${mainWindow !== null}`)
+        console.log(`  - isCreatingWindow: ${isCreatingWindow}`)
+        console.log(`  - recheckHasAnyWindow: ${recheckHasAnyWindow}`)
+
+        if (!recheckHasAnyWindow) {
+          console.log('🍎 [macOS] 确认没有任何窗口，创建新窗口')
+          createWindow()
+        } else {
+          console.log('🍎 [macOS] 延迟检查：发现窗口存在，跳过创建')
+        }
+      }, 500)
+    } else {
+      console.log('🍎 [macOS] 检测到窗口存在，跳过创建')
     }
   })
 

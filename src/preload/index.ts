@@ -74,8 +74,15 @@ const electronAPI = {
   ai: {
     sendMessage: (request: any) => ipcRenderer.invoke('ai:sendMessage', request),
     sendMessageWithMCPTools: (request: any) => ipcRenderer.invoke('ai:sendMessageWithMCPTools', request),
+    streamMessage: (request: any) => ipcRenderer.invoke('ai:streamMessage', request),
     testProvider: (configId: string) => ipcRenderer.invoke('ai:testProvider', configId),
     getAvailableModels: (params: any) => ipcRenderer.invoke('ai:getAvailableModels', params),
+    
+    // 🌊 流式消息事件监听
+    onStreamChunk: (callback: (data: any) => void) => {
+      ipcRenderer.on('ai:streamChunk', (_event, data) => callback(data))
+      return () => ipcRenderer.removeAllListeners('ai:streamChunk')
+    },
   },
 
   // LangChain集成API
@@ -171,6 +178,7 @@ const electronAPI = {
     ensureDir: (dirPath: string) => ipcRenderer.invoke('file:ensureDir', dirPath),
     getPromptXWorkspacePath: () => ipcRenderer.invoke('file:getPromptXWorkspacePath'),
     getAppDataPath: () => ipcRenderer.invoke('file:getAppDataPath'),
+    getProjectPath: () => ipcRenderer.invoke('file:getProjectPath'),
     
     // 文件对话框API - 用于导出功能
     showSaveDialog: (options: any) => ipcRenderer.invoke('file:showSaveDialog', options),

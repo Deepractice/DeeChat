@@ -23,7 +23,7 @@ interface ChatState {
     loading: boolean
     lastUpdated: string | null
     error: string | null
-    initialized: boolean  // 新增：标记是否已初始化
+    initialized: boolean  // 标记是否已初始化
   }
 }
 
@@ -51,27 +51,7 @@ const initialState: ChatState = {
   },
 }
 
-// 异步 thunk：发送消息
-export const sendMessage = createAsyncThunk(
-  'chat/sendMessage',
-  async ({ message, config }: { message: string; config: any }, { getState }) => {
-    const state = getState() as { chat: ChatState }
-    
-    // 🔥 将当前角色信息传递到后端
-    const roleInfo = state.chat.roles.currentRole ? {
-      id: state.chat.roles.currentRole.id,
-      name: state.chat.roles.currentRole.name,
-      description: state.chat.roles.currentRole.description,
-      source: state.chat.roles.currentRole.source
-    } : null
-    
-    const response = await window.electronAPI.sendMessage(message, {
-      ...config,
-      currentRole: roleInfo
-    })
-    return response
-  }
-)
+// 🗑️ [已删除] sendMessage thunk - 统一使用useUnifiedMessage hook中的流式方法
 
 // 异步 thunk：加载聊天历史
 export const loadChatHistory = createAsyncThunk(
@@ -172,6 +152,21 @@ export const loadAvailableRoles = createAsyncThunk(
     try {
       console.log('[Redux] 开始加载可用角色列表...');
       
+      // 如果需要强制刷新，先执行PromptX init重新扫描资源
+      if (forceRefresh) {
+        console.log('[Redux] 执行强制刷新，重新初始化PromptX资源...');
+        try {
+          // 🔥 获取用户数据目录作为统一的PromptX工作目录
+          const userDataPath = await window.electronAPI.file.getAppDataPath();
+          console.log('[Redux] 使用用户数据目录作为PromptX工作目录:', userDataPath);
+          
+          await window.electronAPI.promptx.execute('init', [userDataPath]);
+          console.log('[Redux] PromptX资源重新扫描完成');
+        } catch (initError) {
+          console.warn('[Redux] PromptX init警告，继续执行welcome:', initError);
+        }
+      }
+      
       // 直接调用PromptX welcome工具获取角色列表
       const welcomeResponse = await window.electronAPI.promptx.execute('welcome', []);
       
@@ -206,6 +201,21 @@ export const loadAvailableRoles = createAsyncThunk(
       
       // 降级方案：使用原有的PromptX API直接调用
       try {
+        // 降级方案中也需要强制刷新逻辑
+        if (forceRefresh) {
+          console.log('[Redux] 降级方案中执行强制刷新...');
+          try {
+            // 🔥 降级方案中也使用系统用户数据目录
+            const userDataPath = await window.electronAPI.file.getAppDataPath();
+            console.log('[Redux] 降级方案使用系统用户数据目录:', userDataPath);
+            
+            await window.electronAPI.promptx.execute('init', [userDataPath]);
+            console.log('[Redux] 降级方案PromptX资源重新扫描完成');
+          } catch (initError) {
+            console.warn('[Redux] 降级方案PromptX init警告，继续执行:', initError);
+          }
+        }
+        
         // 检查缓存
         if (!forceRefresh) {
           const cached = RoleCache.load()
@@ -473,6 +483,7 @@ const chatSlice = createSlice({
       state.roles.initialized = false  // 重置初始化标志，允许重新加载
     },
 
+
     // 🔥 流式消息相关reducers
     // 开始流式消息
     startStreamingMessage: (state, action: PayloadAction<{ sessionId: string }>) => {
@@ -523,32 +534,7 @@ const chatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // 发送消息
-      .addCase(sendMessage.pending, (state) => {
-        state.isLoading = true
-        state.error = null
-      })
-      .addCase(sendMessage.fulfilled, (state, action) => {
-        state.isLoading = false
-        if (state.currentSession && action.payload.success) {
-          const assistantMessage: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: action.payload.data.content,
-            timestamp: Date.now(),
-            modelId: action.payload.data.model,
-            toolExecutions: action.payload.data.toolExecutions, // 🔧 包含工具执行信息
-          }
-          state.currentSession.messages.push(assistantMessage)
-          state.currentSession.updatedAt = Date.now()
-          
-          // 角色状态同步逻辑已简化，因为角色内容直接注入，无需检测工具调用结果
-        }
-      })
-      .addCase(sendMessage.rejected, (state, action) => {
-        state.isLoading = false
-        state.error = action.error.message || '发送消息失败'
-      })
+      // 🗑️ [已删除] sendMessage处理 - 统一使用useUnifiedMessage hook中的流式方法
       // 加载历史
       .addCase(loadChatHistory.fulfilled, (state, action) => {
         if (action.payload.success) {

@@ -13,8 +13,7 @@
 import log from 'electron-log';
 import { TokenCounter } from '../components/TokenCounter';
 import { ModelContextManager, ContextAnalysisResult } from '../components/ModelContextManager';
-// 移除跨进程导入，改为在主进程中直接使用PromptXLocalService
-import { getPromptXLocalService } from '../../../main/services/promptx/PromptXLocalService';
+// 移除跨进程导入，改为构造函数依赖注入方式获取PromptX服务
 import { WorkspaceFile } from '../../types/WorkspaceFile';
 
 
@@ -154,20 +153,38 @@ export class RoleStatusMonitorLayer {
     if (targetRole) {
       log.info(`🎭 [角色检测] 检测到角色选择: ${targetRole}`);
       
-      // 🔥 直接使用PromptXLocalService获取完整角色激活内容
-      try {
-        const promptxService = getPromptXLocalService();
-        const result = await promptxService.execute('action', [targetRole]);
-        if (result && typeof result.toString === 'function') {
-          roleContent = result.toString();
-          roleRendered = true;
-          roleContentSource = 'direct';
-          log.info(`✅ [角色内容获取] 成功获取角色激活内容: ${targetRole}, 长度: ${roleContent?.length || 0}字符`);
-        } else {
-          log.warn(`⚠️ [角色内容获取] 未能获取角色内容: ${targetRole}`);
+      // 🔥 使用注入的PromptX服务获取完整角色激活内容
+      if (this.promptxService) {
+        try {
+          console.log(`🎯 [DEBUG-角色激活] 开始调用PromptX服务: targetRole=${targetRole}`);
+          console.log(`🎯 [DEBUG-角色激活] PromptX服务类型:`, typeof this.promptxService);
+          console.log(`🎯 [DEBUG-角色激活] PromptX服务方法:`, Object.keys(this.promptxService));
+          
+          const result = await this.promptxService.execute('action', [targetRole]);
+          
+          console.log(`🎯 [DEBUG-角色激活] PromptX execute调用完成`);
+          console.log(`🎯 [DEBUG-角色激活] result类型:`, typeof result);
+          console.log(`🎯 [DEBUG-角色激活] result值:`, result);
+          console.log(`🎯 [DEBUG-角色激活] result是否有toString:`, result && typeof result.toString === 'function');
+          
+          if (result && typeof result.toString === 'function') {
+            roleContent = result.toString();
+            roleRendered = true;
+            roleContentSource = 'direct';
+            console.log(`✅ [DEBUG-角色激活] 角色激活成功: ${targetRole}, 内容长度: ${roleContent?.length || 0}字符`);
+            console.log(`✅ [DEBUG-角色激活] 角色内容预览: ${roleContent?.substring(0, 200)}...`);
+            log.info(`✅ [角色内容获取] 成功获取角色激活内容: ${targetRole}, 长度: ${roleContent?.length || 0}字符`);
+          } else {
+            console.log(`⚠️ [DEBUG-角色激活] 角色激活失败: result无效或没有toString方法`);
+            log.warn(`⚠️ [角色内容获取] 未能获取角色内容: ${targetRole}`);
+          }
+        } catch (error) {
+          console.error(`❌ [DEBUG-角色激活] PromptX执行异常:`, error);
+          log.error(`❌ [角色内容获取] 角色激活异常: ${targetRole}`, error);
         }
-      } catch (error) {
-        log.error(`❌ [角色内容获取] 角色激活异常: ${targetRole}`, error);
+      } else {
+        console.log(`⚠️ [DEBUG-角色激活] PromptX服务未注入，无法激活角色: ${targetRole}`);
+        log.warn(`⚠️ [角色内容获取] PromptX服务未注入，无法激活角色: ${targetRole}`);
       }
     } else {
       log.info(`❓ [角色检测] 未检测到角色选择`);
@@ -379,6 +396,8 @@ ${roleContent}
 - 保持角色的一致性和专业性`;
       
       sections.push(roleSection);
+      console.log(`✅ [DEBUG-系统提示词] 角色内容已注入到系统提示词: ${currentUIRole}, 长度: ${roleContent.length}字符`);
+      console.log(`✅ [DEBUG-系统提示词] 角色section长度: ${roleSection.length}字符`);
       log.info(`✅ [角色内容注入] 已直接注入角色内容: ${currentUIRole}, 长度: ${roleContent.length}字符`);
     } else if (currentUIRole && !roleContent) {
       // 场景2：有角色但内容还在加载中 - 添加临时提示
@@ -422,7 +441,13 @@ ${roleContent}
     // 6. 基础系统提示词
     sections.push(`# 📝 BASE_SYSTEM_PROMPT\n${baseSystemPrompt}`);
 
-    return sections.join('\n\n');
+    const finalPrompt = sections.join('\n\n');
+    console.log(`📝 [DEBUG-系统提示词] 最终系统提示词构建完成:`);
+    console.log(`📝 [DEBUG-系统提示词] - 总长度: ${finalPrompt.length}字符`);
+    console.log(`📝 [DEBUG-系统提示词] - sections数量: ${sections.length}`);
+    console.log(`📝 [DEBUG-系统提示词] - 前500字符预览: ${finalPrompt.substring(0, 500)}...`);
+    
+    return finalPrompt;
   }
 
   // shouldTriggerRoleActivation 方法已删除，因为不再需要工具调用激活逻辑
@@ -557,7 +582,7 @@ ${roleContent}
 
     // 🔥 工作区状态处理（核心逻辑：工作区打开 = 注入提示词）
     if (uiContext.workspaceState?.isOpen) {
-      const { files } = uiContext.workspaceState;
+      // const { files } = uiContext.workspaceState; // Available but not used in current implementation
       
       intentions.push(`📁 工作区已打开，您可以使用以下工具操作文件：`);
       intentions.push(`  📖 deechat_workspace_read - 读取文件内容`);

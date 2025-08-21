@@ -104,7 +104,18 @@ export class SmartLayeredPromptSystem {
     this.tokenCounter = TokenCounter.getInstance();
     
     // 初始化3个层级
-    this.layer1 = new RoleStatusMonitorLayer();
+    // 🔥 修复：为角色状态监控层注入PromptX服务
+    let promptxService;
+    try {
+      // 获取PromptX服务实例（仅在主进程中有效）
+      const { getPromptXLocalService } = require('../../main/services/promptx/PromptXLocalService');
+      promptxService = getPromptXLocalService();
+    } catch (error) {
+      // 在渲染进程中忽略此错误，使用fallback模式
+      console.warn('[SmartLayeredPrompt] PromptX服务获取失败，使用fallback模式:', error instanceof Error ? error.message : String(error));
+    }
+    
+    this.layer1 = new RoleStatusMonitorLayer(promptxService);
     this.layer2 = new HistoryContextLayer(llmFactory);
     this.layer3 = new CurrentMessageLayer();
 

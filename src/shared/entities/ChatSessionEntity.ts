@@ -5,6 +5,8 @@ interface ChatMessage {
   content: string
   timestamp: number
   modelId?: string
+  toolExecutions?: any[]
+  attachments?: any[]
   metadata?: {
     tokens?: number
     responseTime?: number

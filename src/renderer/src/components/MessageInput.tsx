@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Input, Button, Space, message, Divider, Tag } from 'antd'
-import { SendOutlined, PaperClipOutlined, RobotOutlined, CloseOutlined, FileTextOutlined, SelectOutlined } from '@ant-design/icons'
+import { Input, Button, message, Tag } from 'antd'
+import { SendOutlined, PaperClipOutlined, RobotOutlined, FileTextOutlined, SelectOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { addUserMessage, addAIMessage, sendMessage, saveCurrentSession, setLoading, setSessionLoading } from '../store/slices/chatSlice'
+import { saveCurrentSession, setSessionLoading } from '../store/slices/chatSlice'
 import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 import FileUploadWithProgress, { FileUploadItem, FileUploadWithProgressRef } from './FileUploadWithProgress'
 import DragDropOverlay from './DragDropOverlay'
 import ModelSelectionModal from './ModelSelectionModal'
 import RoleSelector from './RoleSelector'
 import { FileReferenceService, FileReference } from '../../../shared/services/FileReferenceService'
+import { useUnifiedMessage } from '../hooks/useUnifiedMessage'
 
 const { TextArea } = Input
 
@@ -24,8 +25,10 @@ interface MessageInputProps {
 
 const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedModel, onSendMessage, onModelSelect, onGoToModelManagement, compact = false }) => {
   const dispatch = useDispatch<AppDispatch>()
-  const { config } = useSelector((state: RootState) => state.config)
   const { currentSession, roles } = useSelector((state: RootState) => state.chat)
+
+  // 🔥 使用统一消息Hook
+  const { sendMessage: sendUnifiedMessage } = useUnifiedMessage()
   const [inputValue, setInputValue] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<FileUploadItem[]>([])
   const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([])
@@ -113,24 +116,23 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       message.error('请等待所有文件上传完成后再发送')
       return
     }
-    
+
     // 使用已上传的文件ID
     const attachmentIds = uploadedFileIds
-
-    // 清空输入框和文件
-    setInputValue('')
-    setAttachedFiles([])
-    setUploadedFileIds([])
-    setReferencedFiles([])
-    setShowFileUpload(false)
 
     // 如果有父组件回调，使用父组件处理
     if (onSendMessage) {
       onSendMessage(trimmedValue)
+      // 清空输入框和文件
+      setInputValue('')
+      setAttachedFiles([])
+      setUploadedFileIds([])
+      setReferencedFiles([])
+      setShowFileUpload(false)
       return
     }
 
-    // 否则使用原有逻辑
+    // 🔥 使用统一消息API - 大幅简化逻辑
     try {
       // 构建消息内容（包含文件信息）
       let messageContent = trimmedValue
@@ -139,125 +141,53 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
         messageContent = trimmedValue ? `${trimmedValue}\n\n附件:\n${fileList}` : `附件:\n${fileList}`
       }
 
-      // 添加用户消息到状态（包含模型信息和附件ID）
-      dispatch(addUserMessage({
-        message: messageContent,
-        modelId: selectedModel.id,
-        attachments: attachmentIds  // 传递附件ID列表
-      }))
+      // 🔥 立即清空输入框，提供即时反馈
+      setInputValue('')
+      setAttachedFiles([])
+      setUploadedFileIds([])
+      setReferencedFiles([])
+      setShowFileUpload(false)
 
-      // 保存用户消息后立即保存会话
-      dispatch(saveCurrentSession())
-
-      // 🎯 设置会话级加载状态为true
+      // 🎯 设置会话级加载状态
       if (currentSession?.id) {
         dispatch(setSessionLoading({ sessionId: currentSession.id, loading: true }))
       }
-      // 保留全局加载状态用于向后兼容
-      dispatch(setLoading(true))
 
-      // 🆕 准备聊天历史数据
-      const chatHistory = currentSession?.messages || []
-      console.log(`📚 [前端] 当前会话包含 ${chatHistory.length} 条历史消息`)
+      // 🔥 使用统一消息Hook - 超级简化！
+      const response = await sendUnifiedMessage(messageContent, {
+        sessionId: currentSession?.id || `session_${Date.now()}`,
+        configId: selectedModel.id,
+        enableMCPTools: true,
+        chatHistory: currentSession?.messages || [],
+        activeRole: roles.currentRole?.id,
+        attachmentIds
+      })
 
-      // 🎯 采用统一接口设计：工具总是可用，让AI智能决定何时使用
-      console.log('🔧 [前端] 发送消息到AI服务 - 工具总是可用，由AI决定是否使用');
+      console.log('✅ [统一消息] 消息发送成功:', response?.success)
 
-      let response;
-      
-      // 统一使用带MCP工具的接口
-      if (window.electronAPI?.ai?.sendMessageWithMCPTools) {
-        response = await window.electronAPI.ai.sendMessageWithMCPTools({
-          llmRequest: {
-            message: trimmedValue,
-            temperature: 0.7,
-            maxTokens: 2000,
-            attachmentIds: attachmentIds,
-            // 🎭 传递当前选择的角色信息
-            activeRole: roles.currentRole?.id,
-            sessionId: currentSession?.id
-          },
-          configId: selectedModel.id,
-          enableMCPTools: true, // 总是true，让AI决定
-          chatHistory: chatHistory,
-          sessionId: currentSession?.id  // 🎯 传递会话ID
-        });
-      } else if (window.electronAPI?.ai?.sendMessage) {
-        // 降级到普通接口
-        response = await window.electronAPI.ai.sendMessage({
-          llmRequest: {
-            message: trimmedValue,
-            temperature: 0.7,
-            maxTokens: 2000,
-            attachmentIds: attachmentIds,
-            activeRole: roles.currentRole?.id,
-            sessionId: currentSession?.id
-          },
-          configId: selectedModel.id,
-          chatHistory: chatHistory,
-          sessionId: currentSession?.id  // 🎯 传递会话ID
-        });
+      // 🔥 统一消息Hook已经处理了所有复杂逻辑：
+      // - 添加用户消息到状态
+      // - 启动流式状态管理
+      // - 流式显示AI回复
+      // - 自动保存会话
+
+      // 🎯 清除会话级加载状态
+      if (currentSession?.id) {
+        dispatch(setSessionLoading({ sessionId: currentSession.id, loading: false }))
       }
 
-      if (response && response.success) {
-          // 🔥 解析实际使用的模型名称
-          const parseModelName = (modelId: string) => {
-            const parts = modelId.split('-')
-            if (parts.length >= 6) {
-              // 前5段是UUID配置ID，后面的部分是模型名称
-              return parts.slice(5).join('-')
-            }
-            return modelId
-          }
-
-          const actualModelName = parseModelName(selectedModel.id)
-
-        // 🆕 如果响应包含上下文信息，记录到日志
-        if (response.data.contextInfo) {
-          const contextInfo = response.data.contextInfo
-          console.log(`📊 [前端] 上下文管理信息:`)
-          console.log(`   - 原始消息数: ${contextInfo.originalMessageCount}`)
-          console.log(`   - 最终消息数: ${contextInfo.finalMessageCount}`)
-          console.log(`   - Token使用率: ${(contextInfo.tokenStats.utilizationRate * 100).toFixed(1)}%`)
-          console.log(`   - 当前Tokens: ${contextInfo.tokenStats.currentTokens}`)
-          console.log(`   - 最大Tokens: ${contextInfo.tokenStats.maxTokens}`)
-          console.log(`   - 状态: ${contextInfo.tokenStats.status}`)
-          
-          if (contextInfo.compressionApplied) {
-            console.warn(`⚠️ [前端] 上下文压缩已应用，移除了 ${contextInfo.removedCount} 条早期消息`)
-          }
-        }
-
-        // 添加AI响应到状态，包含工具执行记录和上下文信息
-        const aiMessage = {
-          content: response.data.content,
-          modelId: actualModelName || selectedModel.config.model,
-          toolExecutions: response.data.toolExecutions
-        }
-
-        dispatch(addAIMessage(aiMessage))
-
-        // 🎯 清除会话级加载状态
-        if (currentSession?.id) {
-          dispatch(setSessionLoading({ sessionId: currentSession.id, loading: false }))
-        }
-        // 保留全局加载状态清除用于向后兼容
-        dispatch(setLoading(false))
-
-        // 自动保存会话
-        dispatch(saveCurrentSession())
-      } else {
-        throw new Error(response?.error || '发送消息失败')
-      }
+      // 自动保存会话
+      dispatch(saveCurrentSession())
 
     } catch (error) {
-      console.error('发送消息失败:', error)
+      console.error('❌ [统一消息] 发送失败:', error)
+
       // 🎯 发生错误时清除会话级加载状态
       if (currentSession?.id) {
         dispatch(setSessionLoading({ sessionId: currentSession.id, loading: false }))
       }
-      // 保留全局加载状态清除用于向后兼容
-      dispatch(setLoading(false))
+
+      // 🔧 统一消息Hook已经处理了流式状态重置
       message.error(`发送消息失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }

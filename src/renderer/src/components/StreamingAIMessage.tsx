@@ -8,13 +8,15 @@ import { Avatar, Card, Typography, Space, Progress, Tag, Timeline, Spin } from '
 import { RobotOutlined, ToolOutlined, CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons'
 import styled, { keyframes } from 'styled-components'
 import TypewriterRenderer from './TypewriterRenderer'
+import StreamingTypewriter from './StreamingTypewriter'
 import ConversationalToolCall from './ConversationalToolCall'
+import AIStateMachineIndicator, { AIState, AIStateOutput } from './AIStateMachineIndicator'
 
 const { Text, Paragraph } = Typography
 
 // 流式更新接口（与后端保持一致）
 export interface StreamUpdate {
-  type: 'thinking' | 'tool_calling' | 'tool_result' | 'generating' | 'complete'
+  type: 'thinking' | 'tool_calling' | 'tool_result' | 'generating' | 'complete' | 'state_machine'
   stage: string
   currentTool?: {
     name: string
@@ -23,6 +25,16 @@ export interface StreamUpdate {
   }
   toolResults?: any[]
   partialContent?: string
+  // 🔥 新增：AI状态机相关字段
+  aiState?: {
+    aiState: string
+    taskProgress: number
+    nextAction: string
+    errorMessage?: string
+    taskSummary?: string
+  }
+  conversationIteration?: number
+  totalIterations?: number
   metadata?: any
 }
 
@@ -161,6 +173,21 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
 }) => {
   const [isCompleted, setIsCompleted] = useState(false)
 
+  // 🔥 获取当前累积的流式内容
+  const getCurrentStreamingContent = () => {
+    // 优先使用当前阶段的partialContent
+    if (currentStage?.partialContent) {
+      return currentStage.partialContent
+    }
+
+    // 如果没有当前阶段，查找最新的generating类型更新
+    const latestGenerating = [...updates].reverse().find(update =>
+      update.type === 'generating' && update.partialContent
+    )
+
+    return latestGenerating?.partialContent || ''
+  }
+
   // 监听完成状态
   useEffect(() => {
     if (currentStage?.type === 'complete') {
@@ -171,8 +198,12 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
     }
   }, [currentStage, onComplete])
 
-  // 如果已完成，显示最终内容
-  if (isCompleted && finalContent) {
+  // 🔥 获取当前要显示的内容
+  const currentContent = getCurrentStreamingContent()
+  const displayContent = isCompleted ? (finalContent || currentContent) : currentContent
+
+  // 🔥 如果有内容要显示（流式中或已完成）
+  if (displayContent) {
     return (
       <MessageContainer>
         <MessageContent>
@@ -180,7 +211,7 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
             size={32}
             icon={<RobotOutlined />}
             style={{
-              backgroundColor: '#52c41a',
+              backgroundColor: isCompleted ? '#52c41a' : '#1890ff',
               flexShrink: 0,
             }}
           />
@@ -199,17 +230,21 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
               }
             }}
           >
-            <TypewriterRenderer
-              text={finalContent}
-              speed={20}
+            {/* 🌊 使用真正的流式打字机组件 */}
+            <StreamingTypewriter
+              currentText={displayContent}
+              isComplete={isCompleted}
+              speed={80}
+              onComplete={onComplete}
               style={{
                 margin: 0,
                 color: '#000',
               }}
             />
 
-            {finalToolExecutions.length > 0 && (
-              <ConversationalToolCall 
+            {/* 🔧 工具执行结果（仅在完成时显示） */}
+            {isCompleted && finalToolExecutions.length > 0 && (
+              <ConversationalToolCall
                 toolExecutions={finalToolExecutions}
                 isExecuting={false}
               />
@@ -256,6 +291,18 @@ const StreamingAIMessage: React.FC<StreamingAIMessageProps> = ({
             }
           }}
         >
+          {/* 🔥 AI状态机指示器 */}
+          {currentStage?.type === 'state_machine' && currentStage.aiState && (
+            <AIStateMachineIndicator
+              aiState={currentStage.aiState as AIStateOutput}
+              currentIteration={currentStage.conversationIteration}
+              totalIterations={currentStage.totalIterations}
+              isActive={isActive}
+              isEnabled={true}
+              variant="full"
+            />
+          )}
+
           {/* 当前活动阶段 */}
           {currentStage && (
             <StageContainer $isActive={true}>

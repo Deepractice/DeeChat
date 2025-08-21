@@ -169,6 +169,25 @@ export class PromptXLocalService implements IPromptXService {
     try {
       console.log(`[PromptXLocalService] 执行命令: ${command}`, args);
       
+      // 🔥 特殊处理init命令：如果传入了工作目录，使用统一的路径逻辑
+      if (command === 'init' && args.length > 0 && typeof args[0] === 'string') {
+        const workingDirectory = args[0];
+        console.log(`[PromptXLocalService] init命令使用指定的工作目录: ${workingDirectory}`);
+        
+        // 设置环境变量，让PromptX知道工作目录
+        process.env.PROMPTX_PROJECT_PATH = workingDirectory;
+        process.env.PROMPTX_WORKSPACE = workingDirectory;
+        process.env.PROJECT_ROOT = workingDirectory;
+        process.env.WORKSPACE_ROOT = workingDirectory;
+        
+        // 使用MCP格式的对象参数传递给PromptX
+        const result = await this.promptxCLI.execute(command, [{ 
+          workingDirectory: workingDirectory,
+          ideType: 'claude' // 默认IDE类型
+        }]);
+        return result;
+      }
+      
       // 调用PromptX CLI执行命令
       const result = await this.promptxCLI.execute(command, args);
       

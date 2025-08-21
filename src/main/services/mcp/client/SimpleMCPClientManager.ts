@@ -152,16 +152,37 @@ export class SimpleMCPClientManager {
       // 创建传输层
       log.info(`[Simple MCP] 🔌 创建传输层: ${server.type}`)
       const transport = await this.createTransport(server)
-      
+
+      // 🔥 处理进程内模式
+      if (server.type === 'inprocess') {
+        log.info(`[Simple MCP] 🎯 创建进程内服务器用于初始化: ${server.name}`)
+
+        // 创建进程内服务器实例
+        const { InProcessMCPServer } = await import('../servers/InProcessMCPServer')
+        const inProcessServer = new InProcessMCPServer(server)
+        await inProcessServer.start()
+
+        // 缓存进程内服务器实例（而不是客户端）
+        this.clients.set(serverKey, inProcessServer as any)
+
+        log.info(`[Simple MCP] 🎉 进程内MCP服务器启动完成: ${server.name}`)
+        return inProcessServer as any
+      }
+
+      // 🔥 标准传输模式的连接逻辑
+      if (!transport) {
+        throw new Error(`无法创建传输层: ${server.name}`)
+      }
+
       // 🔥 添加连接超时保护
       log.info(`[Simple MCP] 🚀 开始连接客户端...`)
       const connectPromise = client.connect(transport)
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error(`连接超时: ${server.name}`)), 15000) // 15秒超时
       })
-      
+
       await Promise.race([connectPromise, timeoutPromise])
-      
+
       // 🔥 验证连接是否真正成功
       log.info(`[Simple MCP] 🔍 验证连接状态...`)
       try {
@@ -255,7 +276,16 @@ export class SimpleMCPClientManager {
             reconnectionDelayGrowFactor: 1.5
           }
         })
-        
+
+      case 'inprocess':
+        // 🔥 进程内传输 - 避免启动新进程
+        log.info(`[Simple MCP] 🎯 ${server.name} -> 进程内模式 (单进程): ${server.name}`)
+        log.info(`[Simple MCP] 🎯 进程内模式，跳过外部客户端创建: ${server.name}`)
+
+        // 进程内模式不需要传输层，直接返回null
+        // 实际的服务器实例将由InProcessMCPServer管理
+        return null
+
       default:
         // stdio传输 - 支持沙箱
         return this.createStdioTransport(server)
@@ -308,6 +338,12 @@ export class SimpleMCPClientManager {
    * 🔥 智能执行模式检测：进程内 > Electron内置
    */
   private getExecutionMode(server: MCPServerEntity): 'inprocess' | 'builtin' | 'native-builtin' {
+    // 🔥 优先检查是否明确配置为进程内模式
+    if (server.type === 'inprocess') {
+      log.info(`[Simple MCP] 🔥 进程内服务器 -> 进程内模式: ${server.name}`)
+      return 'inprocess'
+    }
+    
     // 🔧 检查是否是DeeChat内置服务器
     if (server.type === 'builtin' || server.command === 'internal') {
       log.info(`[Simple MCP] 🔧 DeeChat内置服务器 -> 原生内置模式: ${server.name}`)
