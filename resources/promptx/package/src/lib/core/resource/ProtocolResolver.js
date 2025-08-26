@@ -1,6 +1,7 @@
 const path = require('path')
 const fs = require('fs')
 const { getDirectoryService } = require('../../utils/DirectoryService')
+const { PACKAGE_NAMES } = require('../../../constants')
 
 class ProtocolResolver {
   constructor() {
@@ -90,7 +91,8 @@ class ProtocolResolver {
       const packageJson = path.join(dir, 'package.json')
       if (fs.existsSync(packageJson)) {
         const pkg = JSON.parse(fs.readFileSync(packageJson, 'utf8'))
-        if (pkg.name === 'promptx' || pkg.name === 'dpml-prompt') {
+        // 支持配置的包名列表，同时也支持 'promptx' 作为开发版本名称
+        if (pkg.name === 'promptx' || PACKAGE_NAMES.ALL.includes(pkg.name)) {
           return dir
         }
       }

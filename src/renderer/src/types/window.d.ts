@@ -39,6 +39,14 @@ declare global {
         delete: (id: string) => Promise<void>;
         test: (id: string) => Promise<any>;
         update: (config: any) => Promise<any>;
+        fetchModels: (provider: string, apiKey: string, baseURL: string) => Promise<string[]>;
+      };
+      
+      // Chat API
+      chat: {
+        getHistory: () => Promise<any>;
+        saveMessage: (message: any) => Promise<any>;
+        deleteSession: (sessionId: string) => Promise<any>;
       };
       
       // AI API
@@ -91,21 +99,7 @@ declare global {
         switchModel: (sessionId: string, modelId: string) => Promise<any>;
       };
       
-      langchain: {
-        getAllConfigs: () => Promise<any[]>;
-        saveConfig: (configData: any) => Promise<any>;
-        deleteConfig: (id: string) => Promise<void>;
-        testConfig: (configData: any) => Promise<any>;
-        getAvailableModels: (configData: any) => Promise<any[]>;
-        refreshProviderModels: (configId: string) => Promise<any>;
-        sendMessageWithConfig: (request: any, configData: any) => Promise<any>;
-        sendMessageWithDefault: (request: any) => Promise<any>;
-        getProviderStats: () => Promise<any>;
-        testAllEnabledConfigs: () => Promise<any>;
-        getAllSessions: () => Promise<any[]>;
-        saveSession: (sessionData: any) => Promise<any>;
-        deleteSession: (sessionId: string) => Promise<void>;
-      };
+      // langchain API 已移除，使用 ai: 接口
       
       debug: {
         getSystemRoleStatus: () => Promise<any>;
@@ -138,6 +132,7 @@ declare global {
       
       // Legacy APIs
       sendMessage: (message: string, config: any) => Promise<any>;
+      streamMessage: (request: any) => Promise<any>;
       getConfig: () => Promise<any>;
       setConfig: (config: any) => Promise<any>;
       getChatHistory: () => Promise<any>;

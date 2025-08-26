@@ -11,7 +11,7 @@ import { ModelConfigEntity } from '../../../shared/entities/ModelConfigEntity'
 // import { parseModelId } from '../../../shared/utils/modelIdHelper'
 import { ApiResponse } from '../../../shared/types'
 import { UserPreferenceEntity, UserPreferenceData } from '../../../shared/entities/UserPreferenceEntity'
-import { useStreamingMessage } from '../hooks/useStreamingMessage'
+import { useStreamProcessor } from '../streaming/useStreamProcessor'
 import { useRoleStateManager } from '../hooks/useRoleStateManager'
 
 // 内置默认配置
@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = {
   provider: 'openai',
   model: 'gpt-4o-mini',
   apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
-  baseURL: 'https://api.chatanywhere.tech/v1/',
+  baseURL: 'https://api.chatanywhere.tech/v1',
   isEnabled: true,
   priority: 10,
   enabledModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
@@ -54,7 +54,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [modelManagementVisible, setModelManagementVisible] = useState(false)
   
   // 🔥 使用流式消息hook
-  const { resetStreaming } = useStreamingMessage()
+  const streamProcessor = useStreamProcessor()
   
   // 🎭 使用角色状态管理器 - 解决"角色选择 ≠ 角色激活"问题
   const { roleStateInfo, resetRoleState } = useRoleStateManager({

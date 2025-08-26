@@ -3,4 +3,6 @@
  * 提供大语言模型相关的服务功能
  */
 
-export { LLMService } from './LLMService';
+export { CoreLLMService } from './CoreLLMService';
+export { CoreLLMServiceFactory } from './CoreLLMServiceFactory';
+// LLMService已移除，使用CoreLLMService

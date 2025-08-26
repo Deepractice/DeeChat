@@ -10,7 +10,8 @@ import { FileReferenceService } from '../../../../shared/services/FileReferenceS
 const { Content } = Layout
 
 interface WorkspaceAreaProps {
-  // 工作区属性
+  // AI文件请求回调（可选）
+  onAIFileRequest?: (prompt: string) => Promise<void>
 }
 
 interface DocumentTab {
@@ -22,7 +23,7 @@ interface DocumentTab {
   isEditing?: boolean
 }
 
-const WorkspaceArea: React.FC<WorkspaceAreaProps> = () => {
+const WorkspaceArea: React.FC<WorkspaceAreaProps> = ({ onAIFileRequest }) => {
   const [activeKey, setActiveKey] = useState<string>()
   const [documents, setDocuments] = useState<DocumentTab[]>([])
   const [selectedText, setSelectedText] = useState<string>('')

@@ -1,18 +1,78 @@
 #!/usr/bin/env node
 
+// 早期错误捕获 - 在任何模块加载之前
+process.on('uncaughtException', (err) => {
+  console.error('❌ Fatal error during startup:', err.message)
+  if (err.stack) {
+    console.error('Stack trace:', err.stack)
+  }
+  process.exit(1)
+})
+
 const { Command } = require('commander')
 const chalk = require('chalk')
 const packageJson = require('../../package.json')
 const logger = require('../lib/utils/logger')
+const { displayBanner, displayCompactBanner } = require('../lib/utils/banner')
 
 // 导入锦囊框架
 const { cli } = require('../lib/core/pouch')
-// 导入MCP Server命令
-const { MCPServerStdioCommand } = require('../lib/mcp/MCPServerStdioCommand')
-const { MCPServerHttpCommand } = require('../lib/mcp/MCPServerHttpCommand')
+// 导入新的 MCP Server 实现
+const FastMCPStdioServer = require('../lib/mcp/server/FastMCPStdioServer')
+const FastMCPHttpServer = require('../lib/mcp/server/FastMCPHttpServer')
+
+// CLI模式默认初始化 ServerEnvironment
+const { getGlobalServerEnvironment } = require('../lib/utils/ServerEnvironment')
+const { ProjectManager, getGlobalProjectManager } = require('../lib/utils/ProjectManager')
+const serverEnv = getGlobalServerEnvironment()
+if (!serverEnv.isInitialized()) {
+  // CLI模式使用特殊的transport标识
+  serverEnv.initialize({ transport: 'cli' })
+  logger.debug('CLI模式：ServerEnvironment已初始化')
+}
+
+// CLI模式自动恢复最近的项目配置
+async function restoreProjectForCLI() {
+  try {
+    const projectManager = getGlobalProjectManager()
+    const cwd = process.cwd()
+    
+    // 尝试获取当前目录的项目实例
+    const instances = await projectManager.getProjectInstances(cwd)
+    if (instances.length > 0) {
+      // 找到最近的CLI模式实例，如果没有就用第一个
+      const cliInstance = instances.find(i => i.transport === 'cli') || instances[0]
+      
+      // 恢复项目状态
+      ProjectManager.setCurrentProject(
+        cliInstance.projectPath,
+        cliInstance.mcpId,
+        cliInstance.ideType,
+        cliInstance.transport
+      )
+      logger.debug(`CLI模式：已恢复项目配置 - ${cliInstance.projectPath}`)
+    }
+  } catch (error) {
+    // 静默处理错误，不影响CLI使用
+    logger.debug(`CLI模式：无法恢复项目配置 - ${error.message}`)
+  }
+}
 
 // 创建主程序
 const program = new Command()
+
+// 需要在命令执行前完成项目恢复
+async function ensureProjectRestored() {
+  try {
+    // 使用正确的静态方法检查
+    if (!ProjectManager.isInitialized || !ProjectManager.isInitialized()) {
+      await restoreProjectForCLI()
+    }
+  } catch (error) {
+    // 如果检查失败，也尝试恢复
+    await restoreProjectForCLI()
+  }
+}
 
 // 设置程序信息
 program
@@ -41,6 +101,7 @@ program
   .command('action <role>')
   .description('⚡ action锦囊 - 激活特定AI角色，获取专业提示词')
   .action(async (role, options) => {
+    await ensureProjectRestored()
     await cli.execute('action', [role])
   })
 
@@ -67,10 +128,10 @@ program
   })
 
 
-// Tool命令
+// ToolX命令
 program
-  .command('tool <arguments>')
-  .description('🔧 tool锦囊 - 执行通过@tool协议声明的JavaScript工具')
+  .command('toolx <arguments>')
+  .description('🔧 toolx锦囊 - 执行PromptX工具体系(ToolX)中的JavaScript功能')
   .action(async (argumentsJson, options) => {
     try {
       let args = {};
@@ -98,9 +159,9 @@ program
         process.exit(1);
       }
       
-      await cli.execute('tool', args);
+      await cli.execute('toolx', args);
     } catch (error) {
-      console.error(`❌ Tool命令执行失败: ${error.message}`);
+      console.error(`❌ ToolX命令执行失败: ${error.message}`);
       process.exit(1);
     }
   })
@@ -109,10 +170,10 @@ program
 program
   .command('mcp-server')
   .description('🔌 启动MCP Server，支持Claude Desktop等AI应用接入')
-  .option('-t, --transport <type>', '传输类型 (stdio|http|sse)', 'stdio')
-  .option('-p, --port <number>', 'HTTP端口号 (仅http/sse传输)', '3000')
-  .option('--host <address>', '绑定地址 (仅http/sse传输)', 'localhost')
-  .option('--cors', '启用CORS (仅http/sse传输)', false)
+  .option('-t, --transport <type>', '传输类型 (stdio|http|simple-http)', 'stdio')
+  .option('-p, --port <number>', 'HTTP端口号 (仅http传输)', '5203')
+  .option('--host <address>', '绑定地址 (仅http传输)', 'localhost')
+  .option('--cors', '启用CORS (仅http传输)', false)
   .option('--debug', '启用调试模式', false)
   .action(async (options) => {
     try {
@@ -123,21 +184,40 @@ program
 
       // 根据传输类型选择命令
       if (options.transport === 'stdio') {
-        const mcpServer = new MCPServerStdioCommand();
-        await mcpServer.execute();
-      } else if (options.transport === 'http' || options.transport === 'sse') {
-        const mcpHttpServer = new MCPServerHttpCommand();
-        const serverOptions = {
-          transport: options.transport,
+        const mcpServer = new FastMCPStdioServer({
+          debug: options.debug,
+          name: 'promptx-mcp-stdio-server',
+          version: packageJson.version
+        });
+        await mcpServer.start();
+        
+        // 保持进程运行
+        await new Promise(() => {}); // 永远不会resolve，保持进程运行
+      } else if (options.transport === 'http') {
+        const mcpHttpServer = new FastMCPHttpServer({
+          debug: options.debug,
+          name: 'promptx-mcp-http-server',
+          version: packageJson.version,
           port: parseInt(options.port),
           host: options.host,
-          cors: options.cors
+          cors: options.cors,
+          stateless: options.stateless || false
+        });
+        
+        logger.info(chalk.green(`🚀 启动 HTTP MCP Server 在 ${options.host}:${options.port}...`));
+        await mcpHttpServer.start();
+      } else if (options.transport === 'simple-http') {
+        const MCPServerSimpleHttpCommand = require('../lib/mcp/MCPServerSimpleHttpCommand');
+        const simpleHttpServer = new MCPServerSimpleHttpCommand();
+        const serverOptions = {
+          port: parseInt(options.port),
+          host: options.host
         };
         
-        logger.info(chalk.green(`🚀 启动 ${options.transport.toUpperCase()} MCP Server 在 ${options.host}:${options.port}...`));
-        await mcpHttpServer.execute(serverOptions);
+        logger.info(chalk.green(`🚀 启动 Simple HTTP MCP Server 在 ${options.host}:${options.port}...`));
+        await simpleHttpServer.execute(serverOptions);
       } else {
-        throw new Error(`不支持的传输类型: ${options.transport}。支持的类型: stdio, http, sse`);
+        throw new Error(`不支持的传输类型: ${options.transport}。支持的类型: stdio, http, simple-http`);
       }
     } catch (error) {
       // 输出到stderr，不污染MCP的stdout通信
@@ -164,7 +244,7 @@ ${chalk.cyan('🎒 六大核心命令:')}
   📚 ${chalk.blue('learn')}  → 深入学习领域知识体系
   🔍 ${chalk.green('recall')} → AI主动检索应用记忆
   🧠 ${chalk.magenta('remember')} → AI主动内化知识增强记忆
-  🔧 ${chalk.cyan('tool')} → 执行JavaScript工具，AI智能行动
+  🔧 ${chalk.cyan('toolx')} → 执行PromptX工具体系(ToolX)，AI智能行动
   🔌 ${chalk.blue('mcp-server')} → 启动MCP Server，连接AI应用
 
 ${chalk.cyan('示例:')}
@@ -191,13 +271,12 @@ ${chalk.cyan('示例:')}
   promptx remember "测试→预发布→生产"
 
   ${chalk.gray('# 7️⃣ 执行JavaScript工具')}
-  promptx tool '{"tool_resource": "@tool://calculator", "parameters": {"operation": "add", "a": 2, "b": 3}}'
-  promptx tool '{"tool_resource": "@tool://send-email", "parameters": {"to": "test@example.com", "subject": "Hello", "content": "Test"}}'
+  promptx toolx '{"tool_resource": "@tool://calculator", "parameters": {"operation": "add", "a": 2, "b": 3}}'
+  promptx toolx '{"tool_resource": "@tool://send-email", "parameters": {"to": "test@example.com", "subject": "Hello", "content": "Test"}}'
 
   ${chalk.gray('# 8️⃣ 启动MCP服务')}
   promptx mcp-server                    # stdio传输(默认)
-  promptx mcp-server -t http -p 3000    # HTTP传输
-  promptx mcp-server -t sse -p 3001     # SSE传输
+  promptx mcp-server -t http -p 3000    # HTTP传输(Streamable HTTP)
 
 ${chalk.cyan('🔄 PATEOAS状态机:')}
   每个锦囊输出都包含 PATEOAS 导航，引导 AI 发现下一步操作
@@ -226,8 +305,9 @@ program.on('command:*', () => {
   program.help()
 })
 
-// 如果没有参数，显示帮助
+// 如果没有参数，显示banner和帮助
 if (process.argv.length === 2) {
+  displayBanner()
   program.help()
 }
 

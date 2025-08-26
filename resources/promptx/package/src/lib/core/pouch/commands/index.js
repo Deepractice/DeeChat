@@ -8,6 +8,7 @@ const ActionCommand = require('./ActionCommand')
 const LearnCommand = require('./LearnCommand')
 const RecallCommand = require('./RecallCommand')
 const RememberCommand = require('./RememberCommand')
+const ThinkCommand = require('./ThinkCommand')
 const ToolCommand = require('./ToolCommand')
 
 module.exports = {
@@ -17,5 +18,6 @@ module.exports = {
   LearnCommand,
   RecallCommand,
   RememberCommand,
+  ThinkCommand,
   ToolCommand
 }

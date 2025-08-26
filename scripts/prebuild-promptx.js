@@ -1,213 +1,319 @@
 /**
- * 构建时预下载PromptX依赖脚本
- * 在项目构建时自动下载并打包PromptX，避免运行时下载
+ * 从GitHub获取PromptX源码并智能管理依赖
+ * 直接从develop分支获取最新v1.7.1版本
  */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const PROMPTX_VERSION = 'beta'; // 可以配置不同版本
-const BUILD_RESOURCES_DIR = path.join(__dirname, '..', 'resources');
-const PROMPTX_BUILD_DIR = path.join(BUILD_RESOURCES_DIR, 'promptx');
+const PROMPTX_CONFIG = {
+  // GitHub仓库信息 - 使用develop分支获取最新开发代码
+  repository: 'https://github.com/Deepractice/PromptX.git',
+  branch: 'develop', // 🔥 使用develop分支获取最新功能
+  
+  // 本地路径配置
+  buildDir: path.join(__dirname, '..', 'resources'),
+  promptxDir: path.join(__dirname, '..', 'resources', 'promptx'),
+  
+  // 只复制这些必要文件/目录
+  includeFiles: [
+    'src/',           // 源码目录
+    'resource/',      // 资源文件
+    'package.json',   // 包信息
+    'README.md',      // 文档
+    'LICENSE',        // 许可证
+    'CHANGELOG.md'    // 变更日志
+  ],
+  
+  // 排除这些文件/目录（减少体积）
+  excludePatterns: [
+    '.git/',
+    '.github/',
+    'node_modules/',
+    '.gitignore',
+    '.eslintrc.*',
+    'jest.config.*',
+    'tsconfig.*',
+    'tests/',
+    'test/',
+    '__tests__/',
+    '*.test.js',
+    '*.spec.js',
+    '.changeset/',
+    'docs/',
+    'examples/',
+    '.vscode/',
+    '.idea/',
+    '*.log'
+  ]
+};
 
 async function main() {
-  console.log('🚀 [构建] 开始预下载PromptX依赖...');
+  console.log('🚀 [构建] 开始从GitHub获取PromptX源码...');
   
   try {
-    // 1. 创建构建资源目录
-    console.log('📁 [构建] 创建资源目录...');
-    await createDirectories();
+    // 1. 清理和创建目录
+    await setupDirectories();
     
-    // 2. 下载PromptX及其依赖
-    console.log('📥 [构建] 下载PromptX及依赖...');
-    await downloadPromptX();
+    // 2. 从GitHub克隆最新代码
+    await cloneFromGitHub();
     
-    // 3. 验证下载结果
-    console.log('✅ [构建] 验证下载结果...');
-    await validateDownload();
+    // 3. 复制必要文件
+    await copyEssentialFiles();
     
-    console.log('🎉 [构建] PromptX预下载完成！');
+    // 4. 安装运行时依赖（完整生产依赖）
+    await installRuntimeDependencies();
+    
+    // 5. 验证安装结果
+    await validateInstallation();
+    
+    // 6. 清理临时文件
+    await cleanup();
+    
+    console.log('🎉 [构建] PromptX源码获取完成！');
     
   } catch (error) {
-    console.error('❌ [构建] PromptX预下载失败:', error);
+    console.error('❌ [构建] PromptX源码获取失败:', error);
     process.exit(1);
   }
 }
 
-async function createDirectories() {
-  // 创建resources目录结构
-  const dirs = [BUILD_RESOURCES_DIR, PROMPTX_BUILD_DIR];
+async function setupDirectories() {
+  console.log('📁 [构建] 设置目录结构...');
   
-  for (const dir of dirs) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`✅ [构建] 创建目录: ${dir}`);
-    } else {
-      console.log(`✅ [构建] 目录已存在: ${dir}`);
-    }
+  // 清理旧的promptx目录
+  if (fs.existsSync(PROMPTX_CONFIG.promptxDir)) {
+    fs.rmSync(PROMPTX_CONFIG.promptxDir, { recursive: true, force: true });
+    console.log('🗑️ [构建] 清理旧版本目录');
   }
+  
+  // 创建构建目录
+  fs.mkdirSync(PROMPTX_CONFIG.buildDir, { recursive: true });
+  fs.mkdirSync(PROMPTX_CONFIG.promptxDir, { recursive: true });
 }
 
-async function downloadPromptX() {
-  const tempDir = path.join(PROMPTX_BUILD_DIR, 'temp');
+async function cloneFromGitHub() {
+  console.log(`📥 [构建] 从GitHub克隆: ${PROMPTX_CONFIG.repository} (${PROMPTX_CONFIG.branch})`);
+  
+  const tempCloneDir = path.join(PROMPTX_CONFIG.buildDir, 'promptx-temp');
   
   try {
-    // 清理临时目录
-    if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-    fs.mkdirSync(tempDir, { recursive: true });
+    // 浅克隆指定分支，节省时间和空间
+    const cloneCommand = [
+      'git clone',
+      '--depth 1',                                    // 只克隆最新commit
+      '--single-branch',                             // 只克隆指定分支
+      `--branch ${PROMPTX_CONFIG.branch}`,          // 指定分支
+      PROMPTX_CONFIG.repository,
+      tempCloneDir
+    ].join(' ');
     
-    // 创建package.json用于安装
-    const packageJson = {
-      name: 'promptx-build-install',
-      version: '1.0.0',
-      dependencies: {
-        'dpml-prompt': PROMPTX_VERSION
-      }
-    };
+    console.log(`🔧 [构建] 执行: ${cloneCommand}`);
+    execSync(cloneCommand, { stdio: 'pipe' });
     
-    fs.writeFileSync(
-      path.join(tempDir, 'package.json'), 
-      JSON.stringify(packageJson, null, 2)
-    );
+    // 获取版本信息
+    const gitHash = execSync('git rev-parse --short HEAD', { 
+      cwd: tempCloneDir,
+      encoding: 'utf8' 
+    }).trim();
     
-    console.log('🔧 [构建] 开始npm安装...');
+    const gitDate = execSync('git log -1 --format=%cd --date=short', { 
+      cwd: tempCloneDir,
+      encoding: 'utf8' 
+    }).trim();
     
-    // 执行npm install，只安装生产依赖
-    execSync(
-      `cd "${tempDir}" && npm install --production --registry https://registry.npmmirror.com --no-fund --no-audit --no-optional`, 
-      { 
-        stdio: 'inherit',
-        timeout: 120000
-      }
-    );
+    console.log(`✅ [构建] 克隆成功 - 版本: ${gitHash} (${gitDate})`);
     
-    // 复制安装结果到最终位置
-    const sourceDir = path.join(tempDir, 'node_modules', 'dpml-prompt');
-    const targetDir = path.join(PROMPTX_BUILD_DIR, 'package');
-    
-    if (fs.existsSync(targetDir)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
-    }
-    
-    // 复制包文件
-    copyDirectory(sourceDir, targetDir);
-    
-    // 🔥 优化：只复制必需的运行时依赖，排除重型依赖
-    console.log('🔧 [构建] 开始优化依赖复制...');
-    const nodeModulesSource = path.join(tempDir, 'node_modules');
-    const nodeModulesTarget = path.join(targetDir, 'node_modules');
-    
-    // 排除列表：去掉巨大的依赖包
-    const excludePackages = [
-      'node',           // 459MB - 最大的包，使用Electron自带Node.js
-      'pnpm',           // 22MB - 包管理器，运行时不需要
-      '@types',         // TypeScript类型定义，运行时不需要
-      'typescript',     // TypeScript编译器，运行时不需要
-      'eslint',         // 代码检查工具，运行时不需要
-      'jest',           // 测试框架，运行时不需要
-      '@jest',          // Jest相关包
-      'webpack',        // 构建工具，运行时不需要
-      'rollup',         // 构建工具，运行时不需要
-      'vite',           // 构建工具，运行时不需要
-      'esbuild',        // 构建工具，运行时不需要
-    ];
-    
-    copyNodeModulesSelectively(nodeModulesSource, nodeModulesTarget, excludePackages);
-    
-    // 清理临时目录
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    
-    console.log('✅ [构建] PromptX包复制完成');
+    // 暂存克隆目录路径供后续使用
+    PROMPTX_CONFIG._tempDir = tempCloneDir;
     
   } catch (error) {
-    console.error('❌ [构建] npm安装失败:', error);
-    throw error;
+    throw new Error(`GitHub克隆失败: ${error.message}`);
   }
 }
 
-function copyDirectory(src, dest) {
-  if (!fs.existsSync(src)) {
-    throw new Error(`源目录不存在: ${src}`);
-  }
+async function copyEssentialFiles() {
+  console.log('📋 [构建] 复制必要文件...');
   
-  fs.mkdirSync(dest, { recursive: true });
+  const sourceDir = PROMPTX_CONFIG._tempDir;
+  const targetDir = path.join(PROMPTX_CONFIG.promptxDir, 'package');
   
-  const entries = fs.readdirSync(src, { withFileTypes: true });
+  // 确保目标目录存在
+  fs.mkdirSync(targetDir, { recursive: true });
   
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+  let copiedCount = 0;
+  let skippedCount = 0;
+  
+  // 复制包含的文件/目录
+  for (const includeItem of PROMPTX_CONFIG.includeFiles) {
+    const sourcePath = path.join(sourceDir, includeItem);
+    const targetPath = path.join(targetDir, includeItem);
     
-    if (entry.isDirectory()) {
-      copyDirectory(srcPath, destPath);
+    if (fs.existsSync(sourcePath)) {
+      const stats = fs.statSync(sourcePath);
+      
+      if (stats.isDirectory()) {
+        copyDirectorySelectively(sourcePath, targetPath);
+        console.log(`✅ [构建] 复制目录: ${includeItem}`);
+      } else {
+        // 确保目标目录存在
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        fs.copyFileSync(sourcePath, targetPath);
+        console.log(`✅ [构建] 复制文件: ${includeItem}`);
+      }
+      copiedCount++;
     } else {
-      fs.copyFileSync(srcPath, destPath);
+      console.log(`⚠️ [构建] 文件不存在，跳过: ${includeItem}`);
+      skippedCount++;
     }
   }
+  
+  console.log(`📊 [构建] 文件复制完成: ${copiedCount} 个成功, ${skippedCount} 个跳过`);
 }
 
-/**
- * 选择性复制node_modules，排除重型依赖
- */
-function copyNodeModulesSelectively(src, dest, excludePackages = []) {
-  if (!fs.existsSync(src)) {
-    console.warn(`⚠️ [构建] node_modules源目录不存在: ${src}`);
-    return;
-  }
+function copyDirectorySelectively(srcDir, destDir) {
+  if (!fs.existsSync(srcDir)) return;
   
-  fs.mkdirSync(dest, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true });
   
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  let excludedCount = 0;
-  let includedCount = 0;
-  let totalSizeExcluded = 0;
+  const entries = fs.readdirSync(srcDir, { withFileTypes: true });
   
   for (const entry of entries) {
-    const packageName = entry.name;
-    const srcPath = path.join(src, packageName);
-    const destPath = path.join(dest, packageName);
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
     
-    // 检查是否在排除列表中
-    const shouldExclude = excludePackages.some(excludePattern => {
-      return packageName === excludePattern || 
-             packageName.startsWith(excludePattern + '/') ||
-             packageName.startsWith(excludePattern);
+    // 检查是否应该排除
+    const shouldExclude = PROMPTX_CONFIG.excludePatterns.some(pattern => {
+      return entry.name.includes(pattern.replace('/', '')) || 
+             entry.name.match(pattern.replace('/', '').replace('*', '.*'));
     });
     
     if (shouldExclude) {
-      // 计算被排除包的大小
-      try {
-        const stats = getDirectorySize(srcPath);
-        totalSizeExcluded += stats;
-        console.log(`❌ [构建] 排除依赖: ${packageName} (${formatBytes(stats)})`);
-        excludedCount++;
-      } catch (e) {
-        console.log(`❌ [构建] 排除依赖: ${packageName}`);
-        excludedCount++;
-      }
-      continue;
+      continue; // 跳过排除的文件
     }
     
     if (entry.isDirectory()) {
-      copyDirectory(srcPath, destPath);
-      console.log(`✅ [构建] 包含依赖: ${packageName}`);
-      includedCount++;
+      copyDirectorySelectively(srcPath, destPath);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+async function installRuntimeDependencies() {
+  console.log('🔧 [构建] 安装运行时依赖...');
   
-  console.log(`📊 [构建] 依赖统计: 包含 ${includedCount} 个，排除 ${excludedCount} 个`);
-  console.log(`💾 [构建] 节省空间: ${formatBytes(totalSizeExcluded)}`);
+  const packageDir = path.join(PROMPTX_CONFIG.promptxDir, 'package');
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  
+  if (!fs.existsSync(packageJsonPath)) {
+    console.log('⚠️ [构建] 未找到package.json，跳过依赖安装');
+    return;
+  }
+  
+  try {
+    // 策略1: 完整安装所有生产依赖（推荐）
+    const installCommand = [
+      'cd', `"${packageDir}"`,
+      '&&',
+      'npm install',                                    // 使用install而不是ci（develop分支可能没有lock文件）
+      '--production',                                   // 只安装生产依赖
+      '--ignore-scripts',                               // 跳过prepare脚本，避免husky错误
+      '--no-fund',                                      // 跳过资助信息
+      '--no-audit',                                     // 跳过安全审计
+      '--no-optional',                                  // 跳过可选依赖
+      '--registry https://registry.npmmirror.com'       // 使用国内镜像
+    ].join(' ');
+    
+    console.log('🔧 [构建] 执行依赖安装...');
+    execSync(installCommand, { 
+      stdio: 'inherit',
+      timeout: 300000 // 5分钟超时
+    });
+    
+    console.log('✅ [构建] 依赖安装完成');
+    
+    // 统计安装结果
+    const nodeModulesDir = path.join(packageDir, 'node_modules');
+    if (fs.existsSync(nodeModulesDir)) {
+      const nodeModulesSize = await getDirectorySize(nodeModulesDir);
+      console.log(`📊 [构建] 依赖大小: ${formatBytes(nodeModulesSize)}`);
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ [构建] 依赖安装失败，将以无依赖模式运行:', error.message);
+  }
+}
+
+async function validateInstallation() {
+  console.log('🔍 [构建] 验证安装结果...');
+  
+  const packageDir = path.join(PROMPTX_CONFIG.promptxDir, 'package');
+  
+  // 检查关键文件
+  const criticalFiles = [
+    'src/bin/promptx.js',
+    'src/lib/core/pouch/index.js',
+    'package.json'
+  ];
+  
+  let allValid = true;
+  
+  for (const file of criticalFiles) {
+    const filePath = path.join(packageDir, file);
+    if (fs.existsSync(filePath)) {
+      console.log(`✅ [构建] 关键文件存在: ${file}`);
+    } else {
+      console.error(`❌ [构建] 关键文件缺失: ${file}`);
+      allValid = false;
+    }
+  }
+  
+  if (!allValid) {
+    throw new Error('关键文件验证失败');
+  }
+  
+  // 读取版本信息
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+    console.log(`📦 [构建] 包信息: ${packageJson.name}@${packageJson.version}`);
+    
+    // 显示核心依赖
+    if (packageJson.dependencies) {
+      const depCount = Object.keys(packageJson.dependencies).length;
+      console.log(`📋 [构建] 生产依赖: ${depCount} 个`);
+      
+      // 显示关键依赖版本
+      const keyDeps = ['@modelcontextprotocol/sdk', 'commander', 'express', 'zod'];
+      keyDeps.forEach(dep => {
+        if (packageJson.dependencies[dep]) {
+          console.log(`   🔸 ${dep}: ${packageJson.dependencies[dep]}`);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('⚠️ [构建] 无法读取包版本信息');
+  }
+  
+  console.log('✅ [构建] 验证通过');
+}
+
+async function cleanup() {
+  console.log('🧹 [构建] 清理临时文件...');
+  
+  if (PROMPTX_CONFIG._tempDir && fs.existsSync(PROMPTX_CONFIG._tempDir)) {
+    fs.rmSync(PROMPTX_CONFIG._tempDir, { recursive: true, force: true });
+    console.log('✅ [构建] 临时目录清理完成');
+  }
 }
 
 /**
  * 计算目录大小
  */
-function getDirectorySize(dirPath) {
+async function getDirectorySize(dirPath) {
+  if (!fs.existsSync(dirPath)) return 0;
+  
   let totalSize = 0;
   
   function calculateSize(currentPath) {
@@ -239,54 +345,6 @@ function formatBytes(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-async function validateDownload() {
-  const packageDir = path.join(PROMPTX_BUILD_DIR, 'package');
-  const nodeModulesDir = path.join(packageDir, 'node_modules');
-  
-  // 检查包目录
-  if (!fs.existsSync(packageDir)) {
-    throw new Error('PromptX包目录不存在');
-  }
-  
-  // 检查node_modules
-  if (!fs.existsSync(nodeModulesDir)) {
-    throw new Error('node_modules目录不存在');
-  }
-  
-  // 检查关键依赖
-  const criticalDeps = ['commander', '@types/node'];
-  for (const dep of criticalDeps) {
-    const depPath = path.join(nodeModulesDir, dep);
-    if (!fs.existsSync(depPath)) {
-      console.warn(`⚠️ [构建] 警告: 缺少依赖 ${dep}`);
-    }
-  }
-  
-  // 寻找入口文件
-  const possibleEntries = [
-    path.join(packageDir, 'dist', 'mcp-server.js'),
-    path.join(packageDir, 'src', 'bin', 'promptx.js'),
-    path.join(packageDir, 'bin', 'promptx.js'),
-    path.join(packageDir, 'lib', 'mcp-server.js'),
-    path.join(packageDir, 'index.js')
-  ];
-  
-  let entryFound = false;
-  for (const entry of possibleEntries) {
-    if (fs.existsSync(entry)) {
-      console.log(`✅ [构建] 找到入口文件: ${entry}`);
-      entryFound = true;
-      break;
-    }
-  }
-  
-  if (!entryFound) {
-    throw new Error('未找到PromptX入口文件');
-  }
-  
-  console.log('✅ [构建] PromptX验证通过');
 }
 
 // 运行主函数

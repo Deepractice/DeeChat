@@ -59,7 +59,6 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
 
   // 移除组件挂载时的自动加载，只在用户打开下拉框时才加载角色列表
 
-
   // 错误处理 - 静默记录
   useEffect(() => {
     if (roles.error) {

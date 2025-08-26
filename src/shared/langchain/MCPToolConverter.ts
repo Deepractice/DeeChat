@@ -32,74 +32,6 @@ interface MCPIntegrationServiceInterface {
   callTool(request: MCPToolCallRequest): Promise<MCPToolCallResponse>;
 }
 
-/**
- * 将MCP inputSchema转换为Zod schema
- * @param inputSchema MCP工具的输入模式
- * @returns Zod schema对象
- */
-function convertMCPSchemaToZod(inputSchema: any): z.ZodType<any> {
-  if (!inputSchema || !inputSchema.properties) {
-    // 如果没有schema，返回一个通用的object schema
-    return z.object({}).passthrough();
-  }
-
-  const zodFields: Record<string, z.ZodType<any>> = {};
-  const required = inputSchema.required || [];
-
-  // 转换每个属性
-  for (const [key, propSchema] of Object.entries(inputSchema.properties as Record<string, any>)) {
-    let zodType: z.ZodType<any>;
-
-    switch (propSchema.type) {
-      case 'string':
-        zodType = z.string();
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-        break;
-      case 'number':
-      case 'integer':
-        zodType = z.number();
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-        break;
-      case 'boolean':
-        zodType = z.boolean();
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-        break;
-      case 'array':
-        zodType = z.array(z.unknown());
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-        break;
-      case 'object':
-        zodType = z.object({}).passthrough();
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-        break;
-      default:
-        // 未知类型，使用any()
-        zodType = z.unknown();
-        if (propSchema.description) {
-          zodType = zodType.describe(propSchema.description);
-        }
-    }
-
-    // 如果不是必需的，将其设为可选
-    if (!required.includes(key)) {
-      zodType = zodType.optional();
-    }
-
-    zodFields[key] = zodType;
-  }
-
-  return z.object(zodFields);
-}
 
 /**
  * MCP工具转换器类
@@ -117,21 +49,84 @@ export class MCPToolConverter {
    * @returns LangChain工具实例
    */
   convertMCPTool(mcpTool: MCPTool): any {
-    log.debug(`🔧 [MCPToolConverter] 转换MCP工具: ${mcpTool.name}`);
+    // 🚨 生成带server前缀的工具名称，符合StreamProcessor的路由逻辑
+    const toolNameWithPrefix = `${mcpTool.serverId}__${mcpTool.name}`;
+    log.info(`🔧 [MCPToolConverter] 转换MCP工具: ${mcpTool.name} -> ${toolNameWithPrefix}`);
+    log.info(`🔧 [MCPToolConverter-DETAIL] - 描述: ${mcpTool.description || '无描述'}`);
+    log.info(`🔧 [MCPToolConverter-DETAIL] - inputSchema存在: ${!!mcpTool.inputSchema}`);
+    log.info(`🔧 [MCPToolConverter-DETAIL] - serverId: ${mcpTool.serverId}`);
 
-    // 转换输入schema - 使用any类型避免过深的类型推断
-    const zodSchema: any = convertMCPSchemaToZod(mcpTool.inputSchema);
+    // 🚀 核心修复：使用最简单的Zod schema构建，确保编译通过和参数传递
+    console.log(`🔧 [MCPToolConverter-SimpleZod] 工具: ${mcpTool.name}`);
+    console.log(`🔧 [MCPToolConverter-SimpleZod] - 原始inputSchema:`, JSON.stringify(mcpTool.inputSchema, null, 2));
+    
+    // 使用最简单的Zod schema构建方式，避免复杂的类型推断
+    let finalSchema: any;
+    if (mcpTool.inputSchema?.properties && Object.keys(mcpTool.inputSchema.properties).length > 0) {
+      const zodFields: any = {};
+      const required = mcpTool.inputSchema.required || [];
+      
+      console.log(`🚨 [MCPToolConverter-DEBUG] 开始转换工具: ${mcpTool.name}`);
+      console.log(`🚨 [MCPToolConverter-DEBUG] - inputSchema:`, JSON.stringify(mcpTool.inputSchema, null, 2));
+      console.log(`🚨 [MCPToolConverter-DEBUG] - required字段:`, required);
+      
+      for (const [key, propSchema] of Object.entries(mcpTool.inputSchema.properties)) {
+        const prop = propSchema as any;
+        
+        // 🚀 核心修复：正确处理必需和可选参数，让AI知道哪些参数是必需的
+        if (required.includes(key)) {
+          zodFields[key] = z.string().describe(prop.description || `${key} parameter (required)`);
+          console.log(`🚨 [MCPToolConverter-DEBUG] - 字段: ${key} -> z.string() (必需)`);
+        } else {
+          zodFields[key] = z.string().optional().describe(prop.description || `${key} parameter (optional)`);
+          console.log(`🚨 [MCPToolConverter-DEBUG] - 字段: ${key} -> z.string().optional() (可选)`);
+        }
+      }
+      
+      finalSchema = z.object(zodFields);
+      console.log(`🚨 [MCPToolConverter-DEBUG] - 最终zodFields:`, Object.keys(zodFields));
+      console.log(`🚨 [MCPToolConverter-DEBUG] - 最终schema类型:`, finalSchema.constructor?.name);
+      
+      // 测试schema解析
+      try {
+        const testParse = finalSchema.safeParse({});
+        console.log(`🚨 [MCPToolConverter-DEBUG] - 空对象解析结果:`, testParse.success ? 'SUCCESS' : 'FAILED');
+        if (!testParse.success) {
+          console.log(`🚨 [MCPToolConverter-DEBUG] - 解析错误:`, testParse.error.issues);
+        }
+      } catch (error) {
+        console.log(`🚨 [MCPToolConverter-DEBUG] - schema测试失败:`, error);
+      }
+      
+    } else {
+      finalSchema = z.object({});
+      console.log(`🚨 [MCPToolConverter-DEBUG] - 工具 ${mcpTool.name} 使用空schema`);
+    }
 
-    // 创建LangChain工具
+    // 创建LangChain工具 - 使用最终确定的schema
     const langchainTool = tool(
       // 工具执行函数：调用MCP服务
-      async (args: any) => {
+      async (args: any): Promise<string> => {
         try {
-          log.info(`🔧 [LangChain工具] 执行MCP工具: ${mcpTool.name}`, args);
+          log.info(`🔧 [LangChain工具] 执行MCP工具: ${toolNameWithPrefix} (原始: ${mcpTool.name})`, args);
+          console.log(`🔧 [LangChain工具-参数] 收到参数:`, JSON.stringify(args, null, 2));
+          console.log(`🔧 [LangChain工具-参数] 参数类型:`, typeof args, `是否为空:`, Object.keys(args || {}).length === 0);
+          
+          // 🚀 核心修复：在执行时检查必需参数
+          const requiredFields = mcpTool.inputSchema?.required || [];
+          for (const field of requiredFields) {
+            if (!args || args[field] === undefined || args[field] === null || args[field] === '') {
+              const errorMsg = `MCP工具参数验证失败: ${field}: Required`;
+              log.error(`❌ [LangChain工具] ${errorMsg}`);
+              console.log(`❌ [LangChain工具-参数验证] 缺少必需参数: ${field}`);
+              return errorMsg;
+            }
+          }
+          console.log(`✅ [LangChain工具-参数验证] 必需参数检查通过: ${requiredFields.join(', ')}`);
           
           const response = await this.mcpService.callTool({
             serverId: mcpTool.serverId,
-            toolName: mcpTool.name,
+            toolName: mcpTool.name, // callTool仍使用原始工具名称
             arguments: args
           });
 
@@ -140,7 +135,7 @@ export class MCPToolConverter {
               response.result : 
               JSON.stringify(response.result);
             
-            log.info(`✅ [LangChain工具] MCP工具执行成功: ${mcpTool.name}`);
+            log.info(`✅ [LangChain工具] MCP工具执行成功: ${toolNameWithPrefix}`);
             return result;
           } else {
             const errorMsg = `MCP工具执行失败: ${response.error}`;
@@ -154,13 +149,13 @@ export class MCPToolConverter {
         }
       },
       {
-        name: mcpTool.name,
-        description: mcpTool.description || `MCP工具: ${mcpTool.name}`,
-        schema: zodSchema
+        name: toolNameWithPrefix, // 🚨 使用带前缀的名称
+        description: mcpTool.description || `MCP工具: ${mcpTool.name} (from ${mcpTool.serverId})`,
+        schema: finalSchema // 🚀 使用简化schema
       }
     );
 
-    log.debug(`✅ [MCPToolConverter] 成功转换工具: ${mcpTool.name}`);
+    log.info(`✅ [MCPToolConverter] 成功转换工具（直接Schema）: ${mcpTool.name} -> ${toolNameWithPrefix}`);
     return langchainTool;
   }
 

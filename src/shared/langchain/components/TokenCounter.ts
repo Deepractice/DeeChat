@@ -115,7 +115,7 @@ export class TokenCounter {
     this.tokenConfigs.set('gpt-4', {
       provider: 'openai',
       model: 'gpt-4',
-      maxContextLength: 8192,
+      maxContextLength: 128000, // 🔧 修复：GPT-4 Turbo有128k上下文，不是8k
       estimatedCostPer1000Tokens: 0.03,
       encoding: 'cl100k_base'
     });

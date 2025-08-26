@@ -70,12 +70,13 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
 //     console.log('🔍 [ModelSelector] 降级查找配置:', value)
     setLoading(true)
     try {
-      if (!window.electronAPI?.langchain?.getAllConfigs) {
+      if (!window.electronAPI?.model?.getAll) {
 //         console.log('⚠️ [ModelSelector] electronAPI 不可用')
         return
       }
 
-      const configs = await window.electronAPI.langchain.getAllConfigs()
+      const response = await window.electronAPI.model.getAll()
+      const configs = response?.data || []
 //       console.log('🔍 [ModelSelector] 获取到配置列表:', configs.length, '个')
 
       // 新方案：直接使用默认配置，不需要查找
@@ -203,7 +204,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (!value || !currentConfig) return
 
     try {
-      const configs = await window.electronAPI.langchain.getAllConfigs()
+      const response = await window.electronAPI.model.getAll()
+      const configs = response?.data || []
       const parts = value.split('-')
       const configId = parts.length >= 6 ? parts.slice(0, 5).join('-') : value
 

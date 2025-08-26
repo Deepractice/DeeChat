@@ -30,7 +30,6 @@ const StreamingTest: React.FC<StreamingTestProps> = ({ selectedModel }) => {
     try {
       // 设置流式事件监听器
       const removeStreamListener = window.electronAPI?.ai?.onStreamChunk((data: any) => {
-        console.log('🌊 [流式测试] 接收到chunk:', data)
         if (data.chunk) {
           setStreamingResult(data.chunk)
         }

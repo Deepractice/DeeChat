@@ -1,5 +1,5 @@
 import React from 'react'
-import { Select, Button, Space, Typography, Popconfirm, message } from 'antd'
+import { Select, Button, Space, Typography, Popconfirm, App } from 'antd'
 import { PlusOutlined, MessageOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
@@ -18,6 +18,7 @@ export interface ChatSessionDropdownProps {
 export const ChatSessionDropdown: React.FC<ChatSessionDropdownProps> = ({ compact = false }) => {
   const dispatch = useDispatch<AppDispatch>()
   const { sessions, currentSession } = useSelector((state: RootState) => state.chat)
+  const { message } = App.useApp()
 
   const handleNewChat = () => {
     dispatch(createNewSession())
@@ -37,7 +38,9 @@ export const ChatSessionDropdown: React.FC<ChatSessionDropdownProps> = ({ compac
       message.success(`已删除对话 "${sessionTitle}"`)
     } catch (error) {
       console.error('删除会话失败:', error)
-      message.error('删除对话失败')
+      // 显示具体的错误信息
+      const errorMessage = error instanceof Error ? error.message : '删除对话失败，未知错误'
+      message.error(errorMessage)
     }
   }
 

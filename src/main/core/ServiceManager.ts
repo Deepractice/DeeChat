@@ -11,8 +11,10 @@
 
 import { EventEmitter } from 'events'
 import { ProcessPoolManager } from './ProcessPoolManager'
-import { MCPServiceCoordinator } from './MCPServiceCoordinator'
+// MCPServiceCoordinator已删除，使用简化的MCPClient
 // SystemRoleManager已移除，统一使用PromptX角色系统
+import { MCPClient } from '../services/mcp/client/MCPClient'
+import { MCPConfigService } from '../services/mcp/client/MCPConfigService'
 import { QuickDatabaseManager } from '../services/core/QuickDatabaseManager'
 import { FileService } from '../services/FileService'
 // FileOperationService已移除，功能整合到PromptX
@@ -35,7 +37,8 @@ export class ServiceManager extends EventEmitter {
   // 核心服务组件
   private databaseManager: QuickDatabaseManager
   private processPool: ProcessPoolManager
-  private mcpCoordinator: MCPServiceCoordinator
+  private mcpClient: MCPClient
+  private mcpConfigService: MCPConfigService
   // systemRoleManager已移除，统一使用PromptX角色系统
   
   // 业务服务组件
@@ -53,7 +56,8 @@ export class ServiceManager extends EventEmitter {
     // 初始化核心组件
     this.databaseManager = new QuickDatabaseManager()
     this.processPool = new ProcessPoolManager()
-    this.mcpCoordinator = new MCPServiceCoordinator(this.processPool)
+    this.mcpClient = new MCPClient()
+    this.mcpConfigService = new MCPConfigService()
     // systemRoleManager已移除，统一使用PromptX角色系统
     
     // 初始化业务服务组件
@@ -196,13 +200,17 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * 获取MCP协调器
+   * 获取MCP客户端
    */
-  public getMCPCoordinator(): MCPServiceCoordinator {
-    if (!this.isInitialized) {
-      throw new Error('ServiceManager未初始化，无法获取MCP协调器')
-    }
-    return this.mcpCoordinator
+  public getMCPClient(): MCPClient {
+    return this.mcpClient
+  }
+
+  /**
+   * 获取MCP配置服务
+   */
+  public getMCPConfigService(): MCPConfigService {
+    return this.mcpConfigService
   }
 
   /**
@@ -336,9 +344,69 @@ export class ServiceManager extends EventEmitter {
     this.updateServiceStatus('mcp', 'initializing', '初始化MCP服务...')
     
     try {
-      await this.mcpCoordinator.initialize()
-      this.updateServiceStatus('mcp', 'ready', 'MCP服务就绪')
+      console.log('🔌 [ServiceManager] 开始初始化MCP服务并连接enabled服务器...')
+      
+      // MCP配置服务在构造函数中自动初始化
+      console.log('✅ [ServiceManager] MCP配置服务已启动')
+      
+      // 获取所有enabled的服务器配置
+      const servers = await this.mcpConfigService.getAllServerConfigs()
+      const enabledServers = servers.filter((server: any) => server.isEnabled)
+      
+      console.log(`🔍 [ServiceManager] 发现 ${enabledServers.length} 个已启用的MCP服务器:`, enabledServers.map((s: any) => s.name))
+      
+      // 连接所有enabled的服务器
+      for (const server of enabledServers) {
+        try {
+          console.log(`🚀 [ServiceManager] 正在连接MCP服务器: ${server.name} (${server.id})`)
+          
+          // 根据服务器类型确定连接参数
+          if (server.type === 'stdio') {
+            await this.mcpClient.connectServer({
+              serverId: server.id,
+              transport: 'stdio',
+              command: server.command || 'node',
+              args: server.args || []
+            })
+          } else if (server.type === 'sse') {
+            // SSE类型服务器连接逻辑
+            const url = server.url || 'http://localhost:3000'
+            await this.mcpClient.connectServer({
+              serverId: server.id,
+              transport: 'sse',
+              url: url
+            })
+          } else if (server.type === 'streamable-http') {
+            // Streamable HTTP类型服务器连接逻辑
+            const url = server.url || 'http://localhost:3000'
+            await this.mcpClient.connectServer({
+              serverId: server.id,
+              transport: 'http',
+              url: url
+            })
+          } else if (server.type === 'inprocess') {
+            console.log(`🔧 [ServiceManager] 跳过进程内服务器连接: ${server.name} (由InProcessMCPServer管理)`)
+            // 进程内服务器由InProcessMCPServer管理，不需要通过MCPClient连接
+            continue
+          } else {
+            console.warn(`⚠️ [ServiceManager] 不支持的服务器类型: ${server.type} (${server.name})`)
+            continue
+          }
+          
+          console.log(`✅ [ServiceManager] MCP服务器连接成功: ${server.name}`)
+        } catch (serverError) {
+          console.error(`❌ [ServiceManager] MCP服务器连接失败: ${server.name}`, serverError)
+          // 单个服务器连接失败不影响其他服务器
+        }
+      }
+      
+      // 输出连接统计
+      const connectedServers = this.mcpClient.getConnectedServers()
+      console.log(`🎯 [ServiceManager] MCP初始化完成，已连接 ${connectedServers.length} 个服务器:`, connectedServers)
+      
+      this.updateServiceStatus('mcp', 'ready', `MCP服务就绪 (${connectedServers.length} 个服务器已连接)`)
     } catch (error) {
+      console.error('❌ [ServiceManager] MCP服务初始化失败:', error)
       this.updateServiceStatus('mcp', 'error', `MCP服务初始化失败: ${error}`)
       throw error
     }
@@ -378,7 +446,12 @@ export class ServiceManager extends EventEmitter {
   private async shutdownMCPServices(): Promise<void> {
     this.updateServiceStatus('mcp', 'stopping', '关闭MCP服务...')
     try {
-      await this.mcpCoordinator.shutdown()
+      console.log('🛑 [ServiceManager] 开始关闭MCP服务...')
+      
+      // 关闭所有MCP连接
+      await this.mcpClient.close()
+      console.log('✅ [ServiceManager] MCP客户端已关闭')
+      
       this.serviceStatuses.delete('mcp')
     } catch (error) {
       console.error('❌ [ServiceManager] MCP服务关闭失败:', error)
@@ -454,16 +527,7 @@ export class ServiceManager extends EventEmitter {
       this.emit('process-event', { type: 'terminated', ...data })
     })
 
-    // 监听MCP协调器事件
-    this.mcpCoordinator.on('server-connected', (data) => {
-      console.log(`🔌 [ServiceManager] MCP服务器已连接: ${data.serverId}`)
-      this.emit('mcp-event', { type: 'connected', ...data })
-    })
-
-    this.mcpCoordinator.on('server-disconnected', (data) => {
-      console.log(`🔌 [ServiceManager] MCP服务器已断开: ${data.serverId}`)
-      this.emit('mcp-event', { type: 'disconnected', ...data })
-    })
+    // MCP事件监听现在通过MCPClient处理
   }
 
   /**

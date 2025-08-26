@@ -31,7 +31,8 @@ class PouchCLI {
       learn: commands.LearnCommand,
       recall: commands.RecallCommand,
       remember: commands.RememberCommand,
-      tool: commands.ToolCommand
+      think: commands.ThinkCommand,
+      toolx: commands.ToolCommand
     })
 
     // 将命令注册到状态机

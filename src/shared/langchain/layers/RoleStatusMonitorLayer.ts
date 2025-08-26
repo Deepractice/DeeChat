@@ -112,17 +112,12 @@ export class RoleStatusMonitorLayer {
   private readonly CONTEXT_LIGHT_THRESHOLD = 0.25; // 25%以内为轻量上下文
   private readonly CONTEXT_HEAVY_THRESHOLD = 0.60; // 60%以上为重度上下文
 
-  // **修改**：支持从PromptX获取角色内容，不再依赖硬编码文件
-  private roleContentCache: Map<string, {content: string, timestamp: Date}> = new Map();
-  private promptxService?: any; // PromptX服务引用
+  // **简化**：移除角色内容缓存，由CoreLLMService统一处理
 
-  constructor(promptxService?: any) {
+  constructor() {
     this.tokenCounter = TokenCounter.getInstance();
     this.contextManager = ModelContextManager.getInstance();
-    this.promptxService = promptxService;
-    log.info('🎭 [RoleStatusMonitorLayer] 第1层：角色状态监控层（增强版）初始化完成', {
-      promptxServiceAvailable: !!this.promptxService
-    });
+    log.info('🎭 [RoleStatusMonitorLayer] 第1层：角色状态监控层初始化完成');
   }
 
   /**
@@ -138,60 +133,20 @@ export class RoleStatusMonitorLayer {
     context: ConversationContext, 
     systemPrompt: string, 
     userInput: string,
-    uiContext?: UIInjectionContext,
-    availableTools?: any[]
+    uiContext?: UIInjectionContext
   ): Promise<RoleStatusResult> {
     log.info(`🎭 [角色监控Enhanced] 开始增强分析 - 会话: ${context.sessionId.slice(0, 8)}, UI角色: ${uiContext?.selectedRole || '未选择'}, 上下文角色: ${context.activeRole || '未选择'}`);
     
-    // **步骤1**：检测角色选择，直接获取角色内容
-    let finalSystemPrompt = systemPrompt;
-    let roleRendered = false;
-    let roleContentSource: 'direct' | 'fallback' = 'fallback';
-    let roleContent: string | null = null;
-    
+    // **步骤1**：角色状态检测（不再获取角色内容，由CoreLLMService统一处理）
     const targetRole = uiContext?.selectedRole || context.activeRole;
     if (targetRole) {
       log.info(`🎭 [角色检测] 检测到角色选择: ${targetRole}`);
-      
-      // 🔥 使用注入的PromptX服务获取完整角色激活内容
-      if (this.promptxService) {
-        try {
-          console.log(`🎯 [DEBUG-角色激活] 开始调用PromptX服务: targetRole=${targetRole}`);
-          console.log(`🎯 [DEBUG-角色激活] PromptX服务类型:`, typeof this.promptxService);
-          console.log(`🎯 [DEBUG-角色激活] PromptX服务方法:`, Object.keys(this.promptxService));
-          
-          const result = await this.promptxService.execute('action', [targetRole]);
-          
-          console.log(`🎯 [DEBUG-角色激活] PromptX execute调用完成`);
-          console.log(`🎯 [DEBUG-角色激活] result类型:`, typeof result);
-          console.log(`🎯 [DEBUG-角色激活] result值:`, result);
-          console.log(`🎯 [DEBUG-角色激活] result是否有toString:`, result && typeof result.toString === 'function');
-          
-          if (result && typeof result.toString === 'function') {
-            roleContent = result.toString();
-            roleRendered = true;
-            roleContentSource = 'direct';
-            console.log(`✅ [DEBUG-角色激活] 角色激活成功: ${targetRole}, 内容长度: ${roleContent?.length || 0}字符`);
-            console.log(`✅ [DEBUG-角色激活] 角色内容预览: ${roleContent?.substring(0, 200)}...`);
-            log.info(`✅ [角色内容获取] 成功获取角色激活内容: ${targetRole}, 长度: ${roleContent?.length || 0}字符`);
-          } else {
-            console.log(`⚠️ [DEBUG-角色激活] 角色激活失败: result无效或没有toString方法`);
-            log.warn(`⚠️ [角色内容获取] 未能获取角色内容: ${targetRole}`);
-          }
-        } catch (error) {
-          console.error(`❌ [DEBUG-角色激活] PromptX执行异常:`, error);
-          log.error(`❌ [角色内容获取] 角色激活异常: ${targetRole}`, error);
-        }
-      } else {
-        console.log(`⚠️ [DEBUG-角色激活] PromptX服务未注入，无法激活角色: ${targetRole}`);
-        log.warn(`⚠️ [角色内容获取] PromptX服务未注入，无法激活角色: ${targetRole}`);
-      }
     } else {
       log.info(`❓ [角色检测] 未检测到角色选择`);
     }
 
     // **步骤2**：分析Token状态
-    const incomingTokens = this.estimateIncomingTokens(finalSystemPrompt, userInput, context.currentModel);
+    const incomingTokens = this.estimateIncomingTokens(systemPrompt, userInput, context.currentModel);
     const currentStats = this.tokenCounter.getConversationStats(context.sessionId);
     const currentTokens = currentStats?.totalTokens || 0;
     
@@ -213,26 +168,18 @@ export class RoleStatusMonitorLayer {
     const finalRecommendations = this.generateFinalRecommendations(contextAnalysis);
     log.info(`💡 [系统建议] 动作: ${finalRecommendations.action}, 紧急度: ${finalRecommendations.urgency}`);
 
-    // **步骤6**：构建动态注入变量（如果有可用工具）
-    console.log(`🔧 [DEBUG-工具检测] availableTools状态:`, availableTools ? `发现${availableTools.length}个工具` : '无可用工具');
-    const injectedVariables = availableTools ? this.buildInjectionVariables(context, availableTools) : undefined;
-    if (injectedVariables && availableTools) {
-      console.log(`🔧 [DEBUG-工具注入] 工具详情:`, injectedVariables.AVAILABLE_TOOLS_DETAILED?.substring(0, 200) + '...');
-      log.info(`🔧 [工具注入] 准备注入 ${availableTools.length} 个工具到系统提示词`);
-    } else {
-      console.log(`⚠️ [DEBUG-工具注入] 未检测到可用工具，将不会注入工具信息`);
-    }
+    // **步骤6**：构建基础注入变量（不包含工具信息）
+    const injectedVariables = this.buildBasicInjectionVariables(context);
 
-    // **步骤7**：构建增强的系统提示词（加入角色内容直接注入）
+    // **步骤7**：构建增强的系统提示词（只包含角色内容，不包含工具信息）
     const enhancedSystemPrompt = this.buildEnhancedSystemPrompt(
-      finalSystemPrompt,
+      systemPrompt,
       context,
       contextAnalysis,
       roleAnalysis,
       finalRecommendations,
       uiContext,
-      roleContent,
-      injectedVariables  // 🔥 传入注入变量
+      injectedVariables
     );
     log.info(`📝 [最终提示词] 构建完成，长度: ${enhancedSystemPrompt.length} 字符`);
 
@@ -251,13 +198,13 @@ export class RoleStatusMonitorLayer {
         activeRole: uiContext?.selectedRole || context.activeRole || '通用助手',
         totalTokens: roleAnalysis.totalTokens,
         rolePresence: roleAnalysis.rolePresence,
-        roleRendered,
-        injectedVariables
+        roleRendered: true,
+        injectedVariables: injectedVariables
       },
       systemPrompt: enhancedSystemPrompt,
       metadata: {
         uiInjectionProcessed: !!uiContext,
-        roleContentSource: roleContentSource === 'direct' ? 'cache' : 'fallback'
+        roleContentSource: 'file'
       }
     };
 
@@ -377,7 +324,6 @@ export class RoleStatusMonitorLayer {
     roleAnalysis: any,
     _recommendations: any,
     uiContext?: UIInjectionContext,
-    roleContent?: string | null,
     injectedVariables?: Partial<InjectionVariables>
   ): string {
     const sections: string[] = [];
@@ -387,45 +333,19 @@ export class RoleStatusMonitorLayer {
 当前角色: ${context.activeRole || '通用助手'} | 上下文使用率: ${Math.round(contextAnalysis.usage.percentage * 100)}% (${roleAnalysis.totalTokens} tokens) | 角色存在感: ${roleAnalysis.rolePresence}
 模型级别: ${contextAnalysis.usage.level} | 状态: ${roleAnalysis.reason}`);
 
-    // 2. 🔥 角色内容直接注入（新架构：无需工具调用）
+    // 2. 🎯 角色状态记录（简化，不再处理角色内容）
     const currentUIRole = uiContext?.selectedRole || context.activeRole;
     
-    if (currentUIRole && roleContent) {
-      // 场景1：有角色且已获取到角色内容 - 直接注入
-      const roleSection = `# 🎭 ROLE_DEFINITION
-🚀 **当前激活角色：\`${currentUIRole}\`**
-
-📋 **完整角色定义内容**：
-${roleContent}
-
-✅ **重要指示**：
-- 你现在完全具备了该角色的所有能力和知识
-- 请严格按照上述角色定义来回答问题
-- 体现角色的专业特征、思维方式和行为模式
-- 保持角色的一致性和专业性`;
+    if (currentUIRole) {
+      log.info(`🎭 [角色检测] 当前激活角色: ${currentUIRole}`);
       
-      sections.push(roleSection);
-      console.log(`✅ [DEBUG-系统提示词] 角色内容已注入到系统提示词: ${currentUIRole}, 长度: ${roleContent.length}字符`);
-      console.log(`✅ [DEBUG-系统提示词] 角色section长度: ${roleSection.length}字符`);
-      log.info(`✅ [角色内容注入] 已直接注入角色内容: ${currentUIRole}, 长度: ${roleContent.length}字符`);
-    } else if (currentUIRole && !roleContent) {
-      // 场景2：有角色但内容还在加载中 - 添加临时提示
-      const loadingNotice = `# 🎭 ROLE_LOADING
-🎯 **选择角色：\`${currentUIRole}\`**
-⏳ **角色内容加载中...**
-
-💡 请先以通用AI身份回答，角色能力将在下次对话中生效。`;
-      
-      sections.push(loadingNotice);
-      log.info(`⏳ [角色加载中] 角色${currentUIRole}内容还在加载，使用临时提示`);
+      // 添加简单的状态提示
+      const statusNotice = `# 🎭 角色状态
+✅ 当前激活角色：${currentUIRole}`;
+      sections.push(statusNotice);
     } else {
-      // 场景3：无角色选择 - 默认模式
-      const defaultNotice = `# 🤖 DEFAULT_AI_MODE
-💬 **当前模式：通用AI助手**
-🎯 请以友好、专业的AI助手身份回答用户问题。`;
-      
-      sections.push(defaultNotice);
-      log.info(`🤖 [默认模式] 未选择角色，使用默认AI模式`);
+      // 无特定角色时的简单状态
+      log.info(`🤖 [默认模式] 使用基础模板，无特定角色激活`);
     }
 
     // 3. 上下文压力预警（重要）
@@ -447,33 +367,10 @@ ${roleContent}
       }
     }
 
-    // 6. 🔧 工具信息注入（如果有可用工具）
-    if (injectedVariables?.AVAILABLE_TOOLS_DETAILED) {
-      const toolsSection = `# 🔧 AVAILABLE_TOOLS
-
-你现在有以下工具可以使用。请根据用户的需求智能选择合适的工具来完成任务。
-
-${injectedVariables.AVAILABLE_TOOLS_DETAILED}
-
-## 工具调用格式
-工具调用使用XML格式。工具名称作为XML标签名，每个参数都封装在自己的标签中：
-
-<工具名称>
-<参数1>参数值1</参数1>
-<参数2>参数值2</参数2>
-</工具名称>
-
-⚠️ **重要**：当你需要调用工具时，请使用上述XML格式，不要只是描述要执行的操作。`;
-      sections.push(toolsSection);
-      console.log(`🔧 [DEBUG-工具注入到提示词] 工具section已添加，长度: ${toolsSection.length}字符`);
-      console.log(`🔧 [DEBUG-工具注入到提示词] 工具section前200字符: ${toolsSection.substring(0, 200)}...`);
-      log.info(`🔧 [工具注入] 已将工具信息注入到系统提示词中`);
-    } else {
-      console.log(`⚠️ [DEBUG-工具注入到提示词] injectedVariables?.AVAILABLE_TOOLS_DETAILED 为空，未注入工具信息`);
-      if (injectedVariables) {
-        console.log(`📊 [DEBUG-注入变量] injectedVariables的keys:`, Object.keys(injectedVariables));
-      }
-    }
+    // 🚨 Layer1职责边界修复：工具信息应该由Layer3处理，Layer1不应该处理工具注入
+    // Layer1职责：只处理角色状态监控和角色内容，不处理工具集成
+    console.log(`🎭 [Layer1-职责边界] Layer1不处理工具信息，工具集成由Layer3负责`);
+    log.info(`🎭 [Layer1-职责边界] 跳过工具信息注入，保持Layer1职责纯净`);
 
     // 7. 基础系统提示词
     sections.push(`# 📝 BASE_SYSTEM_PROMPT\n${baseSystemPrompt}`);
@@ -597,7 +494,7 @@ ${injectedVariables.AVAILABLE_TOOLS_DETAILED}
       activeRoles: this.roleActivationHistory.size,
       totalSessions: tokenStats.totalSessions,
       avgTokenUsage: tokenStats.averageTokensPerSession,
-      highRiskSessions: 0 // TODO: 实现高风险会话统计
+      highRiskSessions: 0
     };
   }
 
@@ -661,23 +558,19 @@ ${injectedVariables.AVAILABLE_TOOLS_DETAILED}
     return `# 🎯 UI_DRIVEN_INTENTIONS\n用户通过UI明确表达的意图：\n${intentions.join('\n')}`;
   }
 
-  // 删除了getRolePromptContent方法 - AI将通过promptx_action工具获取角色内容
-
-  // 删除了buildRoleSpecificPrompt方法 - 使用PromptX工具获取角色内容
 
   /**
-   * 构建动态注入变量
+   * 构建基础注入变量（不包含工具信息）
    */
-  private buildInjectionVariables(
-    context: ConversationContext,
-    availableTools: any[]
+  private buildBasicInjectionVariables(
+    context: ConversationContext
   ): Partial<InjectionVariables> {
     return {
       PROJECT_NAME: 'DeeChat',
       PROJECT_PATH: process.cwd(),
       TECH_STACK: 'TypeScript, Electron, React, PromptX, MCP',
       CONVERSATION_ROUNDS: context.totalRounds,
-      AVAILABLE_TOOLS_DETAILED: this.formatToolsDetailed(availableTools),
+      AVAILABLE_TOOLS_DETAILED: '工具信息由独立工具层处理', // 占位符，实际由工具层提供
       RUNTIME_INJECTION: this.buildRuntimeInjection(context),
       USER_CONTEXT: this.buildUserContext(context),
       TOOL_SUBSTITUTION_RULES: this.buildToolSubstitutionRules(),
@@ -686,50 +579,7 @@ ${injectedVariables.AVAILABLE_TOOLS_DETAILED}
   }
 
 
-  /**
-   * 格式化工具详细信息
-   */
-  private formatToolsDetailed(tools: any[]): string {
-    console.log(`🔧 [DEBUG-格式化工具] 开始格式化工具，输入工具数量: ${tools?.length || 0}`);
-    
-    if (!tools || tools.length === 0) {
-      console.log(`⚠️ [DEBUG-格式化工具] 工具列表为空，返回默认消息`);
-      return '暂无可用工具';
-    }
-
-    const formattedTools = tools.map((tool, index) => {
-      const name = tool.name || '未知工具';
-      const description = tool.description || '无描述';
-      
-      console.log(`🔧 [DEBUG-格式化工具] 处理第${index + 1}个工具: ${name}`);
-      
-      // 获取输入参数schema信息
-      const schema = tool.inputSchema || tool.schema;
-      let paramsList: string[] = [];
-      if (schema?.properties) {
-        const required = schema.required || [];
-        paramsList = Object.keys(schema.properties).map(param => {
-          const isRequired = required.includes(param);
-          return `<${param}>${isRequired ? '必需参数' : '可选参数'}</${param}>`;
-        });
-        console.log(`🔧 [DEBUG-格式化工具] 工具${name}的参数:`, paramsList);
-      }
-      
-      const paramsExample = paramsList.length > 0 ? `\n${paramsList.join('\n')}` : '\n<!-- 根据具体工具填写参数 -->';
-      
-      const formatted = `**${name}**: ${description}
-XML调用格式:
-<${name}>${paramsExample}
-</${name}>`;
-      
-      console.log(`🔧 [DEBUG-格式化工具] 工具${name}格式化完成，长度: ${formatted.length}字符`);
-      return formatted;
-    });
-    
-    const result = formattedTools.join('\n\n');
-    console.log(`🔧 [DEBUG-格式化工具] 所有工具格式化完成，总长度: ${result.length}字符`);
-    return result;
-  }
+  // 工具格式化功能已移动到 ToolIntegrationLayer
 
   /**
    * 构建运行时注入内容
@@ -785,19 +635,19 @@ XML调用格式:
   private buildExecutionConstraints(): string {
     return `⚡ 执行约束：
 - 单次调用：每条消息只能调用一个工具
+- 继续输出：工具调用后必须继续提供解释或后续步骤
 - 等待确认：不假设工具调用成功
 - XML格式：确保格式正确性
 - 思考先行：使用<thinking>分析需求`;
   }
 
-  // 删除了getFallbackRolePrompt方法 - 简化架构，使用PromptX工具
 
 
   /**
-   * 清除角色内容缓存
+   * 清除角色内容缓存（已简化，无实际操作）
    */
   clearRoleCache(): void {
-    this.roleContentCache.clear();
-    log.info('🗑️ [角色缓存] 角色内容缓存已清除');
+    log.info('🗑️ [角色缓存] 角色内容缓存清除（无操作，由CoreLLMService管理）');
   }
+
 }

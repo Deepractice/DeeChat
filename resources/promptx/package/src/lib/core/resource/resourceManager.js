@@ -57,15 +57,20 @@ class ResourceManager {
    */
   async initializeWithNewArchitecture() {
     try {
+      logger.info('[ResourceManager] Starting initialization...')
+      
       // 1. 清空现有注册表
       this.registryData.clear()
+      logger.info('[ResourceManager] Cleared existing registry')
 
       // 2. 清除发现器缓存
       if (this.discoveryManager && typeof this.discoveryManager.clearCache === 'function') {
         this.discoveryManager.clearCache()
+        logger.info('[ResourceManager] Cleared discovery cache')
       }
 
       // 3. 填充新的RegistryData
+      logger.info('[ResourceManager] Populating registry data...')
       await this.populateRegistryData()
 
       // 4. 为逻辑协议设置注册表引用
@@ -74,7 +79,13 @@ class ResourceManager {
       // 5. 设置初始化状态
       this.initialized = true
 
-      // 初始化完成，不输出日志避免干扰用户界面
+      // 记录初始化完成的统计信息
+      const stats = this.registryData.getStats()
+      logger.info('[ResourceManager] Initialization complete:', {
+        totalResources: this.registryData.size,
+        bySource: stats.bySource,
+        byProtocol: stats.byProtocol
+      })
     } catch (error) {
       logger.warn(`ResourceManager new architecture initialization failed: ${error.message}`)
       logger.warn('ResourceManager continuing with empty registry')
@@ -89,20 +100,44 @@ class ResourceManager {
     // 清空现有数据
     this.registryData.clear()
     
+    logger.info('[ResourceManager] Discovery managers:', {
+      count: this.discoveryManager.discoveries.length,
+      sources: this.discoveryManager.discoveries.map(d => d.source)
+    })
+    
     // 从各个发现器获取RegistryData并合并
     for (const discovery of this.discoveryManager.discoveries) {
       try {
+        logger.info(`[ResourceManager] Loading from ${discovery.source} discovery...`)
+        
         if (typeof discovery.getRegistryData === 'function') {
           const registryData = await discovery.getRegistryData()
           if (registryData && registryData.resources) {
+            const resourceCount = registryData.size || 0
+            logger.info(`[ResourceManager] Found ${resourceCount} resources from ${discovery.source}`)
+            
             // 合并资源到主注册表
             this.registryData.merge(registryData, true) // 允许覆盖
+            
+            // 调试：打印合并的资源
+            if (discovery.source === 'USER' && registryData.resources) {
+              logger.debug(`[ResourceManager] USER resources to merge:`, registryData.resources.map(r => `${r.protocol}://${r.id}`))
+            }
+            
+            // 记录合并后的状态
+            logger.info(`[ResourceManager] After merging ${discovery.source}, total: ${this.registryData.size}`)
+          } else {
+            logger.info(`[ResourceManager] No resources found from ${discovery.source}`)
           }
+        } else {
+          logger.info(`[ResourceManager] ${discovery.source} does not support getRegistryData`)
         }
       } catch (error) {
         logger.warn(`Failed to get RegistryData from ${discovery.source}: ${error.message}`)
       }
     }
+    
+    logger.info('[ResourceManager] Registry population complete, total resources:', this.registryData.size)
   }
 
   /**
@@ -171,6 +206,7 @@ class ResourceManager {
     try {
       // 确保ResourceManager已初始化
       if (!this.initialized) {
+        logger.info('[ResourceManager] Initializing resource manager...')
         await this.initializeWithNewArchitecture()
       }
       
@@ -191,10 +227,16 @@ class ResourceManager {
         }
         
         // 对于逻辑协议，从RegistryData查找资源
+        logger.debug(`[ResourceManager] Finding resource: protocol=${parsed.protocol}, id=${parsed.path}`)
         const resourceData = this.registryData.findResourceById(parsed.path, parsed.protocol)
         if (!resourceData) {
+          // 打印所有可用的资源以便调试
+          const availableResources = this.registryData.getResourcesByProtocol(parsed.protocol)
+          logger.error(`[ResourceManager] Resource not found: ${parsed.protocol}:${parsed.path}`)
+          logger.error(`[ResourceManager] Available ${parsed.protocol} resources:`, availableResources.map(r => `${r.id} (${r.source})`))
           throw new Error(`Resource not found: ${parsed.protocol}:${parsed.path}`)
         }
+        logger.debug(`[ResourceManager] Found resource: ${resourceData.id} from ${resourceData.source}`)
         
         // 通过协议解析加载内容
         const content = await this.loadResourceByProtocol(resourceData.reference)

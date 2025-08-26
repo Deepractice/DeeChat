@@ -122,7 +122,7 @@ function parseWelcomeText(text: string): PromptXWelcomeResponse {
     }
     
     // 检测工具区域标题
-    if (trimmedLine.includes('可用工具') || trimmedLine.includes('Available Tools') || trimmedLine.includes('🔧 可用工具')) {
+    if (trimmedLine.includes('可用工具') || trimmedLine.includes('Available Tools') || trimmedLine.includes('🔧 可用工具') || trimmedLine.includes('系统工具')) {
       currentSection = 'tools'
       console.log('[PromptXParser] 进入工具区域')
       continue
@@ -133,29 +133,16 @@ function parseWelcomeText(text: string): PromptXWelcomeResponse {
       console.log(`[PromptXParser] 检查可能的角色行: "${trimmedLine}"`)
     }
     
-    // 解析角色信息 - 格式: #### N. `role-id` - Role Name
-    const roleMatch = trimmedLine.match(/^####?\s*\d+\.\s*`([^`]+)`\s*-\s*(.+)/)
+    // 解析角色信息 - 新格式: - `role-id`: Role Name → action("role-id")
+    const roleMatch = trimmedLine.match(/^-\s*`([^`]+)`:\s*([^→]+)(?:→\s*action\("[^"]+"\))?/)
     if (roleMatch && currentSection === 'roles') {
       const [, roleId, roleName] = roleMatch
       console.log(`[PromptXParser] 匹配到角色行: roleId=${roleId}, roleName=${roleName}`)
       
-      // 寻找接下来几行的专业能力描述
-      let description = '专业角色，提供特定领域的专业能力'
-      
-      // 向前查找最多3行，寻找专业能力描述
-      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        const nextLine = lines[j].trim()
-        const abilityMatch = nextLine.match(/\*\*专业能力\*\*:\s*(.+)/)
-        if (abilityMatch) {
-          description = abilityMatch[1]
-          break
-        }
-      }
-      
       const role: ParsedRole = {
-        id: roleId,
+        id: roleId.trim(),
         name: roleName.trim(),
-        description,
+        description: `${roleName.trim()} - 专业AI角色`,
         source: currentSource,
         sourceIcon: getSourceIcon(currentSource),
         isActive: false
@@ -163,8 +150,6 @@ function parseWelcomeText(text: string): PromptXWelcomeResponse {
       
       roles.push(role)
       console.log(`[PromptXParser] 解析到角色: ${roleId} (${roleName}) - ${currentSource}`)
-    } else if (currentSection === 'roles' && trimmedLine.includes('`') && trimmedLine.includes('-')) {
-      console.log(`[PromptXParser] 未匹配的角色行: "${trimmedLine}"`)
     }
   }
   

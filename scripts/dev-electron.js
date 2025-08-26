@@ -69,7 +69,8 @@ function startElectron() {
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_ENV: 'development'
+      NODE_ENV: 'development',
+      NODE_OPTIONS: '--experimental-modules --es-module-specifier-resolution=node'  // 🔥 支持ES模块
     }
   })
   

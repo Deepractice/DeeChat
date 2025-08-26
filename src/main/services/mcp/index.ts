@@ -8,8 +8,9 @@
  */
 
 // MCP客户端组件
-export { MCPIntegrationService } from './client/MCPIntegrationService';
-export { SimpleMCPClientManager } from './client/SimpleMCPClientManager';
+export { MCPClient } from './client/MCPClient'; // 🔥 简化的MCP客户端
+
+// 保留的辅助服务
 export { MCPConfigService } from './client/MCPConfigService';
 export { MCPCacheService } from './client/MCPCacheService';
 

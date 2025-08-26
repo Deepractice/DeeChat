@@ -9,6 +9,7 @@ import ChatArea from './components/ChatArea'
 import SettingsPage from './pages/SettingsPage'
 import ResourcesPage from './pages/ResourcesPage'
 import WorkspaceArea from './components/Workspace/WorkspaceArea'
+import BackendLogPanel from './components/BackendLogPanel'
 import { useRoleStateManager } from './hooks/useRoleStateManager'
 
 import './App.css'
@@ -94,6 +95,7 @@ const AppContent: React.FC = () => {
   const handleAIFileRequest = async (prompt: string) => {
     try {
       message.info('AI文件生成功能正在开发中...')
+      console.log('AI文件生成请求:', prompt) // 使用prompt参数
       // 这里将来可以集成PromptX工具调用
       // 1. 如果工作区未展开，先展开工作区
       if (!workspaceState.isExpanded) {
@@ -175,6 +177,8 @@ const AppContent: React.FC = () => {
         </Layout>
       </Layout>
       
+      {/* 后端日志面板 */}
+      <BackendLogPanel />
     </div>
   )
 }

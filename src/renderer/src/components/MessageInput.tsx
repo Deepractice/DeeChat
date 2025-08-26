@@ -11,6 +11,7 @@ import ModelSelectionModal from './ModelSelectionModal'
 import RoleSelector from './RoleSelector'
 import { FileReferenceService, FileReference } from '../../../shared/services/FileReferenceService'
 import { useUnifiedMessage } from '../hooks/useUnifiedMessage'
+import { generateSessionId } from '../../../shared/utils/idGenerator'
 
 const { TextArea } = Input
 
@@ -87,7 +88,10 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
   }
 
   const handleSend = async () => {
+    console.log('🚨🚨🚨 [SUPER-CRITICAL] handleSend被调用了！时间戳：', new Date().toISOString())
     const trimmedValue = inputValue.trim()
+    console.log('🚨 [DEBUG] trimmedValue:', trimmedValue)
+    console.log('🚨 [DEBUG] attachedFiles.length:', attachedFiles.length)
     if (!trimmedValue && attachedFiles.length === 0) {
       message.warning('请输入消息内容或添加文件')
       return
@@ -154,8 +158,13 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
       }
 
       // 🔥 使用统一消息Hook - 超级简化！
+      console.log('🚨🚨🚨 [SUPER-CRITICAL] 准备调用sendUnifiedMessage')
+      console.log('🚨🚨🚨 [SUPER-CRITICAL] 原始输入值:', JSON.stringify(trimmedValue))
+      console.log('🚨🚨🚨 [SUPER-CRITICAL] 消息内容:', JSON.stringify(messageContent))
+      console.log('🚨🚨🚨 [SUPER-CRITICAL] 消息内容长度:', messageContent.length)
+      console.log('🚨🚨🚨 [SUPER-CRITICAL] selectedModel.id:', selectedModel.id)
       const response = await sendUnifiedMessage(messageContent, {
-        sessionId: currentSession?.id || `session_${Date.now()}`,
+        sessionId: currentSession?.id || generateSessionId(),
         configId: selectedModel.id,
         enableMCPTools: true,
         chatHistory: currentSession?.messages || [],
@@ -163,7 +172,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ disabled = false, selectedM
         attachmentIds
       })
 
-      console.log('✅ [统一消息] 消息发送成功:', response?.success)
+      // console.log('✅ [统一消息] 消息发送成功:', response?.success)
 
       // 🔥 统一消息Hook已经处理了所有复杂逻辑：
       // - 添加用户消息到状态

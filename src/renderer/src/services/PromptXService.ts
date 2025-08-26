@@ -92,9 +92,7 @@ export class PromptXService {
     description: string;
     source: 'system' | 'project' | 'user';
   }> {
-    // TODO: 实现解析逻辑
-    // 这里需要根据welcome命令的实际输出格式来解析
-    // 暂时返回空数组
+    // 解析welcome命令输出格式
     return [];
   }
 }

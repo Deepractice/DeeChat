@@ -3,6 +3,13 @@
  * 统一管理命令格式、路径等配置信息
  */
 
+// 包名配置（支持新旧两个包名）
+const PACKAGE_NAMES = {
+  CURRENT: '@promptx/cli',    // 当前使用的包名
+  LEGACY: 'dpml-prompt',       // 旧版包名（向后兼容）
+  ALL: ['@promptx/cli', 'dpml-prompt']  // 所有支持的包名
+}
+
 // 根据环境变量决定命令前缀
 function getCommandPrefix() {
   const env = process.env.PROMPTX_ENV
@@ -10,7 +17,7 @@ function getCommandPrefix() {
   if (env === 'development') {
     return 'pnpm start'
   } else {
-    return 'npx dpml-prompt@snapshot'
+    return `npx ${PACKAGE_NAMES.CURRENT}@snapshot`
   }
 }
 
@@ -87,6 +94,7 @@ module.exports = {
   
   // 其他静态常量
   PATHS,
+  PACKAGE_NAMES,
   VERSION,
   STATES
 }

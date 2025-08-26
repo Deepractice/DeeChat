@@ -44,17 +44,9 @@ const MarkdownBlock: React.FC<MarkdownBlockProps> = ({
     ...style
   }
 
-  // DeeChat原创方案：智能检测XML标签并预处理
+  // 简洁的内容处理 - 相信StreamingXMLProcessor已经完成了工具调用分离
   const processedContent = React.useMemo(() => {
-    // 检测是否包含疑似工具输出的XML标签
-    const toolOutputPattern = /<(promptx_|workingdirectory|project|file|manual|tool|execution|role|knowledge|thought)[^>]*>/gi
-    
-    if (toolOutputPattern.test(content)) {
-      // 将工具输出的XML标签转换为行内代码，保持其他HTML标签不变
-      return content.replace(/<(promptx_\w+|workingdirectory|project|file|manual|tool|execution|role|knowledge|thought)([^>]*)>/gi, '`<$1$2>`')
-    }
-    
-    return content
+    return content || ''
   }, [content])
 
   return (

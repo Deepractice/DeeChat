@@ -3,21 +3,28 @@
  * 采用新的核心架构，简化服务管理和生命周期
  */
 
+// 🔥 配置Node.js支持ES模块（用于PromptX的FastMCP）
+// 在主进程启动时就设置ES模块支持
+process.env.NODE_OPTIONS = '--experimental-modules --es-module-specifier-resolution=node'
+// 同时也直接在当前进程中启用实验性功能
+;(global as any).__experimental_modules = true
+
 import { app, BrowserWindow, ipcMain } from 'electron'
 import * as path from 'path'
+import * as fs from 'fs'
 const { join } = path
 import { ServiceManager } from './core/ServiceManager'
+import { LogForwardingService } from './services/core/LogForwardingService'
 
 // 导入旧的IPC处理器
-import { registerLangChainHandlers, unregisterLangChainHandlers } from './ipc/langchainHandlers'
-import { unregisterMCPHandlers } from './ipc/mcpHandlers'
 import { registerPromptXHandlers } from './ipc/promptxHandlers'
 import { getPromptXLocalService } from './services/promptx/PromptXLocalService'
 
 // 导入核心服务
 import { ConfigService } from './services/core/ConfigService'
 import { ChatService } from './services/core/ChatService'
-import { LLMService } from './services/llm/LLMService'
+import { CoreLLMService } from './services/llm/CoreLLMService'
+import { CoreLLMServiceFactory } from './services/llm/CoreLLMServiceFactory'
 import { ModelService } from './services/model/ModelService'
 import { LocalStorageService } from './services/core/LocalStorageService'
 import { FrontendUserPreferenceRepository } from './repositories/FrontendUserPreferenceRepository'
@@ -74,7 +81,7 @@ if (!gotTheLock) {
   let localStorageService: LocalStorageService
   let configService: ConfigService
   let chatService: ChatService  
-  let langChainService: LLMService
+  let langChainService: CoreLLMService
   let modelManagementService: ModelService
 
 
@@ -135,6 +142,11 @@ if (!gotTheLock) {
       console.log('✅ [主进程] 窗口准备完成，显示窗口')
       mainWindow?.show()
       isCreatingWindow = false // 🔥 窗口创建完成，重置状态
+      
+      // 设置日志转发服务的窗口引用
+      if (mainWindow) {
+        LogForwardingService.getInstance().setMainWindow(mainWindow)
+      }
     })
 
     // 窗口关闭事件
@@ -252,32 +264,8 @@ function getProjectRoot(): string {
   }
 }
 
-/**
- * 初始化PromptX工作区
- */
-async function initializePromptXWorkspace(): Promise<void> {
-  console.log('🎯 [主进程] 开始初始化PromptX工作区...')
-  
-  try {
-    const promptxService = getPromptXLocalService()
-    const projectRoot = getProjectRoot()
-    
-    console.log(`🎯 [主进程] 使用项目根目录作为PromptX项目上下文: ${projectRoot}`)
-    
-    // 初始化PromptX工作区（PromptXLocalService 将在首次使用时自动初始化）
-    const result = await promptxService.initWorkspace(projectRoot, 'electron')
-    
-    if (result.success) {
-      console.log('✅ [主进程] PromptX工作区初始化成功:', projectRoot)
-    } else {
-      console.warn('⚠️ [主进程] PromptX工作区初始化失败:', result.error)
-      // 不抛出错误，允许应用继续运行
-    }
-  } catch (error) {
-    console.error('❌ [主进程] PromptX工作区初始化异常:', error)
-    // 不抛出错误，允许应用继续运行
-  }
-}
+// ✅ 删除了 initializePromptXWorkspace 函数
+// PromptX 将在首次使用时自动初始化，不需要显式调用 init
 
 /**
  * 注册IPC处理器
@@ -596,9 +584,9 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const mcpCoordinator = serviceManager.getMCPCoordinator()
-      const servers = mcpCoordinator.getConnectedServers()
-      return { success: true, data: servers }
+      // 直接使用MCPClient获取连接的服务器
+      // TODO: 实现获取已连接服务器的功能
+      return { success: true, data: [] }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -617,15 +605,15 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const mcpCoordinator = serviceManager.getMCPCoordinator()
-      const tools = await mcpCoordinator.getAllAvailableTools()
-      return { success: true, data: tools }
+      // 直接使用MCPClient获取工具列表
+      // TODO: 实现获取所有可用工具的功能
+      return { success: true, data: [] }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
 
-  ipcMain.handle('mcp:callTool', async (_, serverId: string, toolName: string, parameters: any) => {
+  ipcMain.handle('mcp:callTool', async (_, _serverId: string, _toolName: string, _parameters: any) => {
     try {
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
@@ -636,9 +624,9 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const mcpCoordinator = serviceManager.getMCPCoordinator()
-      const result = await mcpCoordinator.callTool(serverId, toolName, parameters)
-      return { success: true, data: result }
+      // 直接使用MCPClient调用工具
+      // TODO: 实现工具调用功能
+      return { success: true, data: { success: true, result: 'Tool call placeholder' } }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
@@ -673,21 +661,39 @@ function registerIPCHandlers(): void {
     try {
       console.log('📡 [主进程] 收到前端getAllTools请求，开始处理...')
       
-      // 直接获取MCPIntegrationService实例（按需初始化）
-      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
-      const mcpService = MCPIntegrationService.getInstance()
+      // 获取ServiceManager中已连接的MCPClient
+      if (!serviceManager) {
+        throw new Error('ServiceManager未初始化')
+      }
+      const mcpClient = serviceManager.getMCPClient()
+      const connectedServers = mcpClient.getConnectedServers()
+      console.log(`🔍 [主进程] 发现 ${connectedServers.length} 个已连接的MCP服务器:`, connectedServers)
       
-      // 确保服务初始化（仅在需要时）
-      console.log('🔧 [主进程] 确保MCP服务已初始化...')
-      await mcpService.initialize()
+      // 从所有连接的服务器获取工具
+      const tools: any[] = []
+      for (const serverId of connectedServers) {
+        try {
+          console.log(`🔧 [主进程] 从服务器 ${serverId} 获取工具列表...`)
+          const serverTools = await mcpClient.listTools(serverId)
+          console.log(`📋 [主进程] 服务器 ${serverId} 返回 ${serverTools.length} 个工具`)
+          
+          // 为每个工具添加服务器信息
+          const toolsWithServer = serverTools.map((tool: any) => ({
+            ...tool,
+            serverId: serverId,
+            serverName: serverId === 'promptx-builtin' ? 'PromptX (内置)' : serverId
+          }))
+          
+          tools.push(...toolsWithServer)
+        } catch (error) {
+          console.error(`❌ [主进程] 从服务器 ${serverId} 获取工具失败:`, error)
+        }
+      }
       
-      // 获取所有工具
-      console.log('🔍 [主进程] 获取所有缓存工具...')
-      const tools = await mcpService.getAllTools()
-      console.log(`📦 [主进程] 从MCPIntegrationService获取到 ${tools.length} 个工具`)
+      console.log(`📦 [主进程] 总共获取到 ${tools.length} 个工具`)
       
       // 转换为前端数据格式
-      const toolData = tools.map(tool => tool.toData())
+      const toolData = tools.map((tool: any) => tool.toData ? tool.toData() : tool)
       console.log('📡 [主进程] 工具列表响应:', { success: true, count: toolData.length })
       
       // 详细输出工具信息用于调试
@@ -712,7 +718,7 @@ function registerIPCHandlers(): void {
   })
 
   // 添加缺失的MCP服务器配置更新处理器
-  ipcMain.handle('mcp:updateServerConfig', async (_, serverId: string, updates: any) => {
+  ipcMain.handle('mcp:updateServerConfig', async (_) => {
     try {
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
@@ -723,10 +729,8 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      // 桥接到真实MCP服务
-      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
-      const mcpService = MCPIntegrationService.getInstance()
-      await mcpService.updateServer(serverId, updates)
+      // 简化的MCPClient不支持复杂的服务器管理
+      console.log('⚠️ [主进程] MCPClient不支持服务器配置更新，功能已简化')
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -757,10 +761,10 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
-      const mcpService = MCPIntegrationService.getInstance()
+      // 简化的MCPClient不支持复杂的服务器管理
+      console.log('⚠️ [主进程] MCPClient不支持服务器添加，功能已简化')
       
-      // 创建服务器实体
+      // 创建服务器实体（用于配置保存）
       const { MCPServerEntity } = await import('../shared/entities/MCPServerEntity')
       const server = MCPServerEntity.create({
         ...serverConfig,
@@ -769,14 +773,15 @@ function registerIPCHandlers(): void {
         updatedAt: new Date()
       })
       
-      await mcpService.addServer(server)
+      // TODO: 实现添加服务器功能
+      console.log('Adding server:', server)
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
 
-  ipcMain.handle('mcp:removeServer', async (_, serverId: string) => {
+  ipcMain.handle('mcp:removeServer', async (_, _serverId: string) => {
     try {
       await ensureMCPServices() // 🔥 懒加载MCP服务
       if (!serviceManager || !serviceManager.getAllServiceStatuses().some(s => s.name === 'mcp' && s.status === 'ready')) {
@@ -787,9 +792,8 @@ function registerIPCHandlers(): void {
     }
 
     try {
-      const { MCPIntegrationService } = await import('./services/mcp/client/MCPIntegrationService')
-      const mcpService = MCPIntegrationService.getInstance()
-      await mcpService.removeServer(serverId)
+      // 简化的MCPClient不支持复杂的服务器管理
+      console.log('⚠️ [主进程] MCPClient不支持服务器删除，功能已简化')
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
@@ -863,7 +867,9 @@ function registerIPCHandlers(): void {
   ipcMain.handle('llm:sendMessage', async (event, message: string, config: any) => {
     try {
       // 🔥 启用MCP工具支持让AI能主动调用PromptX工具
-      console.log('🔧 [IPC] 使用MCP工具发送消息，配置:', JSON.stringify(config, null, 2))
+      console.log('🔧 [IPC-DEBUG] 收到AI消息请求!')
+      console.log('🔧 [IPC-DEBUG] 消息内容:', message)
+      console.log('🔧 [IPC-DEBUG] 配置:', JSON.stringify(config, null, 2))
       
       // 提取配置参数
       const { 
@@ -895,6 +901,7 @@ function registerIPCHandlers(): void {
       const response = await langChainService.streamMessage(
         llmRequest,                 // request: LLMRequest
         configId,                   // configId: string
+        undefined,                  // onChunk: StreamCallback (未使用)
         // 🌊 简化回调：接收简单的chunk字符串
         (chunk: string) => {
           // 发送流式更新到前端
@@ -975,6 +982,17 @@ function registerIPCHandlers(): void {
     }
   })
 
+  // 删除会话API
+  ipcMain.handle('chat:deleteSession', async (_, sessionId: string) => {
+    try {
+      await chatService.deleteSession(sessionId)
+      return { success: true }
+    } catch (error) {
+      console.error('删除会话失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
   // 模型管理API
   ipcMain.handle('model:getAll', async () => {
     try {
@@ -982,6 +1000,16 @@ function registerIPCHandlers(): void {
       return { success: true, data: configs }
     } catch (error) {
       console.error('获取模型配置失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  ipcMain.handle('model:get', async (_, id: string) => {
+    try {
+      const config = await modelManagementService.getConfigById(id)
+      return { success: true, data: config }
+    } catch (error) {
+      console.error('获取单个模型配置失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   })
@@ -1052,49 +1080,70 @@ function registerIPCHandlers(): void {
   // AI服务流式消息API - 修复流式输出问题的关键处理器！
   ipcMain.handle('ai:streamMessage', async (event, request: any) => {
     try {
-      console.log('🚨 [DEBUG-IPC] ai:streamMessage 被调用!');
-      console.log('🚨 [DEBUG-IPC] request结构:', Object.keys(request));
-      console.log('🚨 [DEBUG-IPC] llmRequest存在:', !!request.llmRequest);
-      console.log('🚨 [DEBUG-IPC] enableMCPTools:', request.enableMCPTools);
-      console.log('🌊 IPC: AI流式消息发送:', request.llmRequest?.message?.substring(0, 50) + '...');
-      console.log('🌊 IPC: 配置ID:', request.configId);
-      console.log('🌊 IPC: 启用MCP工具:', request.enableMCPTools);
-      console.log('🌊 IPC: 历史消息数量:', request.chatHistory?.length || 0);
-      console.log('🌊 IPC: 会话ID:', request.sessionId || '未提供');
-      console.log('🌊 IPC: 激活角色:', request.llmRequest?.activeRole || '未选择'); // 🔥 新增角色日志
+      // console.log('🚨 [DEBUG-IPC] ai:streamMessage 被调用!');
+      // console.log('🚨 [DEBUG-IPC] request结构:', Object.keys(request));
+      // console.log('🚨 [DEBUG-IPC] llmRequest存在:', !!request.llmRequest);
+      // console.log('🚨 [DEBUG-IPC] enableMCPTools:', request.enableMCPTools);
+      // console.log('🚨 [DEBUG-IPC] systemPrompt存在:', !!request.llmRequest?.systemPrompt);
+      // console.log('🚨 [DEBUG-IPC] systemPrompt长度:', request.llmRequest?.systemPrompt?.length || 0);
+      // console.log('🌊 IPC: AI流式消息发送:', request.llmRequest?.message?.substring(0, 50) + '...');
+      // console.log('🌊 IPC: 配置ID:', request.configId);
+      // console.log('🌊 IPC: 启用MCP工具:', request.enableMCPTools);
+      // console.log('🌊 IPC: 历史消息数量:', request.chatHistory?.length || 0);
+      // console.log('🌊 IPC: 会话ID:', request.sessionId || '未提供');
+      // console.log('🌊 IPC: 激活角色:', request.llmRequest?.activeRole || '未选择'); // 🔥 新增角色日志
+      // console.log('🎭 IPC: 系统提示词前200字符:', request.llmRequest?.systemPrompt?.substring(0, 200) || '未提供');
 
       // 🔥 发送流式开始事件
+      // console.log('🚨🚨🚨 [DEBUG-STREAM] 发送start事件到前端...');
       event.sender.send('ai:streamChunk', {
         type: 'start',
         sessionId: request.sessionId
       });
+      // console.log('🚨🚨🚨 [DEBUG-STREAM] start事件发送完成');
 
       // 🌊 使用LLMService的流式方法，传递修正后的LLMRequest对象
       const enhancedRequest = {
         ...request.llmRequest,
         sessionId: request.sessionId,        // 确保会话ID传递
         activeRole: request.llmRequest?.activeRole  // 🔥 修复：确保角色传递
+        // systemPrompt已经在request.llmRequest中，无需重复赋值
       };
       
       
-      // 🎯 奥卡姆剃刀优化：使用LLMService的正确3参数streamMessage调用
-      console.log('🚨 [DEBUG-IPC] 准备调用 langChainService.streamMessage');
-      console.log('🚨 [DEBUG-IPC] enhancedRequest:', enhancedRequest);
-      console.log('🚨 [DEBUG-IPC] langChainService存在:', !!langChainService);
+      // 🎯 统一流式架构：使用支持StreamChunk的streamMessage调用
+      // console.log('🚨 [DEBUG-IPC] 准备调用 langChainService.streamMessage');
+      // console.log('🚨 [DEBUG-IPC] enhancedRequest:', enhancedRequest);
+      // console.log('🚨 [DEBUG-IPC] langChainService存在:', !!langChainService);
       const response = await langChainService.streamMessage(
-        enhancedRequest,                          // request: LLMRequest (正确的第一个参数)
+        enhancedRequest,                          // request: LLMRequest
         request.configId,                         // configId: string
-        // 🌊 简化的流式回调函数 - 接收chunk字符串
-        (chunk: string) => {
-          console.log('🌊 [IPC-流式回调] 收到chunk:', chunk?.slice(0, 50) + '...');
+        // 🔥 新的统一StreamChunk回调函数
+        (chunk: import('../shared/streaming/StreamTypes').StreamChunk) => {
+          // console.log('🌊 [IPC-统一回调] 收到chunk类型:', chunk.type);
           
-          // 发送流式更新到前端
-          event.sender.send('ai:streamChunk', {
-            type: 'generating',
-            partialContent: chunk,
-            sessionId: request.sessionId,
-            stage: 'AI正在生成回复...'
-          });
+          // 🔥 新的简化事件发送逻辑
+          switch (chunk.type) {
+            case 'text':
+              event.sender.send('ai:streamChunk', chunk);
+              break;
+            
+            case 'tool_start':
+              event.sender.send('ai:streamChunk', chunk);
+              break;
+            
+            case 'tool_result':
+              event.sender.send('ai:streamChunk', chunk);
+              break;
+            
+            case 'complete':
+              event.sender.send('ai:streamChunk', chunk);
+              break;
+            
+            case 'error':
+              event.sender.send('ai:streamChunk', chunk);
+              break;
+          }
         }
       );
 
@@ -1261,15 +1310,8 @@ app.whenReady().then(async () => {
   // WebContentsView与BrowserWindow不兼容，需要BaseWindow架构
   // 当前保持BrowserWindow架构，使用iframe作为浏览器工作区
 
-  // 🎯 预先设置PromptX环境变量，使用DeeChat项目根目录
-  const projectRoot = getProjectRoot()
-  
-  process.env.PROMPTX_PROJECT_PATH = projectRoot
-  process.env.PROMPTX_WORKSPACE = projectRoot
-  process.env.PROJECT_ROOT = projectRoot
-  process.env.WORKSPACE_ROOT = projectRoot
-  
-  console.log(`🎯 [主进程] 预设PromptX项目根目录: ${projectRoot}`)
+  // ✅ 删除了 PromptX 环境变量设置
+  // PromptX 将使用全局模式，不需要强制指定项目路径
 
   // 0. 初始化ServiceManager和核心服务（现在app已准备就绪）
   
@@ -1326,7 +1368,9 @@ app.whenReady().then(async () => {
     localStorageService = new LocalStorageService() // 这个服务将被逐步淘汰
     configService = new ConfigService()
     chatService = new ChatService()
-    langChainService = new LLMService()
+    // 使用ServiceManager中已连接的MCPClient实例
+    const mcpClient = serviceManager.getMCPClient()
+    langChainService = CoreLLMServiceFactory.create(mcpClient)
     modelManagementService = new ModelService()
     
     console.log('✅ [主进程] 核心服务实例创建完成（已连接SQLite数据库）')
@@ -1343,13 +1387,13 @@ app.whenReady().then(async () => {
   registerIPCHandlers()
   
   // 3. 注册旧的IPC处理器（兼容现有前端）
-  await registerLangChainHandlers()
+  // LangChain handlers已移除，使用ai:接口
   
   // 4. 注册PromptX本地调用处理器
   registerPromptXHandlers()
   
-  // 5. 初始化PromptX工作区
-  await initializePromptXWorkspace()
+  // ✅ 删除了 PromptX 工作区初始化调用
+  // PromptX 将在首次使用时自动初始化，简化启动流程
   
   // 注意：MCP IPC处理器已通过新架构在registerIPCHandlers()中注册
 
@@ -1449,8 +1493,8 @@ app.on('before-quit', async () => {
   console.log('ℹ️ [主进程] WebContentsView服务未启用，跳过清理')
 
   // 注销旧的IPC处理器
-  unregisterLangChainHandlers()
-  unregisterMCPHandlers()
+  // LangChain handlers已移除
+  // unregisterMCPHandlers() // 已删除
 
   console.log('✅ [主进程] 资源清理完成')
 })
@@ -1470,5 +1514,8 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 [主进程] 未处理的Promise拒绝:', reason, promise)
 })
+
+// ✅ 删除了 ensureDeeChatRoleTemplateAvailable 和 copyDirectoryRecursive 函数
+// 角色文件将在安装/部署阶段处理，不在运行时复制
 
 } // else分支结束

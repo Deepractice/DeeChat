@@ -371,6 +371,15 @@ export class ConversationThreadManager extends EventEmitter {
       const startTime = Date.now();
       
       try {
+        console.log('🔧 [ConversationThread] LangChain工具调用请求:', {
+          toolName: toolCall.name,
+          toolId: toolCall.id,
+          args: toolCall.args,
+          argsType: typeof toolCall.args,
+          argsKeys: Object.keys(toolCall.args || {}),
+          argsJSON: JSON.stringify(toolCall.args, null, 2)
+        });
+        
         const mcpResponse = await this.mcpService?.callTool({
           serverId: 'promptx-builtin',
           toolName: toolCall.name,
@@ -447,8 +456,8 @@ export class ConversationThreadManager extends EventEmitter {
           }
         },
         {
-          name: mcpTool.name,
-          description: mcpTool.description || `MCP工具: ${mcpTool.name}`,
+          name: `${mcpTool.serverId}__${mcpTool.name}`, // 🚨 使用带server前缀的工具名称
+          description: mcpTool.description || `MCP工具: ${mcpTool.name} (from ${mcpTool.serverId})`,
           schema: this.convertMCPSchemaToZod(mcpTool.inputSchema)
         }
       )

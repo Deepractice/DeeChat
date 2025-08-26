@@ -5,7 +5,6 @@
 
 // 核心类
 export { LangChainModelFactory } from './LangChainModelFactory';
-export { LangChainLLMService } from './LangChainLLMService';
 
 // 智能分层提示词系统
 export { SmartLayeredPromptSystem } from './SmartLayeredPromptSystem';

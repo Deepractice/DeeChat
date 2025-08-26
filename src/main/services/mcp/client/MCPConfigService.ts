@@ -139,23 +139,8 @@ export class MCPConfigService implements IMCPConfigService {
           console.log('[MCP Config] PromptX配置已存在，跳过初始化');
         }
 
-        // 🏗️ 添加DeeChat独立工作区MCP服务器
-        const deechatWorkspaceExists = servers.some(s => s.id === 'deechat-workspace-builtin');
-        if (!deechatWorkspaceExists) {
-          console.log(`[MCP Config] ➕ 首次运行，添加DeeChat工作区MCP服务器`);
-          
-          try {
-            const deechatWorkspaceServer = this.createDefaultDeeChatWorkspaceServer();
-            servers.push(deechatWorkspaceServer); // 添加DeeChat工作区服务器
-            await this.saveAllConfigs(servers);
-            
-            console.log('✅ [MCP Config] DeeChat工作区MCP服务器配置添加成功');
-          } catch (error) {
-            console.error('[MCP Config] DeeChat工作区MCP服务器配置添加失败:', error);
-          }
-        } else {
-          console.log('[MCP Config] DeeChat工作区MCP服务器配置已存在，跳过初始化');
-        }
+        // 🏗️ DeeChat工作区MCP暂时移除 - 早期设计错误，需要重新设计
+        console.log('[MCP Config] 工作区MCP已暂时移除，专注于PromptX核心功能');
 
         console.log('[MCP Config] 🎯 架构解耦：PromptX专注AI能力增强，DeeChat专注工作区文件管理');
         
@@ -171,7 +156,7 @@ export class MCPConfigService implements IMCPConfigService {
   }
 
   // 🔒 静态标志防止重复初始化内置服务器
-  private static _builtinServersInitialized = false // 🔧 临时重置以添加文件操作配置
+  private static _builtinServersInitialized = false
 
   /**
    * 获取服务器配置
@@ -434,21 +419,22 @@ export class MCPConfigService implements IMCPConfigService {
     let promptxScriptPath: string;
     
     if (isDev) {
-      // 开发环境：从编译后的dist目录回到项目根目录
-      // __dirname 是 dist/main/main/services/mcp，需要回到项目根目录
-      promptxScriptPath = path.resolve(__dirname, '../../../../../resources/promptx/package/src/bin/promptx.js');
+      // 开发环境：__dirname 是 dist/main/main/services/mcp/client
+      // 需要到 dist/main/resources/promptx/package/src/bin/promptx.js
+      promptxScriptPath = path.resolve(__dirname, '../../resources/promptx/package/src/bin/promptx.js');
     } else {
       // 生产环境：使用打包后的资源
       promptxScriptPath = path.join(process.resourcesPath, 'resources/promptx/package/src/bin/promptx.js');
     }
     
     // 🚀 使用标准MCP配置，进程内运行提供最佳性能
+    // ✅ 启用ES模块支持的MCP服务器
     const server = new MCPServerEntity({
       id: 'promptx-builtin',
       name: 'PromptX (内置)',
-      description: 'PromptX AI专业能力增强框架 - 进程内运行，基于官方MCP SDK',
+      description: 'PromptX AI专业能力增强框架 - 支持ES模块动态加载',
       type: 'stdio',
-      isEnabled: true,
+      isEnabled: true, // 🔥 启用ES模块支持的MCP服务器
       command: 'node', // 用户看到的是标准node命令
       args: [promptxScriptPath, 'mcp-server'], // 🔥 动态的PromptX启动参数
       workingDirectory: promptxWorkspace, // 🔥 在DeeChat项目根目录运行
@@ -469,50 +455,6 @@ export class MCPConfigService implements IMCPConfigService {
     return server;
   }
 
-  /**
-   * 创建默认的DeeChat工作区MCP服务器配置
-   */
-  private createDefaultDeeChatWorkspaceServer(): MCPServerEntity {
-    const now = new Date();
-    
-    // 🔥 动态获取DeeChat工作区MCP服务器脚本路径
-    const path = require('path');
-    const isDev = process.env.NODE_ENV === 'development';
-    
-    let deechatWorkspaceMCPPath: string;
-    
-    if (isDev) {
-      // 开发环境：从编译后的dist目录到源码目录
-      deechatWorkspaceMCPPath = path.resolve(__dirname, '../DeeChatWorkspaceMCPServer.js');
-    } else {
-      // 生产环境：使用打包后的资源
-      deechatWorkspaceMCPPath = path.join(process.resourcesPath, 'dist/main/main/services/mcp/DeeChatWorkspaceMCPServer.js');
-    }
-    
-    // 🔥 修复双进程问题：改为进程内模式，避免启动第二个Electron实例
-    const server = new MCPServerEntity({
-      id: 'deechat-workspace-builtin',
-      name: 'DeeChat工作区 (内置)',
-      description: 'DeeChat独立工作区文件管理MCP服务器 - 提供read/write/diff/list工具 (进程内模式)',
-      type: 'inprocess', // 🔥 改为进程内模式
-      isEnabled: true,
-      command: 'node', // 保留用于显示，实际不使用
-      args: [deechatWorkspaceMCPPath],
-      env: {
-        NODE_ENV: process.env.NODE_ENV || 'production',
-        DEECHAT_WORKSPACE_MODE: 'mcp-server'
-      },
-      timeout: 8000,
-      retryCount: 2,
-      createdAt: now,
-      updatedAt: now
-    });
-
-    console.log(`[MCP Config] ✅ 创建DeeChat工作区MCP服务器配置:`);
-    console.log(`[MCP Config]   - 脚本路径: ${deechatWorkspaceMCPPath}`);
-    console.log(`[MCP Config]   - 服务器ID: ${server.id}`);
-    return server;
-  }
 
   /**
    * 初始化PromptX服务器配置（优先传统模式，沙箱将在运行时自动检测）

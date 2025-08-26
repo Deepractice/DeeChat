@@ -188,8 +188,14 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
   const loadConfigs = async () => {
     setLoading(true);
     try {
-      // 调用主进程的LangChain集成服务
-      const configEntities = await window.electronAPI.langchain.getAllConfigs();
+      // 调用主进程的模型管理服务
+      const response = await window.electronAPI.model.getAll();
+      
+      if (!response.success) {
+        throw new Error(response.error || '获取配置失败');
+      }
+      
+      const configEntities = response.data || [];
 
       // 转换为UI状态格式
       const configsWithStatus: ProviderConfigWithStatus[] = configEntities.map(entity => ({
@@ -249,7 +255,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       for (const configData of defaultConfigs) {
         try {
           const entity = ProviderConfigEntity.create(configData);
-          await window.electronAPI.langchain.saveConfig(entity);
+          await window.electronAPI.model.save(entity);
           createdConfigs.push({ ...entity, status: undefined });
         } catch (error) {
           console.warn('创建默认配置失败:', configData.name, error);
@@ -284,7 +290,11 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
     setLoadingModels(true);
     try {
       console.log(`🔄 刷新 ${targetConfig.name} 的模型列表...`);
-      const models = await window.electronAPI.langchain.getAvailableModels(targetConfig);
+      const models = await window.electronAPI.model.fetchModels(
+        targetConfig.provider,
+        targetConfig.apiKey,
+        targetConfig.baseURL
+      );
       setAvailableModels(models);
       message.success(`✅ 获取到 ${models.length} 个可用模型`);
 
@@ -314,7 +324,12 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
         maxTokens: 50
       };
 
-      const response = await window.electronAPI.langchain.sendMessageWithConfig(testRequest, config);
+      // 使用新的AI流式消息接口进行测试
+      const response = await window.electronAPI.streamMessage({
+        message: testRequest.message,
+        sessionId: `test-${Date.now()}`,
+        configId: config.id
+      });
       message.success(`测试消息发送成功！AI回复: ${response.content}`);
     } catch (error) {
       console.error('发送测试消息失败:', error);
@@ -335,7 +350,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       for (const config of providerConfigs) {
         try {
           console.log(`🔄 测试配置: ${config.name}`);
-          const testResult = await window.electronAPI.langchain.testConfig(config);
+          const testResult = await window.electronAPI.model.test(config.id);
 
           // 更新单个配置的测试结果
           setProviderConfigs(configs => configs.map(c =>
@@ -385,7 +400,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       };
 
       // 保存到后端
-      await window.electronAPI.langchain.saveConfig(updatedConfig);
+      await window.electronAPI.model.save(updatedConfig);
 
       // 更新本地状态
       setProviderConfigs(prev => prev.map(config =>
@@ -436,7 +451,11 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
         priority: 1
       };
 
-      const models = await window.electronAPI.langchain.getAvailableModels(tempConfig);
+      const models = await window.electronAPI.model.fetchModels(
+        tempConfig.provider,
+        tempConfig.apiKey,
+        tempConfig.baseURL
+      );
       setAvailableModels(models);
       message.success(`获取到 ${models.length} 个可用模型`);
     } catch (error) {
@@ -509,7 +528,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       onOk: async () => {
         try {
           // 调用主进程删除配置
-          await window.electronAPI.langchain.deleteConfig(config.id);
+          await window.electronAPI.model.delete(config.id);
 
           // 更新UI状态
           const newConfigs = providerConfigs.filter(c => c.id !== config.id);
@@ -536,7 +555,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       ));
 
       // 调用主进程测试配置
-      const testResult = await window.electronAPI.langchain.testConfig(config);
+      const testResult = await window.electronAPI.model.test(config.id);
 
       // 更新测试结果
       const updatedConfig = {
@@ -598,7 +617,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
       }
 
       // 调用主进程保存配置
-      await window.electronAPI.langchain.saveConfig(configEntity);
+      await window.electronAPI.model.save(configEntity);
 
       // 更新UI状态
       const configWithStatus: ProviderConfigWithStatus = {
@@ -718,7 +737,7 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
 
                             // 保存到数据库
                             const updatedConfig = { ...config, isEnabled: checked };
-                            await window.electronAPI.langchain.saveConfig(updatedConfig);
+                            await window.electronAPI.model.save(updatedConfig);
 
                             message.success(checked ? '配置已启用' : '配置已禁用');
                           } catch (error) {
@@ -1206,6 +1225,92 @@ const ModelManagement: React.FC<ModelManagementProps> = ({ visible, onClose }) =
               {[1,2,3,4,5,6,7,8,9,10].map(num => (
                 <Option key={num} value={num}>{num}</Option>
               ))}
+            </Select>
+          </Form.Item>
+
+          {/* 智能maxTokens配置区域 */}
+          <Divider orientation="left" orientationMargin="0">
+            <Space>
+              智能Token配置
+              <Tooltip title="智能调整输出token数量，基于模型上下文窗口和当前对话长度动态计算最优值">
+                <QuestionCircleOutlined />
+              </Tooltip>
+            </Space>
+          </Divider>
+
+          <Form.Item
+            name="maxTokens"
+            label={
+              <Space>
+                最大Token数量
+                <Tooltip title="AI回复的最大token数量，智能模式下作为上限值使用">
+                  <QuestionCircleOutlined />
+                </Tooltip>
+              </Space>
+            }
+            initialValue={4096}
+          >
+            <Input
+              type="number"
+              min={512}
+              max={32768}
+              placeholder="4096"
+              style={{ width: '100%' }}
+              suffix="tokens"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="enableMaxTokens"
+            label={
+              <Space>
+                启用Token限制
+                <Tooltip title="是否对AI回复设置token数量限制，关闭则无限制">
+                  <QuestionCircleOutlined />
+                </Tooltip>
+              </Space>
+            }
+            valuePropName="checked"
+            initialValue={true}
+          >
+            <Switch />
+          </Form.Item>
+
+          <Form.Item
+            name="autoAdjustMaxTokens"
+            label={
+              <Space>
+                智能调整
+                <Tooltip title="根据模型上下文窗口和当前对话长度自动调整token数量，推荐开启">
+                  <QuestionCircleOutlined />
+                </Tooltip>
+              </Space>
+            }
+            valuePropName="checked"
+            initialValue={true}
+          >
+            <Switch />
+          </Form.Item>
+
+          <Form.Item
+            name="contextRatio"
+            label={
+              <Space>
+                上下文比例
+                <Tooltip title="使用模型上下文窗口的比例作为输出限制，范围15%-25%，推荐20%">
+                  <QuestionCircleOutlined />
+                </Tooltip>
+              </Space>
+            }
+            initialValue={0.2}
+          >
+            <Select
+              style={{ width: '100%' }}
+              getPopupContainer={(triggerNode) => triggerNode.parentElement}
+            >
+              <Option value={0.15}>15% (保守)</Option>
+              <Option value={0.2}>20% (推荐)</Option>
+              <Option value={0.25}>25% (激进)</Option>
             </Select>
           </Form.Item>
 

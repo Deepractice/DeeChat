@@ -64,47 +64,185 @@ export class AIContentFormatter {
       }
     }
 
+    // 🔥 保持原始内容顺序的解析策略
     const blocks: ContentBlock[] = []
-    let remainingContent = content.trim()
     let hasMarkdown = false
     let hasMermaid = false
     let hasCode = false
+    
+    // 查找所有特殊块的位置，但保持原有顺序
+    const specialBlocks: Array<{
+      start: number
+      end: number
+      type: 'mermaid' | 'code'
+      content: string
+      language?: string
+      match: string
+    }> = []
 
-    // 1. 提取Mermaid图表块
-    remainingContent = this.extractMermaidBlocks(remainingContent, blocks)
-    if (blocks.some(block => block.type === 'mermaid')) {
-      hasMermaid = true
+    // 1. 查找所有代码块位置（包括mermaid）
+    const codeMatches = Array.from(content.matchAll(this.CODE_BLOCK_PATTERN))
+    for (const match of codeMatches) {
+      const start = match.index!
+      const end = start + match[0].length
+      const language = match[1]?.toLowerCase()
+      const codeContent = match[2]?.trim()
+
+      if (codeContent) {
+        if (language === 'mermaid') {
+          specialBlocks.push({
+            start,
+            end,
+            type: 'mermaid',
+            content: codeContent,
+            match: match[0]
+          })
+        } else {
+          specialBlocks.push({
+            start,
+            end,
+            type: 'code',
+            content: codeContent,
+            language: language || 'text',
+            match: match[0]
+          })
+        }
+      }
     }
 
-    // 2. 提取代码块（除了已处理的mermaid）
-    remainingContent = this.extractCodeBlocks(remainingContent, blocks)
-    if (blocks.some(block => block.type === 'code')) {
-      hasCode = true
+    // 2. 查找独立的Mermaid块位置
+    const lines = content.split('\n')
+    let currentPos = 0
+    let inMermaidBlock = false
+    let mermaidStart = 0
+    let currentMermaidContent = ''
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      const lineStart = currentPos
+      const lineEnd = currentPos + lines[i].length + 1 // +1 for newline
+
+      // 检查这一行是否在已知的代码块中
+      const inCodeBlock = specialBlocks.some(block => 
+        lineStart >= block.start && lineEnd <= block.end
+      )
+
+      if (!inCodeBlock) {
+        if (this.MERMAID_PATTERNS[1].test(line) && !inMermaidBlock) {
+          inMermaidBlock = true
+          mermaidStart = lineStart
+          currentMermaidContent = lines[i] + '\n'
+        } else if (inMermaidBlock) {
+          if (line === '' || this.isMermaidSyntaxLine(line)) {
+            currentMermaidContent += lines[i] + '\n'
+          } else {
+            // Mermaid块结束
+            if (currentMermaidContent.trim()) {
+              specialBlocks.push({
+                start: mermaidStart,
+                end: currentPos,
+                type: 'mermaid',
+                content: currentMermaidContent.trim(),
+                match: currentMermaidContent
+              })
+            }
+            inMermaidBlock = false
+            currentMermaidContent = ''
+          }
+        }
+      }
+
+      currentPos = lineEnd
     }
 
-    // 3. 检测剩余内容是否包含Markdown特征
-    if (this.hasMarkdownFeatures(remainingContent)) {
-      hasMarkdown = true
-      blocks.push({
-        type: 'markdown',
-        content: remainingContent
+    // 处理文件末尾的Mermaid块
+    if (inMermaidBlock && currentMermaidContent.trim()) {
+      specialBlocks.push({
+        start: mermaidStart,
+        end: currentPos,
+        type: 'mermaid',
+        content: currentMermaidContent.trim(),
+        match: currentMermaidContent
       })
-    } else {
-      // 4. 作为纯文本处理
-      if (remainingContent.trim()) {
+    }
+
+    // 3. 按位置排序特殊块
+    specialBlocks.sort((a, b) => a.start - b.start)
+
+    // 4. 按顺序构建内容块
+    let lastEnd = 0
+    for (const block of specialBlocks) {
+      // 添加特殊块之前的文本
+      if (block.start > lastEnd) {
+        const textContent = content.slice(lastEnd, block.start).trim()
+        if (textContent) {
+          if (this.hasMarkdownFeatures(textContent)) {
+            hasMarkdown = true
+            blocks.push({
+              type: 'markdown',
+              content: textContent
+            })
+          } else {
+            blocks.push({
+              type: 'text',
+              content: textContent
+            })
+          }
+        }
+      }
+
+      // 添加特殊块
+      if (block.type === 'mermaid') {
+        hasMermaid = true
         blocks.push({
-          type: 'text',
-          content: remainingContent
+          type: 'mermaid',
+          content: block.content
         })
+      } else {
+        hasCode = true
+        blocks.push({
+          type: 'code',
+          content: block.content,
+          language: block.language || 'text'
+        })
+      }
+
+      lastEnd = block.end
+    }
+
+    // 5. 添加最后剩余的内容
+    if (lastEnd < content.length) {
+      const textContent = content.slice(lastEnd).trim()
+      if (textContent) {
+        if (this.hasMarkdownFeatures(textContent)) {
+          hasMarkdown = true
+          blocks.push({
+            type: 'markdown',
+            content: textContent
+          })
+        } else {
+          blocks.push({
+            type: 'text',
+            content: textContent
+          })
+        }
       }
     }
 
     // 如果没有提取到任何块，至少返回原始内容作为文本块
     if (blocks.length === 0) {
-      blocks.push({
-        type: 'text',
-        content: content
-      })
+      if (this.hasMarkdownFeatures(content)) {
+        hasMarkdown = true
+        blocks.push({
+          type: 'markdown',
+          content: content
+        })
+      } else {
+        blocks.push({
+          type: 'text',
+          content: content
+        })
+      }
     }
 
     return {
@@ -115,108 +253,7 @@ export class AIContentFormatter {
     }
   }
 
-  /**
-   * 提取Mermaid图表块
-   */
-  private static extractMermaidBlocks(content: string, blocks: ContentBlock[]): string {
-    let remainingContent = content
 
-    // 处理```mermaid代码块
-    const mermaidMatches = Array.from(content.matchAll(this.MERMAID_PATTERNS[0]))
-    for (const match of mermaidMatches) {
-      const mermaidContent = match[1]?.trim()
-      if (mermaidContent) {
-        blocks.push({
-          type: 'mermaid',
-          content: mermaidContent,
-          metadata: {
-            originalMatch: match[0]
-          }
-        })
-        remainingContent = remainingContent.replace(match[0], '')
-      }
-    }
-
-    // 检测独立的Mermaid语法（未包装在代码块中）
-    const lines = remainingContent.split('\n')
-    let currentMermaidBlock = ''
-    let inMermaidBlock = false
-    let filteredLines: string[] = []
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim()
-      
-      // 检测Mermaid图表开始
-      if (this.MERMAID_PATTERNS[1].test(line)) {
-        inMermaidBlock = true
-        currentMermaidBlock = line + '\n'
-        continue
-      }
-
-      if (inMermaidBlock) {
-        // 如果是空行或者看起来像Mermaid语法，继续添加
-        if (line === '' || this.isMermaidSyntaxLine(line)) {
-          currentMermaidBlock += lines[i] + '\n'
-          continue
-        } else {
-          // Mermaid块结束
-          if (currentMermaidBlock.trim()) {
-            blocks.push({
-              type: 'mermaid',
-              content: currentMermaidBlock.trim()
-            })
-          }
-          inMermaidBlock = false
-          currentMermaidBlock = ''
-          filteredLines.push(lines[i])
-        }
-      } else {
-        filteredLines.push(lines[i])
-      }
-    }
-
-    // 处理文件末尾的Mermaid块
-    if (inMermaidBlock && currentMermaidBlock.trim()) {
-      blocks.push({
-        type: 'mermaid',
-        content: currentMermaidBlock.trim()
-      })
-    }
-
-    return filteredLines.join('\n')
-  }
-
-  /**
-   * 提取代码块
-   */
-  private static extractCodeBlocks(content: string, blocks: ContentBlock[]): string {
-    let remainingContent = content
-
-    const codeMatches = Array.from(content.matchAll(this.CODE_BLOCK_PATTERN))
-    for (const match of codeMatches) {
-      const language = match[1]?.toLowerCase()
-      const codeContent = match[2]?.trim()
-
-      // 跳过mermaid代码块（已在前面处理）
-      if (language === 'mermaid') {
-        continue
-      }
-
-      if (codeContent) {
-        blocks.push({
-          type: 'code',
-          content: codeContent,
-          language: language || 'text',
-          metadata: {
-            originalMatch: match[0]
-          }
-        })
-        remainingContent = remainingContent.replace(match[0], '')
-      }
-    }
-
-    return remainingContent
-  }
 
   /**
    * 检测内容是否包含Markdown特征

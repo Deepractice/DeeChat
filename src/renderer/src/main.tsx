@@ -24,9 +24,9 @@ const ThemedApp = () => {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+  // <React.StrictMode> // 暂时禁用以测试消息重复问题
     <Provider store={store}>
       <ThemedApp />
     </Provider>
-  </React.StrictMode>,
+  // </React.StrictMode>,
 )

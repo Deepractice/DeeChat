@@ -1,3 +1,5 @@
+import { calculateSmartMaxTokens, MaxTokensConfig } from '../config/modelContextWindows'
+
 export type ModelStatus = 'available' | 'error' | 'untested' | 'testing'
 
 export interface ModelConfigData {
@@ -17,6 +19,12 @@ export interface ModelConfigData {
   errorMessage?: string
   availableModels?: string[]  // 可用模型列表
   enabledModels?: string[]    // 启用的模型列表
+  temperature?: number        // 模型温度参数
+  maxTokens?: number         // 最大token数量
+  // 智能maxTokens配置
+  enableMaxTokens?: boolean   // 是否启用token限制
+  autoAdjustMaxTokens?: boolean // 是否自动调整maxTokens
+  contextRatio?: number       // 上下文窗口使用比例
 }
 
 export interface ValidationResult {
@@ -48,6 +56,12 @@ export class ModelConfigEntity {
   public errorMessage?: string
   public availableModels: string[]
   public enabledModels: string[]
+  public temperature?: number
+  public maxTokens?: number
+  // 智能maxTokens配置
+  public enableMaxTokens: boolean
+  public autoAdjustMaxTokens: boolean
+  public contextRatio: number
 
   constructor(data: ModelConfigData) {
     this.id = data.id
@@ -66,6 +80,12 @@ export class ModelConfigEntity {
     this.errorMessage = data.errorMessage
     this.availableModels = data.availableModels || []
     this.enabledModels = data.enabledModels || []
+    this.temperature = data.temperature || 0.7
+    this.maxTokens = data.maxTokens || 4096
+    // 智能maxTokens配置默认值
+    this.enableMaxTokens = data.enableMaxTokens ?? true
+    this.autoAdjustMaxTokens = data.autoAdjustMaxTokens ?? true
+    this.contextRatio = data.contextRatio ?? 0.2
   }
 
   // 验证配置
@@ -157,7 +177,12 @@ export class ModelConfigEntity {
       responseTime: this.responseTime,
       errorMessage: this.errorMessage,
       availableModels: this.availableModels,
-      enabledModels: this.enabledModels
+      enabledModels: this.enabledModels,
+      temperature: this.temperature,
+      maxTokens: this.maxTokens,
+      enableMaxTokens: this.enableMaxTokens,
+      autoAdjustMaxTokens: this.autoAdjustMaxTokens,
+      contextRatio: this.contextRatio
     }
   }
 
@@ -200,5 +225,20 @@ export class ModelConfigEntity {
   // 克隆实体
   clone(): ModelConfigEntity {
     return new ModelConfigEntity(this.toData())
+  }
+
+  /**
+   * 获取智能计算的maxTokens值
+   * 结合用户配置和模型特性，动态计算最优的maxTokens
+   */
+  getSmartMaxTokens(contextTokens: number = 0): number | undefined {
+    const config: MaxTokensConfig = {
+      maxTokens: this.maxTokens || 4096,
+      enableMaxTokens: this.enableMaxTokens,
+      autoAdjust: this.autoAdjustMaxTokens,
+      contextRatio: this.contextRatio
+    }
+
+    return calculateSmartMaxTokens(this.model, contextTokens, config)
   }
 }

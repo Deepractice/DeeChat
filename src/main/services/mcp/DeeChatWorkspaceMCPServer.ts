@@ -47,6 +47,119 @@ export class DeeChatWorkspaceMCPServer {
     this.setupHandlers()
   }
 
+  /**
+   * 获取工具定义列表 - 兼容InProcessMCPServer的调用
+   */
+  getToolDefinitions() {
+    return [
+      {
+        name: 'deechat_workspace_read',
+        description: 'Read a file from DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Path to the file within workspace (relative or absolute)',
+            },
+          },
+          required: ['file_path'],
+        },
+      },
+      {
+        name: 'deechat_workspace_write',
+        description: 'Write content to a file in DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Path to the file within workspace',
+            },
+            content: {
+              type: 'string',
+              description: 'Content to write to the file',
+            },
+            overwrite: {
+              type: 'boolean',
+              description: 'Whether to overwrite existing file (default: false)',
+              default: false,
+            },
+          },
+          required: ['file_path', 'content'],
+        },
+      },
+      {
+        name: 'deechat_workspace_list',
+        description: 'List all files in DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pattern: {
+              type: 'string',
+              description: 'Optional file pattern filter (e.g., "*.txt")',
+            },
+            include_temp: {
+              type: 'boolean',
+              description: 'Include temporary files (default: false)',
+              default: false,
+            },
+          },
+        },
+      },
+      {
+        name: 'deechat_workspace_diff',
+        description: 'Compare two files in DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file1_path: {
+              type: 'string',
+              description: 'Path to the first file',
+            },
+            file2_path: {
+              type: 'string',
+              description: 'Path to the second file',
+            },
+            format: {
+              type: 'string',
+              enum: ['unified', 'side-by-side', 'json'],
+              description: 'Diff output format',
+              default: 'unified',
+            },
+          },
+          required: ['file1_path', 'file2_path'],
+        },
+      },
+      {
+        name: 'deechat_workspace_stats',
+        description: 'Get statistics about DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'deechat_workspace_delete',
+        description: 'Delete a file from DeeChat workspace',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Path to the file to delete',
+            },
+            confirm: {
+              type: 'boolean',
+              description: 'Confirmation flag (required for safety)',
+            },
+          },
+          required: ['file_path', 'confirm'],
+        },
+      },
+    ]
+  }
+
   private setupHandlers() {
     // 工具列表
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {

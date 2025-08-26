@@ -14,6 +14,11 @@ ipcRenderer.on('main-process-log', (_event, logData) => {
   }
 });
 
+// 监听后端日志
+ipcRenderer.on('backend-log', (_event, logData) => {
+  // 这里可以添加额外的处理逻辑，目前主要是转发给组件
+});
+
 // 定义暴露给渲染进程的 API
 const electronAPI = {
   // 应用信息
@@ -48,6 +53,13 @@ const electronAPI = {
   getChatHistory: () => ipcRenderer.invoke('chat:getHistory'),
   saveChatMessage: (message: any) => ipcRenderer.invoke('chat:saveMessage', message),
 
+  // 聊天API
+  chat: {
+    getHistory: () => ipcRenderer.invoke('chat:getHistory'),
+    saveMessage: (message: any) => ipcRenderer.invoke('chat:saveMessage', message),
+    deleteSession: (sessionId: string) => ipcRenderer.invoke('chat:deleteSession', sessionId),
+  },
+
   // 新架构：模型管理API
   model: {
     getAll: () => ipcRenderer.invoke('model:getAll'),
@@ -55,6 +67,8 @@ const electronAPI = {
     delete: (id: string) => ipcRenderer.invoke('model:delete', id),
     test: (id: string) => ipcRenderer.invoke('model:test', id),
     update: (config: any) => ipcRenderer.invoke('model:update', config),
+    fetchModels: (provider: string, apiKey: string, baseURL: string) => 
+      ipcRenderer.invoke('model:fetchModels', provider, apiKey, baseURL),
   },
 
   // 新架构：用户偏好API
@@ -85,35 +99,15 @@ const electronAPI = {
     },
   },
 
-  // LangChain集成API
-  langchain: {
-    // 配置管理
-    getAllConfigs: () => ipcRenderer.invoke('langchain:getAllConfigs'),
-    saveConfig: (configData: any) => ipcRenderer.invoke('langchain:saveConfig', configData),
-    deleteConfig: (id: string) => ipcRenderer.invoke('langchain:deleteConfig', id),
+  // 🔥 根层级的streamMessage方法（兼容前端调用）
+  streamMessage: (request: any) => ipcRenderer.invoke('ai:streamMessage', request),
 
-    // 配置测试
-    testConfig: (configData: any) => ipcRenderer.invoke('langchain:testConfig', configData),
-
-    // 模型发现
-    getAvailableModels: (configData: any) => ipcRenderer.invoke('langchain:getAvailableModels', configData),
-    refreshProviderModels: (configId: string) => ipcRenderer.invoke('langchain:refreshProviderModels', configId),
-
-    // 消息发送
-    sendMessageWithConfig: (request: any, configData: any) =>
-      ipcRenderer.invoke('langchain:sendMessageWithConfig', request, configData),
-    sendMessageWithDefault: (request: any) =>
-      ipcRenderer.invoke('langchain:sendMessageWithDefault', request),
-
-    // 统计和批量操作
-    getProviderStats: () => ipcRenderer.invoke('langchain:getProviderStats'),
-    testAllEnabledConfigs: () => ipcRenderer.invoke('langchain:testAllEnabledConfigs'),
-
-    // 会话管理
-    getAllSessions: () => ipcRenderer.invoke('langchain:getAllSessions'),
-    saveSession: (sessionData: any) => ipcRenderer.invoke('langchain:saveSession', sessionData),
-    deleteSession: (sessionId: string) => ipcRenderer.invoke('langchain:deleteSession', sessionId)
+  // 🖼️ 窗口管理API（修复App.tsx中的window调用）
+  window: {
+    resize: (width: number, height: number) => ipcRenderer.invoke('window:resize', width, height),
+    getSize: () => ipcRenderer.invoke('window:getSize'),
   },
+
 
   // MCP API
   mcp: {
@@ -199,21 +193,38 @@ const electronAPI = {
   // 🔧 文件操作API已移除，请使用PromptX的@file://协议
   // fileOp API已全部移除：read, write, isEditable
 
-  // 🪟 窗口管理API
-  window: {
-    resize: (width: number, height: number) => ipcRenderer.invoke('window:resize', width, height),
-    getSize: () => ipcRenderer.invoke('window:getSize')
-  },
+  // 🪟 窗口管理API (已在上面定义，移除重复)
 
   // 🌐 浏览器相关API（保留用于未来扩展）
   browser: {
     // 占位 - 如果需要与主进程通信的浏览器功能可以在这里添加
     openExternal: (url: string) => ipcRenderer.invoke('browser:open-external', url)
+  },
+
+  // 🔥 通用事件监听器（用于流式消息）
+  on: (channel: string, callback: (...args: any[]) => void) => {
+    ipcRenderer.on(channel, callback)
+  },
+  removeListener: (channel: string, callback: (...args: any[]) => void) => {
+    ipcRenderer.removeListener(channel, callback)
+  },
+  removeAllListeners: (channel: string) => {
+    ipcRenderer.removeAllListeners(channel)
+  },
+
+  // 🔧 后端日志监听
+  onBackendLog: (callback: (event: any, log: any) => void) => {
+    ipcRenderer.on('backend-log', callback)
   }
 }
 
 // 暴露 API 到渲染进程
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
+
+// 🚨 调试日志：验证API是否正确暴露
+console.log('🔧 [Preload] electronAPI已暴露到渲染进程')
+console.log('🔧 [Preload] model对象:', electronAPI.model)
+console.log('🔧 [Preload] fetchModels方法存在:', typeof electronAPI.model.fetchModels)
 
 // 类型声明（供 TypeScript 使用）
 export type ElectronAPI = typeof electronAPI

@@ -6,10 +6,40 @@
  * - 保留所有emoji、markdown、中文字符
  * - 转换为MCP标准的content数组格式
  * - 提供统一的错误处理机制
+ * - 在输出末尾添加简单的Token统计
  */
+const { getVersion } = require('../utils/version');
+
 class MCPOutputAdapter {
   constructor() {
     this.version = '1.0.0';
+    this.promptxVersion = getVersion();
+  }
+  
+  /**
+   * 简单估算token数量
+   * 使用简化算法：平均每4个字符算1个token（英文）
+   * 中文字符平均每2个字符算1个token
+   * @param {string} text - 要估算的文本
+   * @returns {number} 估算的token数量
+   */
+  estimateTokens(text) {
+    if (!text) return 0;
+    
+    const str = String(text);
+    let tokenCount = 0;
+    
+    // 分别统计中英文字符
+    const chineseChars = str.match(/[\u4e00-\u9fa5]/g) || [];
+    const englishAndOthers = str.replace(/[\u4e00-\u9fa5]/g, '');
+    
+    // 中文字符：约2个字符1个token
+    tokenCount += Math.ceil(chineseChars.length / 2);
+    
+    // 英文和其他字符：约4个字符1个token
+    tokenCount += Math.ceil(englishAndOthers.length / 4);
+    
+    return tokenCount;
   }
   
   /**
@@ -22,11 +52,17 @@ class MCPOutputAdapter {
       const text = this.normalizeInput(input);
       const sanitizedText = this.sanitizeText(text);
       
+      // 估算token数量
+      const tokenCount = this.estimateTokens(sanitizedText);
+      
+      // 添加token统计信息
+      const finalText = sanitizedText + `\n\n---\n📊 Token usage: ~${tokenCount} tokens\nPowered by PromptX v${this.promptxVersion} | deepractice.ai`;
+      
       return {
         content: [
           {
             type: 'text',
-            text: sanitizedText
+            text: finalText
           }
         ]
       };
@@ -138,4 +174,4 @@ class MCPOutputAdapter {
   }
 }
 
-module.exports = { MCPOutputAdapter }; 
+module.exports = { MCPOutputAdapter };

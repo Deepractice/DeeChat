@@ -4,6 +4,9 @@ const { spawn } = require('child_process');
 const vm = require('vm');
 const SandboxIsolationManager = require('./SandboxIsolationManager');
 const SandboxErrorManager = require('./SandboxErrorManager');
+const ToolDirectoryManager = require('./ToolDirectoryManager');
+const ESModuleRequireSupport = require('./ESModuleRequireSupport');
+const logger = require('../utils/logger');
 
 /**
  * ToolSandbox - 工具沙箱环境管理器
@@ -22,10 +25,12 @@ class ToolSandbox {
     this.toolContent = null;             // 工具文件内容
     this.toolInstance = null;            // 工具实例
     this.dependencies = [];              // 依赖列表
-    this.sandboxPath = null;             // 沙箱目录路径
+    this.directoryManager = null;        // 目录管理器（新增）
+    this.sandboxPath = null;             // 沙箱目录路径（保留用于兼容）
     this.sandboxContext = null;          // VM沙箱上下文
     this.isolationManager = null;        // 沙箱隔离管理器
     this.errorManager = new SandboxErrorManager(); // 智能错误管理器
+    this.esModuleSupport = null;         // ES Module 支持器
     
     // 状态标志
     this.isAnalyzed = false;
@@ -53,7 +58,7 @@ class ToolSandbox {
    * @param {boolean} deleteDirectory - 是否删除沙箱目录
    */
   async clearSandbox(deleteDirectory = false) {
-    console.log(`[ToolSandbox] 清理沙箱状态${deleteDirectory ? '并删除目录' : ''}`);
+    logger.debug(`[ToolSandbox] Clearing sandbox state${deleteDirectory ? ' and deleting directory' : ''}`);
     
     // 清空所有缓存和状态
     this.isAnalyzed = false;
@@ -64,13 +69,11 @@ class ToolSandbox {
     this.sandboxContext = null;
     
     // 如果需要，删除沙箱目录
-    if (deleteDirectory && this.sandboxPath && await this.sandboxExists()) {
+    if (deleteDirectory && this.directoryManager) {
       try {
-        const { rmdir } = require('fs').promises;
-        await rmdir(this.sandboxPath, { recursive: true });
-        console.log(`[ToolSandbox] 已删除沙箱目录 ${this.sandboxPath}`);
+        await this.directoryManager.deleteToolbox();
       } catch (error) {
-        console.log(`[ToolSandbox] 删除沙箱目录时出错（可忽略）: ${error.message}`);
+        logger.debug(`[ToolSandbox] Error deleting toolbox directory (can be ignored): ${error.message}`);
       }
     }
   }
@@ -81,7 +84,7 @@ class ToolSandbox {
    */
   async analyze() {
     if (this.isAnalyzed && !this.options.rebuild) {
-      console.log(`[ToolSandbox] 使用缓存的分析结果，依赖: ${JSON.stringify(this.dependencies)}`);
+      logger.debug(`[ToolSandbox] Using cached analysis result, dependencies: ${JSON.stringify(this.dependencies)}`);
       return this.getAnalysisResult();
     }
 
@@ -95,14 +98,14 @@ class ToolSandbox {
       
       // 2. 通过协议系统加载工具（forceReinstall时强制重新加载）
       const loadOptions = this.options.forceReinstall ? { noCache: true } : {};
-      console.log(`[ToolSandbox] 加载工具 ${this.toolReference}，选项:`, loadOptions);
+      logger.debug(`[ToolSandbox] Loading tool ${this.toolReference}, options:`, loadOptions);
       
       const toolResult = await this.resourceManager.loadResource(this.toolReference, loadOptions);
       if (!toolResult.success) {
         // 调试：尝试不同的查找方式
-        console.log(`🔍 调试：尝试查找工具 ${this.toolReference}`);
+        logger.debug(`[ToolSandbox] Debug: Trying to find tool ${this.toolReference}`);
         const directLookup = this.resourceManager.registryData.findResourceById(`tool:${this.toolId}`, 'tool');
-        console.log(`   - 直接查找 tool:${this.toolId}: ${directLookup ? '找到' : '未找到'}`);
+        logger.debug(`[ToolSandbox]    - Direct lookup tool:${this.toolId}: ${directLookup ? 'found' : 'not found'}`);
         
         throw new Error(`Failed to load tool: ${toolResult.error.message}`);
       }
@@ -110,12 +113,17 @@ class ToolSandbox {
       this.toolContent = toolResult.content;
       
       // 调试：检查加载的工具内容
-      console.log(`[ToolSandbox] 加载的工具内容前200字符:`, this.toolContent.substring(0, 200));
+      logger.debug(`[ToolSandbox] Loaded tool content first 200 chars:`, this.toolContent.substring(0, 200));
       
-      // 3. 设置沙箱路径（工具专用沙箱）
-      this.sandboxPath = await this.resolveSandboxPath();
+      // 3. 初始化目录管理器
+      this.directoryManager = new ToolDirectoryManager(this.toolId, this.resourceManager);
+      await this.directoryManager.initialize();
+      await this.directoryManager.ensureDirectories();
       
-      // 4. 在基础沙箱中分析工具
+      // 4. 设置 sandboxPath 用于兼容
+      this.sandboxPath = this.directoryManager.getWorkingPath();
+      
+      // 5. 在基础沙箱中分析工具
       await this.analyzeToolInSandbox();
       
       this.isAnalyzed = true;
@@ -133,8 +141,12 @@ class ToolSandbox {
   async prepareDependencies() {
     // 处理rebuild选项
     if (this.options.rebuild) {
-      console.log(`[ToolSandbox] 手动触发重建沙箱`);
+      logger.debug(`[ToolSandbox] Manually triggering sandbox rebuild`);
       await this.clearSandbox(true);
+      // 重新初始化目录管理器
+      if (this.directoryManager) {
+        await this.directoryManager.initialize();
+      }
     }
     
     // 分析工具（如果需要）
@@ -144,7 +156,7 @@ class ToolSandbox {
     
     // 自动检测依赖是否需要更新
     if (!this.options.rebuild && await this.checkDependenciesNeedUpdate()) {
-      console.log(`[ToolSandbox] 检测到依赖变化，自动重建沙箱`);
+      logger.debug(`[ToolSandbox] Dependency changes detected, auto-rebuilding sandbox`);
       await this.clearSandbox(true);
       // 重新分析以获取最新依赖
       await this.analyze();
@@ -159,8 +171,15 @@ class ToolSandbox {
       await this.ensureSandboxDirectory();
       
       // 2. 如果有依赖，安装它们
-      if (this.dependencies.length > 0) {
+      const hasDependencies = typeof this.dependencies === 'object' && !Array.isArray(this.dependencies) 
+        ? Object.keys(this.dependencies).length > 0
+        : this.dependencies.length > 0;
+        
+      if (hasDependencies) {
         await this.installDependencies();
+        
+        // 2.1 检测 ES Module 依赖
+        await this.detectAndHandleESModules();
       }
       
       // 3. 创建执行沙箱环境
@@ -169,7 +188,8 @@ class ToolSandbox {
       this.isPrepared = true;
       return { 
         success: true, 
-        sandboxPath: this.sandboxPath,
+        sandboxPath: this.directoryManager.getWorkingPath(),
+        toolboxPath: this.directoryManager.getToolboxPath(),
         dependencies: this.dependencies 
       };
       
@@ -200,7 +220,8 @@ class ToolSandbox {
         data: result,
         metadata: {
           toolId: this.toolId,
-          sandboxPath: this.sandboxPath,
+          sandboxPath: this.directoryManager.getWorkingPath(),
+          toolboxPath: this.directoryManager.getToolboxPath(),
           executionTime: Date.now()
         }
       };
@@ -210,7 +231,8 @@ class ToolSandbox {
       const intelligentError = this.errorManager.analyzeError(error, {
         toolId: this.toolId,
         dependencies: this.dependencies,
-        sandboxPath: this.sandboxPath,
+        sandboxPath: this.directoryManager?.getWorkingPath(),
+        toolboxPath: this.directoryManager?.getToolboxPath(),
         phase: 'execute'
       });
       
@@ -235,35 +257,13 @@ class ToolSandbox {
     return match[1];
   }
 
-  /**
-   * 解析沙箱路径
-   * @returns {Promise<string>} 沙箱绝对路径
-   */
-  async resolveSandboxPath() {
-    // 使用 @user://.promptx/toolbox/{toolId} 作为沙箱路径  
-    const userDataReference = `@user://.promptx/toolbox/${this.toolId}`;
-    const result = await this.resourceManager.resolveProtocolReference(userDataReference);
-    
-    if (!result.success) {
-      throw new Error(`Failed to resolve sandbox path: ${result.error}`);
-    }
-    
-    // 通过UserProtocol解析实际路径
-    const userProtocol = this.resourceManager.protocols.get('user');
-    const sandboxPath = await userProtocol.resolvePath(
-      `.promptx/toolbox/${this.toolId}`, 
-      new Map()
-    );
-    
-    return sandboxPath;
-  }
 
   /**
    * 在基础沙箱中分析工具
    */
   async analyzeToolInSandbox() {
-    // 创建分析阶段的隔离管理器
-    this.isolationManager = new SandboxIsolationManager(this.sandboxPath, {
+    // 创建分析阶段的隔离管理器，使用工作目录
+    this.isolationManager = new SandboxIsolationManager(this.directoryManager.getWorkingPath(), {
       enableDependencyLoading: false,
       analysisMode: true
     });
@@ -271,8 +271,8 @@ class ToolSandbox {
     const sandbox = this.isolationManager.createIsolatedContext();
     
     // 调试：检查即将执行的代码
-    console.log(`[ToolSandbox] 即将执行的工具代码中的getDependencies部分:`, 
-      this.toolContent.match(/getDependencies[\s\S]*?return[\s\S]*?\]/)?.[0] || '未找到getDependencies');
+    logger.debug(`[ToolSandbox] Tool code getDependencies section:`, 
+      this.toolContent.match(/getDependencies[\s\S]*?return[\s\S]*?\]/)?.[0] || 'getDependencies not found');
     
     const script = new vm.Script(this.toolContent, { filename: `${this.toolId}.js` });
     const context = vm.createContext(sandbox);
@@ -307,15 +307,15 @@ class ToolSandbox {
     // 提取依赖
     if (typeof toolInstance.getDependencies === 'function') {
       try {
-        this.dependencies = toolInstance.getDependencies() || [];
-        console.log(`[ToolSandbox] 提取到的依赖列表: ${JSON.stringify(this.dependencies)}`);
+        this.dependencies = toolInstance.getDependencies() || {};
+        logger.debug(`[ToolSandbox] Extracted dependencies: ${JSON.stringify(this.dependencies)}`);
       } catch (error) {
-        console.warn(`[ToolSandbox] Failed to get dependencies for ${this.toolId}: ${error.message}`);
-        this.dependencies = [];
+        logger.warn(`[ToolSandbox] Failed to get dependencies for ${this.toolId}: ${error.message}`);
+        this.dependencies = {};
       }
     } else {
-      console.log(`[ToolSandbox] 工具没有 getDependencies 方法`);
-      this.dependencies = [];
+      logger.debug(`[ToolSandbox] Tool does not have getDependencies method`);
+      this.dependencies = {};
     }
     
     this.toolInstance = toolInstance;
@@ -338,7 +338,7 @@ class ToolSandbox {
         
         // 检查缺失的模块是否在依赖声明中
         if (this._isDeclaredInDependencies(missingModule, declaredDependencies)) {
-          console.log(`[ToolSandbox] 依赖 ${missingModule} 未安装，将在prepareDependencies阶段安装`);
+          logger.debug(`[ToolSandbox] Dependency ${missingModule} not installed, will install in prepareDependencies phase`);
           return null; // 预期的错误，忽略
         } else {
           return new Error(`未声明的依赖: ${missingModule}，请在getDependencies()中添加此依赖`);
@@ -381,7 +381,7 @@ class ToolSandbox {
         }
       }
     } catch (error) {
-      console.warn(`[ToolSandbox] 无法解析依赖声明: ${error.message}`);
+      logger.warn(`[ToolSandbox] Unable to parse dependency declaration: ${error.message}`);
     }
     
     return [];
@@ -407,26 +407,19 @@ class ToolSandbox {
    * @returns {Promise<boolean>}
    */
   async sandboxExists() {
-    try {
-      await fs.access(this.sandboxPath);
-      return true;
-    } catch (error) {
+    if (!this.directoryManager) {
       return false;
     }
+    return await this.directoryManager.toolboxExists();
   }
 
   /**
    * 确保沙箱目录存在
    */
   async ensureSandboxDirectory() {
-    try {
-      await fs.access(this.sandboxPath);
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        await fs.mkdir(this.sandboxPath, { recursive: true });
-      } else {
-        throw error;
-      }
+    // 委托给 directoryManager 处理
+    if (this.directoryManager) {
+      await this.directoryManager.ensureDirectories();
     }
   }
 
@@ -434,7 +427,12 @@ class ToolSandbox {
    * 安装依赖
    */
   async installDependencies() {
-    if (this.dependencies.length === 0) {
+    // 检查依赖是否为空（支持对象和数组格式）
+    const hasDependencies = typeof this.dependencies === 'object' && !Array.isArray(this.dependencies) 
+      ? Object.keys(this.dependencies).length > 0
+      : this.dependencies.length > 0;
+      
+    if (!hasDependencies) {
       return;
     }
 
@@ -450,7 +448,7 @@ class ToolSandbox {
    * @returns {Promise<boolean>} true表示需要更新
    */
   async checkDependenciesNeedUpdate() {
-    const packageJsonPath = path.join(this.sandboxPath, 'package.json');
+    const packageJsonPath = this.directoryManager.getPackageJsonPath();
     
     try {
       // 读取现有的package.json
@@ -459,13 +457,25 @@ class ToolSandbox {
       const existingDeps = existingPackageJson.dependencies || {};
       
       // 构建新的依赖对象
-      const newDeps = {};
-      for (const dep of this.dependencies) {
-        if (dep.includes('@')) {
-          const [name, version] = dep.split('@');
-          newDeps[name] = version;
-        } else {
-          newDeps[dep] = 'latest';
+      let newDeps = {};
+      if (typeof this.dependencies === 'object' && !Array.isArray(this.dependencies)) {
+        // 新格式：直接使用对象
+        newDeps = this.dependencies;
+      } else if (Array.isArray(this.dependencies)) {
+        // 兼容旧格式（数组）
+        for (const dep of this.dependencies) {
+          if (dep.includes('@')) {
+            const lastAtIndex = dep.lastIndexOf('@');
+            if (lastAtIndex > 0) {
+              const name = dep.substring(0, lastAtIndex);
+              const version = dep.substring(lastAtIndex + 1);
+              newDeps[name] = version;
+            } else {
+              newDeps[dep] = 'latest';
+            }
+          } else {
+            newDeps[dep] = 'latest';
+          }
         }
       }
       
@@ -476,14 +486,14 @@ class ToolSandbox {
       // 检查键是否相同
       if (existingKeys.length !== newKeys.length || 
           !existingKeys.every((key, index) => key === newKeys[index])) {
-        console.log(`[ToolSandbox] 依赖列表变化 - 旧: ${existingKeys.join(', ')} | 新: ${newKeys.join(', ')}`);
+        logger.debug(`[ToolSandbox] Dependency list changed - old: ${existingKeys.join(', ')} | new: ${newKeys.join(', ')}`);
         return true;
       }
       
       // 检查版本是否相同
       for (const key of existingKeys) {
         if (existingDeps[key] !== newDeps[key]) {
-          console.log(`[ToolSandbox] 依赖版本变化 - ${key}: ${existingDeps[key]} -> ${newDeps[key]}`);
+          logger.debug(`[ToolSandbox] Dependency version changed - ${key}: ${existingDeps[key]} -> ${newDeps[key]}`);
           return true;
         }
       }
@@ -491,7 +501,7 @@ class ToolSandbox {
       return false;
     } catch (error) {
       // 文件不存在或解析失败，需要创建
-      console.log(`[ToolSandbox] package.json不存在或无效，需要创建`);
+      logger.debug(`[ToolSandbox] package.json does not exist or is invalid, needs to be created`);
       return true;
     }
   }
@@ -500,7 +510,7 @@ class ToolSandbox {
    * 创建package.json
    */
   async createPackageJson() {
-    const packageJsonPath = path.join(this.sandboxPath, 'package.json');
+    const packageJsonPath = this.directoryManager.getPackageJsonPath();
     
     const packageJson = {
       name: `toolbox-${this.toolId}`,
@@ -510,15 +520,29 @@ class ToolSandbox {
       dependencies: {}
     };
     
-    // 解析依赖格式 ["validator@^13.11.0", "lodash"]
-    console.log(`[ToolSandbox] 正在处理依赖列表: ${JSON.stringify(this.dependencies)}`);
-    for (const dep of this.dependencies) {
-      if (dep.includes('@')) {
-        const [name, version] = dep.split('@');
-        console.log(`[ToolSandbox] 解析依赖 "${dep}" => name="${name}", version="${version}"`);
-        packageJson.dependencies[name] = version;
-      } else {
-        packageJson.dependencies[dep] = 'latest';
+    // 直接使用 getDependencies 返回的对象格式 {"package-name": "version"}
+    logger.debug(`[ToolSandbox] Processing dependencies: ${JSON.stringify(this.dependencies)}`);
+    if (typeof this.dependencies === 'object' && !Array.isArray(this.dependencies)) {
+      // 新格式：直接使用对象
+      packageJson.dependencies = this.dependencies;
+    } else if (Array.isArray(this.dependencies)) {
+      // 兼容旧格式（数组），但应该逐步废弃
+      logger.warn(`[ToolSandbox] Tool ${this.toolId} is using deprecated array format for dependencies. Please update to object format.`);
+      for (const dep of this.dependencies) {
+        if (dep.includes('@')) {
+          const lastAtIndex = dep.lastIndexOf('@');
+          if (lastAtIndex > 0) {
+            const name = dep.substring(0, lastAtIndex);
+            const version = dep.substring(lastAtIndex + 1);
+            logger.debug(`[ToolSandbox] Parsing dependency "${dep}" => name="${name}", version="${version}"`);
+            packageJson.dependencies[name] = version;
+          } else {
+            // 只有 @ 开头，没有版本号的情况（如 @scope/package）
+            packageJson.dependencies[dep] = 'latest';
+          }
+        } else {
+          packageJson.dependencies[dep] = 'latest';
+        }
       }
     }
     
@@ -535,7 +559,7 @@ class ToolSandbox {
       const pnpmBinPath = path.join(path.dirname(pnpmModulePath), 'bin', 'pnpm.cjs');
       
       const pnpm = spawn('node', [pnpmBinPath, 'install'], {
-        cwd: this.sandboxPath,
+        cwd: this.directoryManager.getToolboxPath(),  // 使用 toolbox 路径安装依赖
         stdio: 'pipe'
       });
       
@@ -565,16 +589,122 @@ class ToolSandbox {
   }
 
   /**
+   * 检测和处理 ES Module 依赖
+   */
+  async detectAndHandleESModules() {
+    // 初始化 ES Module 支持器
+    if (!this.esModuleSupport) {
+      this.esModuleSupport = new ESModuleRequireSupport(this.directoryManager.getToolboxPath());
+    }
+
+    // 检测依赖类型
+    const dependencyTypes = await this.esModuleSupport.detectDependenciesTypes(this.dependencies);
+    
+    if (dependencyTypes.esmodule.length > 0) {
+      logger.warn(`[ToolSandbox] 检测到 ES Module 依赖：`, dependencyTypes.esmodule.map(d => d.name).join(', '));
+      logger.info(`[ToolSandbox] ES Module 包需要使用动态 import() 加载，工具可能需要相应调整`);
+      
+      // 存储 ES Module 信息供后续使用
+      this.esModuleDependencies = dependencyTypes.esmodule;
+    }
+
+    if (dependencyTypes.unknown.length > 0) {
+      logger.debug(`[ToolSandbox] 无法检测的依赖类型：`, dependencyTypes.unknown.map(d => d.name).join(', '));
+    }
+
+    return dependencyTypes;
+  }
+
+  /**
    * 创建执行沙箱环境
    */
   async createExecutionSandbox() {
-    // 创建执行阶段的隔离管理器
-    this.isolationManager = new SandboxIsolationManager(this.sandboxPath, {
+    // 创建执行阶段的隔离管理器，使用工作目录
+    this.isolationManager = new SandboxIsolationManager(this.directoryManager.getWorkingPath(), {
       enableDependencyLoading: true,
-      analysisMode: false
+      analysisMode: false,
+      toolboxPath: this.directoryManager.getToolboxPath()  // 传递 toolbox 路径用于依赖加载
     });
     
     this.sandboxContext = this.isolationManager.createIsolatedContext();
+    
+    // 添加 ES Module 动态加载支持
+    // 始终提供 importModule 函数，以支持工具动态加载 ES Module
+    if (!this.esModuleSupport) {
+      this.esModuleSupport = new ESModuleRequireSupport(this.directoryManager.getToolboxPath());
+    }
+    
+    // 统一的模块加载函数 - 自动检测并加载
+    this.sandboxContext.loadModule = async (moduleName) => {
+      const moduleType = await this.esModuleSupport.detectModuleType(moduleName);
+      if (moduleType === 'esm') {
+        // ES Module - 尝试动态 import
+        try {
+          return await this.esModuleSupport.loadESModule(moduleName);
+        } catch (error) {
+          // 如果动态 import 失败，尝试通过 require 加载并提取 default
+          const module = this.sandboxContext.require(moduleName);
+          // Node.js 的 createRequire 会将 ES Module 包装，真正的导出在 default 中
+          return module.default || module;
+        }
+      } else {
+        return this.sandboxContext.require(moduleName);
+      }
+    };
+    
+    // 保留 importModule 作为别名（向后兼容）
+    this.sandboxContext.importModule = this.sandboxContext.loadModule;
+    
+    // 增强 require - 主动检测 ES Module 并阻止加载
+    const originalRequire = this.sandboxContext.require;
+    const esModuleSupport = this.esModuleSupport;  // 捕获引用用于闭包
+    
+    this.sandboxContext.require = function(moduleName) {
+      // 主动检测是否是 ES Module（使用同步方法避免 async）
+      try {
+        const packageJsonPath = require.resolve(`${moduleName}/package.json`, {
+          paths: [esModuleSupport.toolboxPath]
+        });
+        const packageJson = require(packageJsonPath);
+        
+        if (packageJson.type === 'module') {
+          // 是 ES Module，主动抛出错误
+          const error = new Error(
+            `❌ "${moduleName}" 是 ES Module 包，请使用 await loadModule('${moduleName}') 代替 require('${moduleName}')\n` +
+            `💡 提示：loadModule 会自动检测包类型并正确加载`
+          );
+          error.code = 'ERR_REQUIRE_ESM';
+          throw error;
+        }
+      } catch (checkError) {
+        // 如果检测失败（比如包不存在），让原始 require 处理
+        if (checkError.code === 'ERR_REQUIRE_ESM') {
+          throw checkError;  // 重新抛出我们的错误
+        }
+      }
+      
+      // 不是 ES Module 或检测失败，使用原始 require
+      const result = originalRequire(moduleName);
+      
+      // 额外检查：如果返回对象有 __esModule 和 default，说明是被包装的 ES Module
+      if (result && result.__esModule && result.default && !result.default.__esModule) {
+        // 这是 createRequire 包装的 ES Module，应该报错
+        const error = new Error(
+          `❌ "${moduleName}" 是 ES Module 包，请使用 await loadModule('${moduleName}') 代替 require('${moduleName}')\n` +
+          `💡 提示：loadModule 会自动检测包类型并正确加载`
+        );
+        error.code = 'ERR_REQUIRE_ESM';
+        throw error;
+      }
+      
+      return result;
+    };
+    
+    if (this.esModuleDependencies && this.esModuleDependencies.length > 0) {
+      logger.debug(`[ToolSandbox] 已为工具 ${this.toolId} 启用 ES Module 支持，检测到 ${this.esModuleDependencies.length} 个 ES Module 依赖`);
+    } else {
+      logger.debug(`[ToolSandbox] 已为工具 ${this.toolId} 启用 importModule 函数`);
+    }
     
     // 在完全隔离的沙箱中重新加载工具
     const script = new vm.Script(this.toolContent, { filename: `${this.toolId}.js` });
@@ -619,7 +749,7 @@ class ToolSandbox {
         } catch (error) {
           if (error.code === 'ENOENT') {
             await fs.mkdir(resolvedPath, { recursive: true });
-            console.log(`[ToolSandbox] 创建统一工作目录: ${resolvedPath}`);
+            logger.debug(`[ToolSandbox] Created unified working directory: ${resolvedPath}`);
           }
         }
         
@@ -679,7 +809,8 @@ class ToolSandbox {
     return {
       toolId: this.toolId,
       dependencies: this.dependencies,
-      sandboxPath: this.sandboxPath,
+      sandboxPath: this.directoryManager?.getWorkingPath(),
+      toolboxPath: this.directoryManager?.getToolboxPath(),
       hasMetadata: typeof this.toolInstance?.getMetadata === 'function',
       hasSchema: typeof this.toolInstance?.getSchema === 'function'
     };
@@ -695,9 +826,16 @@ class ToolSandbox {
       this.isolationManager = null;
     }
     
+    // 清理 ES Module 支持器
+    if (this.esModuleSupport) {
+      this.esModuleSupport.clearCache();
+      this.esModuleSupport = null;
+    }
+    
     // 清理其他资源
     this.sandboxContext = null;
     this.toolInstance = null;
+    this.esModuleDependencies = null;
   }
 
   /**

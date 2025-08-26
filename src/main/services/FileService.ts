@@ -4,7 +4,6 @@ import * as path from 'path'
 import { createHash } from 'crypto'
 import { BaseService, ServiceEvent } from '../core/BaseService'
 import db from '../db'
-// import log from 'electron-log' // 暂时注释，未使用
 
 export interface FileMetadata {
   id: string

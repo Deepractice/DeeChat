@@ -271,7 +271,7 @@ export class MCPCacheService {
     return {
       toolsCache: {
         size: this.toolsCache.size,
-        hitRate: 0 // TODO: 实现命中率统计
+        hitRate: 0
       },
       toolCallCache: {
         size: this.toolCallCache.size,

@@ -17,7 +17,7 @@ const DEFAULT_CONFIG = {
   provider: 'openai',
   model: '', // 动态从API获取，不写死
   apiKey: 'sk-cVZTEb3pLEKqM0gfWPz3QE9jXc8cq9Zyh0Api8rESjkITqto',
-  baseURL: 'https://api.chatanywhere.tech/v1/',
+  baseURL: 'https://api.chatanywhere.tech/v1',
   isEnabled: true,
   priority: 10
 }
@@ -214,7 +214,11 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
               
               try {
                 // 🔥 使用LangChain服务的getAvailableModels方法获取真实的模型列表
-                const models = await window.electronAPI.langchain.getAvailableModels(configItem)
+                const models = await window.electronAPI.model.fetchModels(
+                  configItem.provider,
+                  configItem.apiKey,
+                  configItem.baseURL
+                )
                 
                 if (models && Array.isArray(models) && models.length > 0) {
                   // 使用API返回的实际模型列表
@@ -263,10 +267,25 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
       if (modelOptions.length === 0) {
         console.log('📦 没有用户配置，使用默认配置从API获取模型')
         
+        // 🚨 调试日志：检查window.electronAPI
+        console.log('🔧 [DEBUG] window.electronAPI存在:', !!window.electronAPI)
+        console.log('🔧 [DEBUG] window.electronAPI.model存在:', !!window.electronAPI?.model)
+        console.log('🔧 [DEBUG] window.electronAPI.model.fetchModels类型:', typeof window.electronAPI?.model?.fetchModels)
+        console.log('🔧 [DEBUG] window.electronAPI完整结构:', Object.keys(window.electronAPI || {}))
+        console.log('🔧 [DEBUG] model对象完整结构:', Object.keys(window.electronAPI?.model || {}))
+        
         try {
-          const defaultModels = await window.electronAPI.langchain.getAvailableModels(DEFAULT_CONFIG)
+          const response = await window.electronAPI.model.fetchModels(
+            DEFAULT_CONFIG.provider,
+            DEFAULT_CONFIG.apiKey,
+            DEFAULT_CONFIG.baseURL
+          )
           
-          if (defaultModels && Array.isArray(defaultModels) && defaultModels.length > 0) {
+          console.log('🔧 [DEBUG] fetchModels响应:', response)
+          
+          // 处理响应格式：{ success: true, data: models[] }
+          if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+            const defaultModels = response.data
             defaultModels.forEach(modelName => {
               if (!modelName) return
               
@@ -290,7 +309,7 @@ const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
             
             console.log('✅ 从默认配置API获取到', defaultModels.length, '个模型')
           } else {
-            console.log('⚠️ 默认配置也无法获取到模型')
+            console.log('⚠️ 默认配置也无法获取到模型，响应:', response)
           }
         } catch (error) {
           console.error('❌ 默认配置API获取失败:', error)

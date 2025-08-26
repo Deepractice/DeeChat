@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { ChatMessage, ChatSession, EnhancedChatSession } from '../../../../shared/types'
 import { SessionService } from '../../services/SessionService'
 import { ParsedRole, parsePromptXWelcome, RoleCache } from '../../utils/promptxParser'
+import { generateMessageId, generateSessionId } from '../../../../shared/utils/idGenerator'
 
 interface ChatState {
   currentSession: EnhancedChatSession | null  // 🔥 使用增强的会话类型
@@ -24,6 +25,20 @@ interface ChatState {
     lastUpdated: string | null
     error: string | null
     initialized: boolean  // 标记是否已初始化
+  }
+  // 🎯 新增：角色激活状态（来自后端SmartLayeredPromptSystem）
+  roleActivation: {
+    activeRole: string | null           // 当前激活的角色
+    isActivated: boolean                // 角色是否成功激活
+    activationSuccess: boolean          // 角色激活是否成功
+    roleContent?: string                // 角色内容（调试用）
+    roleMetadata?: {                    // 角色元数据
+      name: string
+      description?: string
+      lastActivated: Date
+    }
+    error?: string                      // 角色激活错误信息
+    lastUpdated?: Date                  // 最后更新时间
   }
 }
 
@@ -49,6 +64,16 @@ const initialState: ChatState = {
     error: null,
     initialized: false  // 初始值为false
   },
+  // 🎯 角色激活初始状态
+  roleActivation: {
+    activeRole: null,
+    isActivated: false,
+    activationSuccess: false,
+    roleContent: undefined,
+    roleMetadata: undefined,
+    error: undefined,
+    lastUpdated: undefined
+  },
 }
 
 // 🗑️ [已删除] sendMessage thunk - 统一使用useUnifiedMessage hook中的流式方法
@@ -66,7 +91,7 @@ export const loadChatHistory = createAsyncThunk(
 
     if (window.electronAPI?.langchain?.getAllSessions) {
       // console.log('✅ 使用新版会话API');
-      const response = await window.electronAPI.langchain.getAllSessions()
+      const response = await window.electronAPI.chat.getHistory()
       return response
     } else {
       // console.log('⚠️ 降级到旧版API');
@@ -91,9 +116,9 @@ export const saveCurrentSession = createAsyncThunk(
     //   sessionData: state.chat.currentSession
     // });
 
-    if (window.electronAPI?.langchain?.saveSession) {
+    if (window.electronAPI?.chat?.saveMessage) {
       // console.log('✅ 调用保存会话API');
-      const response = await window.electronAPI.langchain.saveSession(state.chat.currentSession)
+      const response = await window.electronAPI.chat.saveMessage(state.chat.currentSession)
       return response
     }
     console.error('❌ 保存会话功能不可用');
@@ -105,11 +130,9 @@ export const saveCurrentSession = createAsyncThunk(
 export const deleteSession = createAsyncThunk(
   'chat/deleteSession',
   async (sessionId: string) => {
-    if (window.electronAPI?.langchain?.deleteSession) {
-      const response = await window.electronAPI.langchain.deleteSession(sessionId)
-      return { sessionId, response }
-    }
-    throw new Error('删除会话功能不可用')
+    // 调用SessionService删除会话
+    await SessionService.deleteSession(sessionId);
+    return { sessionId };
   }
 )
 
@@ -156,12 +179,10 @@ export const loadAvailableRoles = createAsyncThunk(
       if (forceRefresh) {
         console.log('[Redux] 执行强制刷新，重新初始化PromptX资源...');
         try {
-          // 🔥 获取用户数据目录作为统一的PromptX工作目录
-          const userDataPath = await window.electronAPI.file.getAppDataPath();
-          console.log('[Redux] 使用用户数据目录作为PromptX工作目录:', userDataPath);
-          
-          await window.electronAPI.promptx.execute('init', [userDataPath]);
-          console.log('[Redux] PromptX资源重新扫描完成');
+          // ✅ PromptX 支持自动初始化，不需要显式调用 init
+          // 直接刷新资源发现即可
+          console.log('[Redux] 跳过init调用，PromptX将自动初始化');
+          // 这里可以添加其他资源刷新逻辑
         } catch (initError) {
           console.warn('[Redux] PromptX init警告，继续执行welcome:', initError);
         }
@@ -292,7 +313,7 @@ const chatSlice = createSlice({
     // 创建新会话
     createNewSession: (state) => {
       const newSession: ChatSession = {
-        id: Date.now().toString(),
+        id: generateSessionId(),
         title: '新对话',
         messages: [],
         createdAt: Date.now(),
@@ -324,7 +345,7 @@ const chatSlice = createSlice({
       if (!state.currentSession) {
         // 如果没有当前会话，创建一个新的
         const newSession: ChatSession = {
-          id: Date.now().toString(),
+          id: generateSessionId(),
           title: message.slice(0, 20) + '...',
           messages: [],
           createdAt: Date.now(),
@@ -341,7 +362,7 @@ const chatSlice = createSlice({
       }
 
       const userMessage: ChatMessage = {
-        id: Date.now().toString(),
+        id: generateMessageId(),
         role: 'user',
         content: message,
         timestamp: Date.now(),
@@ -364,7 +385,7 @@ const chatSlice = createSlice({
       }
 
       const aiMessage: ChatMessage = {
-        id: Date.now().toString(),
+        id: generateMessageId(),
         role: 'assistant',
         content: action.payload.content,
         timestamp: Date.now(),
@@ -483,6 +504,37 @@ const chatSlice = createSlice({
       state.roles.initialized = false  // 重置初始化标志，允许重新加载
     },
 
+    // 🎯 角色激活状态管理（后端返回的状态信息）
+    updateRoleActivationStatus: (state, action: PayloadAction<{
+      activeRole: string | null
+      isActivated: boolean
+      activationSuccess: boolean
+      roleContent?: string
+      roleMetadata?: {
+        name: string
+        description?: string
+        lastActivated: Date
+      }
+      error?: string
+    }>) => {
+      state.roleActivation = {
+        ...action.payload,
+        lastUpdated: new Date()
+      }
+    },
+
+    // 清除角色激活状态
+    clearRoleActivationStatus: (state) => {
+      state.roleActivation = {
+        activeRole: null,
+        isActivated: false,
+        activationSuccess: false,
+        roleContent: undefined,
+        roleMetadata: undefined,
+        error: undefined,
+        lastUpdated: new Date()
+      }
+    },
 
     // 🔥 流式消息相关reducers
     // 开始流式消息
@@ -508,18 +560,23 @@ const chatSlice = createSlice({
       state.streamingMessage.currentStage = null
       state.isLoading = false
 
-      // 添加AI消息到当前会话
+      // 只有当有实际内容或工具执行时才添加AI消息到当前会话
       if (state.currentSession) {
-        const aiMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: action.payload.content,
-          timestamp: Date.now(),
-          modelId: action.payload.model,
-          toolExecutions: action.payload.toolExecutions,
+        const hasContent = action.payload.content && action.payload.content.trim().length > 0
+        const hasToolExecutions = action.payload.toolExecutions && action.payload.toolExecutions.length > 0
+        
+        if (hasContent || hasToolExecutions) {
+          const aiMessage: ChatMessage = {
+            id: generateMessageId(),
+            role: 'assistant',
+            content: action.payload.content || '',
+            timestamp: Date.now(),
+            modelId: action.payload.model,
+            toolExecutions: action.payload.toolExecutions,
+          }
+          state.currentSession.messages.push(aiMessage)
+          state.currentSession.updatedAt = Date.now()
         }
-        state.currentSession.messages.push(aiMessage)
-        state.currentSession.updatedAt = Date.now()
       }
     },
 
@@ -703,6 +760,9 @@ export const {
   clearCurrentRole,
   clearRoleError,
   refreshRoleCache,
+  // 🎯 角色激活状态actions
+  updateRoleActivationStatus,
+  clearRoleActivationStatus,
   // 🔥 流式消息actions
   startStreamingMessage,
   addStreamUpdate,

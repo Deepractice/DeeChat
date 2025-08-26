@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { IPromptXService, PromptXCommand } from '../../../shared/interfaces/IPromptXService';
-import { DEECHAT_PROJECT_DIR } from '../../../shared/constants/promptx';
+import { DEECHAT_PROJECT_DIR, setPromptXEnvironmentVariables } from '../../../shared/constants/promptx';
 
 /**
  * PromptX本地调用服务
@@ -59,7 +59,7 @@ export class PromptXLocalService implements IPromptXService {
   }
 
   /**
-   * 初始化PromptX，按照正确的流程：ServerEnvironment -> CLI -> 项目初始化 -> 工作区
+   * 初始化PromptX，按照正确的流程：环境变量设置 -> ServerEnvironment -> CLI -> 项目初始化
    */
   private async initialize(): Promise<void> {
     if (this.initialized) {
@@ -68,6 +68,10 @@ export class PromptXLocalService implements IPromptXService {
 
     try {
       console.log(`[PromptXLocalService] 开始初始化PromptX: ${this.promptxPath}`);
+
+      // 0. 🔥 首先设置统一的PromptX环境变量
+      setPromptXEnvironmentVariables();
+      console.log('[PromptXLocalService] PromptX环境变量设置完成');
 
       // 1. 先初始化 ServerEnvironment（模拟 CLI 模式）
       const { getGlobalServerEnvironment } = require(path.join(this.promptxPath, 'src/lib/utils/ServerEnvironment'));
@@ -99,21 +103,9 @@ export class PromptXLocalService implements IPromptXService {
         console.log('[PromptXLocalService] CLI ServerEnvironment初始化成功');
       }
 
-      // 3. 🔥 设置DeeChat项目工作目录：初始化PromptX项目环境
-      try {
-        // 使用DeeChat项目目录作为PromptX的项目工作目录
-        // PromptX会将此目录注册为当前项目，同时全局资源仍存储在~/.promptx
-        const workingDirectory = DEECHAT_PROJECT_DIR;
-          
-        console.log(`[PromptXLocalService] 正在设置DeeChat为PromptX项目: ${workingDirectory}`);
-        
-        // 调用init命令设置项目工作目录
-        const initResult = await this.promptxCLI.execute('init', [workingDirectory]);
-        console.log('[PromptXLocalService] PromptX项目环境设置成功:', initResult);
-      } catch (initError) {
-        console.warn('[PromptXLocalService] PromptX项目初始化警告:', initError);
-        // 项目初始化失败不阻止整个服务启动，某些功能可能会受限
-      }
+      // 3. ✅ 跳过项目初始化，使用全局模式
+      // DeeChat角色已放置在PromptX系统目录下，无需项目初始化即可发现
+      console.log(`[PromptXLocalService] 使用PromptX全局模式，跳过项目初始化`);
 
       // 4. 收集可用命令
       this.collectAvailableCommands();
@@ -279,19 +271,14 @@ export class PromptXLocalService implements IPromptXService {
    * init命令支持对象格式参数（MCP格式）或字符串格式（CLI格式）
    */
   async initWorkspace(workspacePath?: string, ideType?: string): Promise<any> {
+    // ✅ 简化为全局模式，不设置项目路径环境变量
+    // PromptX 将在全局模式下工作，避免项目初始化死锁
+    
     if (workspacePath) {
-      // 设置环境变量，让PromptX ProjectManager知道项目路径
-      process.env.PROMPTX_PROJECT_PATH = workspacePath;
-      process.env.PROMPTX_WORKSPACE = workspacePath;
-      // 备用环境变量名称
-      process.env.PROJECT_ROOT = workspacePath;
-      process.env.WORKSPACE_ROOT = workspacePath;
-      
-      console.log(`[PromptXLocalService] 设置项目路径环境变量: ${workspacePath}`);
-      
-      // 使用MCP格式的对象参数
+      console.log(`[PromptXLocalService] 忽略项目路径参数，使用全局模式: ${workspacePath}`);
+      // 使用MCP格式的对象参数，但传入null以触发全局模式
       return this.execute(PromptXCommand.INIT, [{ 
-        workingDirectory: workspacePath,
+        workingDirectory: null,  // 全局模式
         ideType: ideType 
       }]);
     }

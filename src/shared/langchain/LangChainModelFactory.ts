@@ -18,16 +18,20 @@ export class LangChainModelFactory {
    */
   static createChatModel(config: ModelConfigEntity): BaseChatModel {
     const provider = config.provider.toLowerCase();
-    log.info(`🔧 [ModelFactory] 开始创建模型 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
+    
+    // 🔧 修复URL构造问题：确保baseURL正确格式化
+    const normalizedBaseURL = this.normalizeBaseURL(config.baseURL);
+    
+    log.info(`🔧 [ModelFactory] 开始创建模型 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${normalizedBaseURL}`)
     
     switch (provider) {
       case 'openai':
-        log.info(`🤖 [ModelFactory] 创建ChatOpenAI实例 - Model: ${config.model}, BaseURL: ${config.baseURL}`)
+        log.info(`🤖 [ModelFactory] 创建ChatOpenAI实例 - Model: ${config.model}, BaseURL: ${normalizedBaseURL}`)
         return new ChatOpenAI({
           modelName: config.model, // LangChain 0.5.x 使用 modelName
           openAIApiKey: config.apiKey, // LangChain 0.5.x 使用 openAIApiKey
           configuration: {
-            baseURL: config.baseURL || 'https://api.openai.com/v1'
+            baseURL: normalizedBaseURL || 'https://api.openai.com/v1'
           },
           temperature: 0.7,
           maxTokens: 2000
@@ -42,7 +46,7 @@ export class LangChainModelFactory {
           temperature: 0.7,
           maxTokens: 2000,
           clientOptions: {
-            baseURL: config.baseURL
+            baseURL: normalizedBaseURL
           }
         });
       
@@ -59,8 +63,8 @@ export class LangChainModelFactory {
           clientOptions.httpAgent = require('https-proxy-agent')(proxyUrl)
         }
 
-        if (config.baseURL && config.baseURL !== 'https://generativelanguage.googleapis.com') {
-          clientOptions.baseURL = config.baseURL
+        if (normalizedBaseURL && normalizedBaseURL !== 'https://generativelanguage.googleapis.com') {
+          clientOptions.baseURL = normalizedBaseURL
         }
 
         return new ChatGoogleGenerativeAI({
@@ -74,12 +78,12 @@ export class LangChainModelFactory {
       // 对于自定义提供商，使用ChatOpenAI with 自定义baseURL
       // 大多数自定义API都是OpenAI兼容的
       default:
-        log.info(`🔧 [ModelFactory] 创建默认ChatOpenAI实例 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${config.baseURL}`)
+        log.info(`🔧 [ModelFactory] 创建默认ChatOpenAI实例 - Provider: ${provider}, Model: ${config.model}, BaseURL: ${normalizedBaseURL}`)
         return new ChatOpenAI({
           openAIApiKey: config.apiKey,
           modelName: config.model,
           configuration: {
-            baseURL: config.baseURL || 'https://api.openai.com/v1'
+            baseURL: normalizedBaseURL || 'https://api.openai.com/v1'
           },
           temperature: 0.7,
           maxTokens: 2000
@@ -128,6 +132,7 @@ export class LangChainModelFactory {
     params: Record<string, any>
   ): BaseChatModel {
     const provider = config.provider.toLowerCase();
+    const normalizedBaseURL = this.normalizeBaseURL(config.baseURL);
     
     switch (provider) {
       case 'openai':
@@ -135,7 +140,7 @@ export class LangChainModelFactory {
           modelName: config.model,
           openAIApiKey: config.apiKey,
           configuration: {
-            baseURL: config.baseURL || 'https://api.openai.com/v1'
+            baseURL: normalizedBaseURL || 'https://api.openai.com/v1'
           },
           ...params
         });
@@ -146,7 +151,7 @@ export class LangChainModelFactory {
           modelName: config.model,
           anthropicApiKey: config.apiKey,
           clientOptions: {
-            baseURL: config.baseURL
+            baseURL: normalizedBaseURL
           },
           ...params
         });
@@ -165,10 +170,27 @@ export class LangChainModelFactory {
           openAIApiKey: config.apiKey,
           modelName: config.model,
           configuration: {
-            baseURL: config.baseURL || 'https://api.openai.com/v1'
+            baseURL: normalizedBaseURL || 'https://api.openai.com/v1'
           },
           ...params
         });
     }
+  }
+
+  /**
+   * 规范化BaseURL，确保不会导致双斜杠问题
+   * 🔧 修复URL构造问题：移除尾随斜杠以防止//v1/messages的问题
+   */
+  private static normalizeBaseURL(baseURL?: string): string | undefined {
+    if (!baseURL) return baseURL;
+    
+    // 如果URL以斜杠结尾且包含/v1路径，移除尾随斜杠
+    if (baseURL.endsWith('/') && baseURL.includes('/v1')) {
+      const normalized = baseURL.slice(0, -1);
+      log.debug(`🔧 [ModelFactory] URL规范化: ${baseURL} → ${normalized}`);
+      return normalized;
+    }
+    
+    return baseURL;
   }
 }

@@ -1,4 +1,4 @@
-import Database = require('better-sqlite3');
+import Database from 'better-sqlite3';
 import { app } from 'electron';
 import * as path from 'path';
 

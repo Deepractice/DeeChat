@@ -42,22 +42,7 @@ declare global {
         testProvider: (configId: string) => Promise<any>
       }
 
-      // LangChain集成API
-      langchain: {
-        getAllConfigs: () => Promise<any>
-        saveConfig: (configData: any) => Promise<any>
-        deleteConfig: (id: string) => Promise<any>
-        testConfig: (configData: any) => Promise<any>
-        getAvailableModels: (configData: any) => Promise<any>
-        refreshProviderModels: (configId: string) => Promise<any>
-        sendMessageWithConfig: (request: any, configData: any) => Promise<any>
-        sendMessageWithDefault: (request: any) => Promise<any>
-        getProviderStats: () => Promise<any>
-        testAllEnabledConfigs: () => Promise<any>
-        getAllSessions: () => Promise<any>
-        saveSession: (sessionData: any) => Promise<any>
-        deleteSession: (sessionId: string) => Promise<any>
-      }
+      // LangChain集成API 已移除，使用 ai: 接口
 
       // MCP API
       mcp: {

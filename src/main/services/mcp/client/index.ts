@@ -3,14 +3,11 @@
  * 管理和连接外部MCP服务器的相关组件
  */
 
-// MCP客户端管理器
-export { SimpleMCPClientManager } from './SimpleMCPClientManager';
+// MCP客户端（简化版）
+export { MCPClient } from './MCPClient';
 
 // MCP配置服务
 export { MCPConfigService } from './MCPConfigService';
-
-// MCP集成服务
-export { MCPIntegrationService } from './MCPIntegrationService';
 
 // MCP缓存服务
 export { MCPCacheService } from './MCPCacheService';

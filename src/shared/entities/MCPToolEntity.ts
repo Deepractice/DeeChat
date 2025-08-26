@@ -16,6 +16,9 @@ export interface MCPToolConfig {
     required?: string[];
   };
   
+  // 完整工具定义 - 用于存储完整的工具提示词和使用指南
+  fullDefinition?: any;
+  
   // 工具元数据
   category?: string;
   tags?: string[];
@@ -43,6 +46,9 @@ export class MCPToolEntity {
     required?: string[];
   };
   
+  // 完整工具定义 - 用于存储完整的工具提示词和使用指南
+  public fullDefinition?: any;
+  
   // 工具元数据
   public category?: string;
   public tags: string[];
@@ -62,6 +68,7 @@ export class MCPToolEntity {
     this.serverId = config.serverId;
     this.serverName = config.serverName;
     this.inputSchema = config.inputSchema;
+    this.fullDefinition = config.fullDefinition;
     this.category = config.category;
     this.tags = config.tags || [];
     this.version = config.version;
@@ -221,6 +228,7 @@ export class MCPToolEntity {
       serverId: this.serverId,
       serverName: this.serverName,
       inputSchema: this.inputSchema,
+      fullDefinition: this.fullDefinition,
       category: this.category,
       tags: this.tags,
       version: this.version,

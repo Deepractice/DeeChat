@@ -6,11 +6,11 @@
 import log from 'electron-log'
 import { MCPServerEntity } from '../../../../shared/entities/MCPServerEntity'
 import * as path from 'path'
-import { DEECHAT_PROJECT_DIR } from '../../../../shared/constants/promptx'
+import { DEECHAT_PROJECT_DIR, setPromptXEnvironmentVariables } from '../../../../shared/constants/promptx'
 
 export class InProcessMCPServer {
   private promptxServer: any = null
-  private deechatServer: any = null // 🔥 添加DeeChat服务器实例
+  // private deechatServer: any = null // 🚫 DeeChat工作区MCP已移除
   private isRunning: boolean = false
   private workingDirectory: string
   
@@ -25,6 +25,8 @@ export class InProcessMCPServer {
    * 启动进程内MCP服务器
    */
   async start(): Promise<void> {
+    log.info(`[InProcess MCP] 🚀 开始启动进程内MCP服务器: ${this.server.name}, ID: ${this.server.id}`)
+    
     if (this.isRunning) {
       log.warn(`[InProcess MCP] 服务器已在运行: ${this.server.name}`)
       return
@@ -32,11 +34,13 @@ export class InProcessMCPServer {
 
     try {
       // 🔥 根据服务器ID选择不同的启动逻辑
+      log.info(`[InProcess MCP] 🔍 检查服务器ID: ${this.server.id}`)
+      
       if (this.server.id === 'promptx-builtin') {
+        log.info(`[InProcess MCP] ✅ 匹配到PromptX服务器，开始启动...`)
         await this.startPromptXServer()
-      } else if (this.server.id === 'deechat-workspace-builtin') {
-        await this.startDeeChatWorkspaceServer()
       } else {
+        log.error(`[InProcess MCP] ❌ 不支持的进程内服务器类型: ${this.server.id}`)
         throw new Error(`不支持的进程内服务器类型: ${this.server.id}`)
       }
 
@@ -54,9 +58,35 @@ export class InProcessMCPServer {
    */
   private async startPromptXServer(): Promise<void> {
     log.info(`[InProcess MCP] 🚀 启动进程内PromptX MCP服务器...`)
-    // 🔥 设置环境变量
+    log.info(`[InProcess MCP] 🔧 PromptX启动参数: 工作目录=${this.workingDirectory}`)
+    
+    // 🔥 设置统一的PromptX环境变量
+    setPromptXEnvironmentVariables()
     process.env.MCP_DEBUG = 'true'
-    process.env.PROMPTX_WORKSPACE = this.workingDirectory
+
+    // 🎯 🔥 CRITICAL: 直接设置ProjectManager项目路径，确保初始化目录与角色发现目录一致
+    try {
+      // 动态require PromptX的ProjectManager
+      const promptxPath = this.getPromptXPath()
+      const promptxDir = path.dirname(promptxPath)
+      const ProjectManagerPath = path.resolve(promptxDir, '../../../utils/ProjectManager.js')
+      
+      log.info(`[InProcess MCP] 🎯 直接设置ProjectManager项目路径: ${ProjectManagerPath}`)
+      const ProjectManager = require(ProjectManagerPath)
+      
+      // 直接调用静态方法设置当前项目，确保@project://协议指向正确目录
+      ProjectManager.setCurrentProject(
+        this.workingDirectory,  // 使用DeeChat项目目录
+        'electron-mcp',         // MCP ID
+        'electron',             // IDE类型
+        'stdio'                 // 传输协议
+      )
+      
+      log.info(`[InProcess MCP] ✅ ProjectManager项目路径设置成功，初始化目录与角色发现目录现已统一为: ${this.workingDirectory}`)
+    } catch (error) {
+      log.error(`[InProcess MCP] ❌ 设置ProjectManager项目路径失败:`, error)
+      // 不中断启动流程，继续使用环境变量方式
+    }
 
     // 🔥 切换到PromptX工作目录
     const originalCwd = process.cwd()
@@ -71,45 +101,82 @@ export class InProcessMCPServer {
 
     process.chdir(this.workingDirectory)
 
-    // 🔥 动态加载PromptX MCP服务器
+    // 🔥 动态加载PromptX MCP服务器（支持ES模块）
     const promptxPath = this.getPromptXPath()
     log.info(`[InProcess MCP] 📦 加载PromptX模块: ${promptxPath}`)
 
-    // 清除require缓存以确保重新加载
-    delete require.cache[require.resolve(promptxPath)]
+    // 🌐 添加Web API polyfill for undici兼容性
+    if (typeof (global as any).File === 'undefined') {
+      log.info(`[InProcess MCP] 🔧 添加File API polyfill for undici兼容性...`)
+      // 简单的File构造函数polyfill
+      ;(global as any).File = class File {
+        name: string
+        size: number
+        type: string
+        lastModified: number
+        
+        constructor(_fileBits: any, fileName: string, options: any = {}) {
+          this.name = fileName
+          this.size = 0
+          this.type = options.type || ''
+          this.lastModified = options.lastModified || Date.now()
+        }
+      }
+      // 也确保globalThis也有这些
+      if (typeof (globalThis as any).File === 'undefined') {
+        (globalThis as any).File = (global as any).File
+      }
+    }
 
-    const { MCPServerStdioCommand } = require(promptxPath)
-
-    // 创建服务器实例
-    this.promptxServer = new MCPServerStdioCommand()
-
-    log.info(`[InProcess MCP] ✅ PromptX MCP服务器实例创建成功`)
+    try {
+      // 🚀 使用动态import()加载ES模块兼容的PromptX服务器
+      log.info(`[InProcess MCP] 🔄 使用动态import()加载ES模块...`)
+      
+      // 动态import支持ES模块，使用Function构造器确保TypeScript不会转换它
+      const dynamicImport = new Function('modulePath', 'return import(modulePath)') as (path: string) => Promise<any>
+      const FastMCPStdioServerModule = await dynamicImport(promptxPath)
+      
+      // 处理ES模块的默认导出或具名导出
+      const FastMCPStdioServer = FastMCPStdioServerModule.default || FastMCPStdioServerModule
+      
+      // 创建服务器实例
+      this.promptxServer = new FastMCPStdioServer()
+      
+      // 🔥 启动服务器以初始化工具注册
+      await this.promptxServer.start()
+      
+      log.info(`[InProcess MCP] ✅ PromptX MCP服务器实例创建并启动成功（ES模块模式）`)
+    } catch (error) {
+      log.error(`[InProcess MCP] ❌ ES模块加载失败，尝试CommonJS回退:`, error)
+      
+      try {
+        // 🔄 回退到CommonJS模式（为了兼容性）
+        const FastMCPStdioServer = require(promptxPath)
+        this.promptxServer = new FastMCPStdioServer()
+        
+        // 🔥 启动服务器以初始化工具注册
+        await this.promptxServer.start()
+        
+        log.info(`[InProcess MCP] ✅ PromptX MCP服务器实例创建并启动成功（CommonJS回退模式）`)
+      } catch (fallbackError) {
+        log.error(`[InProcess MCP] ❌ CommonJS回退也失败:`, fallbackError)
+        throw fallbackError
+      }
+    }
 
     // 🔥 恢复原工作目录，让Electron正常运行
     process.chdir(originalCwd)
     log.info(`[InProcess MCP] 🔄 恢复工作目录: ${process.cwd()}`)
   }
 
-  /**
-   * 启动DeeChat工作区服务器
-   */
-  private async startDeeChatWorkspaceServer(): Promise<void> {
-    log.info(`[InProcess MCP] 🚀 启动进程内DeeChat工作区MCP服务器...`)
-
-    // 🔥 动态加载DeeChat工作区MCP服务器
-    const deechatPath = this.getDeeChatWorkspacePath()
-    log.info(`[InProcess MCP] 📦 加载DeeChat工作区模块: ${deechatPath}`)
-
-    // 清除require缓存以确保重新加载
-    delete require.cache[require.resolve(deechatPath)]
-
-    const { DeeChatWorkspaceMCPServer } = require(deechatPath)
-
-    // 创建服务器实例（但不启动transport，因为我们在进程内使用）
-    this.deechatServer = new DeeChatWorkspaceMCPServer()
-
-    log.info(`[InProcess MCP] ✅ DeeChat工作区MCP服务器实例创建成功`)
-  }
+  // 🚫 DeeChat工作区MCP已移除
+  // /**
+  //  * 启动DeeChat工作区服务器
+  //  */
+  // private async startDeeChatWorkspaceServer(): Promise<void> {
+  //   log.info(`[InProcess MCP] 🚀 启动进程内DeeChat工作区MCP服务器...`)
+  //   // ... 实现已移除
+  // }
 
   /**
    * 停止进程内MCP服务器
@@ -149,8 +216,6 @@ export class InProcessMCPServer {
       // 🔥 根据服务器类型选择不同的工具调用逻辑
       if (this.server.id === 'promptx-builtin' && this.promptxServer) {
         return await this.callPromptXTool(toolName, args)
-      } else if (this.server.id === 'deechat-workspace-builtin' && this.deechatServer) {
-        return await this.callDeeChatTool(toolName, args)
       } else {
         throw new Error(`服务器未就绪或不支持的服务器类型: ${this.server.id}`)
       }
@@ -169,9 +234,8 @@ export class InProcessMCPServer {
     const originalCwd = process.cwd()
     process.chdir(this.workingDirectory)
 
-    // 🎯 设置环境变量确保PromptX正确识别工作目录
-    const originalPromptXWorkspace = process.env.PROMPTX_WORKSPACE
-    process.env.PROMPTX_WORKSPACE = this.workingDirectory
+    // 🎯 确保使用统一的PromptX环境变量
+    setPromptXEnvironmentVariables()
 
     try {
       // 直接调用PromptX的工具方法
@@ -181,26 +245,18 @@ export class InProcessMCPServer {
       return result
 
     } finally {
-      // 恢复环境变量和工作目录
-      if (originalPromptXWorkspace !== undefined) {
-        process.env.PROMPTX_WORKSPACE = originalPromptXWorkspace
-      } else {
-        delete process.env.PROMPTX_WORKSPACE
-      }
+      // 恢复工作目录
       process.chdir(originalCwd)
     }
   }
 
-  /**
-   * 调用DeeChat工具
-   */
-  private async callDeeChatTool(toolName: string, args: any): Promise<any> {
-    // DeeChat工具调用不需要切换工作目录
-    const result = await this.deechatServer.callTool(toolName, args)
-
-    log.info(`[InProcess MCP] ✅ DeeChat工具调用完成: ${toolName}`)
-    return result
-  }
+  // 🚫 DeeChat工作区MCP已移除
+  // /**
+  //  * 调用DeeChat工具
+  //  */
+  // private async callDeeChatTool(toolName: string, args: any): Promise<any> {
+  //   // ... 实现已移除
+  // }
 
   /**
    * 获取工具列表
@@ -216,8 +272,6 @@ export class InProcessMCPServer {
       // 🔥 根据服务器类型获取工具列表
       if (this.server.id === 'promptx-builtin' && this.promptxServer) {
         tools = this.promptxServer.getToolDefinitions()
-      } else if (this.server.id === 'deechat-workspace-builtin' && this.deechatServer) {
-        tools = this.deechatServer.getToolDefinitions()
       } else {
         throw new Error(`服务器未就绪或不支持的服务器类型: ${this.server.id}`)
       }
@@ -239,8 +293,6 @@ export class InProcessMCPServer {
     // 🔥 根据服务器类型检查状态
     if (this.server.id === 'promptx-builtin') {
       return this.promptxServer !== null
-    } else if (this.server.id === 'deechat-workspace-builtin') {
-      return this.deechatServer !== null
     }
 
     return false
@@ -254,25 +306,18 @@ export class InProcessMCPServer {
 
     if (isDev) {
       // 开发环境
-      return path.resolve(__dirname, '../../../../../../dist/main/resources/promptx/package/src/lib/mcp/MCPServerStdioCommand.js')
+      return path.resolve(__dirname, '../../../../../../dist/main/resources/promptx/package/src/lib/mcp/server/FastMCPStdioServer.js')
     } else {
       // 生产环境
-      return path.join(process.resourcesPath, 'resources/promptx/package/src/lib/mcp/MCPServerStdioCommand.js')
+      return path.join(process.resourcesPath, 'resources/promptx/package/src/lib/mcp/server/FastMCPStdioServer.js')
     }
   }
 
-  /**
-   * 获取DeeChat工作区模块路径
-   */
-  private getDeeChatWorkspacePath(): string {
-    const isDev = process.env.NODE_ENV === 'development'
-
-    if (isDev) {
-      // 开发环境：从编译后的dist目录
-      return path.resolve(__dirname, '../DeeChatWorkspaceMCPServer.js')
-    } else {
-      // 生产环境：使用打包后的资源
-      return path.join(process.resourcesPath, 'dist/main/main/services/mcp/DeeChatWorkspaceMCPServer.js')
-    }
-  }
+  // 🚫 DeeChat工作区MCP已移除
+  // /**
+  //  * 获取DeeChat工作区模块路径
+  //  */
+  // private getDeeChatWorkspacePath(): string {
+  //   // ... 实现已移除
+  // }
 }

@@ -136,14 +136,7 @@ ${content}
 ## 🎯 学习效果
 - ✅ **已激活${label}能力**
 - ✅ **相关知识已整合到AI认知体系**
-- ✅ **可立即应用于实际场景**
-
-## 🔄 下一步行动：
-- 继续学习: 使用 MCP PromptX learn 工具学习其他相关资源
-- 应用记忆: 使用 MCP PromptX recall 工具检索相关经验
-- 激活角色: 使用 MCP PromptX action 工具激活完整角色能力
-
-📍 当前状态：learned_${protocol}`
+- ✅ **可立即应用于实际场景**`
   }
 
   /**
@@ -166,13 +159,7 @@ ${errorMessage}
 - \`tool://tool-name\` - 学习工具代码
 
 🔍 查看可用资源：
-使用 MCP PromptX action 工具查看角色的所有依赖
-
-🔄 下一步行动：
-  - 继续学习: 使用 MCP PromptX learn 工具学习其他资源
-  - 应用记忆: 使用 MCP PromptX recall 工具检索相关经验
-  - 激活角色: 使用 MCP PromptX action 工具激活完整角色能力
-  - 查看角色列表: 使用 MCP PromptX welcome 工具选择其他角色`
+使用 MCP PromptX action 工具查看角色的所有依赖`
   }
 
   /**
@@ -205,11 +192,7 @@ ${errorMessage}
 
 ## 🔍 发现可学习资源
 - 使用 MCP PromptX action 工具查看角色需要的所有资源
-- 使用 MCP PromptX welcome 工具查看可用角色列表
-
-🔄 下一步行动：
-  - 激活角色: 使用 MCP PromptX action 工具分析角色依赖
-  - 查看角色: 使用 MCP PromptX welcome 工具选择感兴趣的角色`
+- 使用 MCP PromptX welcome 工具查看可用角色列表`
   }
 
   /**
@@ -354,9 +337,6 @@ ${errorMessage}
       ...output,
       toString () {
         const divider = '='.repeat(60)
-        const nextSteps = (pateoas.nextActions || [])
-          .map(action => `  - ${action.name}: ${action.description}\n    方式: ${action.method || action.command || '通过MCP工具'}`)
-          .join('\n')
 
         return `${projectPrompt}
 
@@ -366,9 +346,6 @@ ${divider}
 
 📜 锦囊内容：
 ${content}
-
-🔄 下一步行动：
-${nextSteps}
 
 📍 当前状态：${pateoas.currentState}
 ${divider}

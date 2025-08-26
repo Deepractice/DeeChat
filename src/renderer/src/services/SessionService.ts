@@ -56,7 +56,7 @@ export class SessionService {
         })
         
         // 🔥 修复：获取所有配置，处理不同的API响应格式
-        const configsResponse = await window.electronAPI?.langchain?.getAllConfigs()
+        const configsResponse = await window.electronAPI?.model?.getAll()
         console.log('🔍 [SessionService] 配置API原始响应:', configsResponse)
 
         // 处理不同的响应格式
@@ -174,6 +174,20 @@ export class SessionService {
     } catch (error) {
       console.error('❌ [SessionService] 保存会话失败:', error)
       return false
+    }
+  }
+
+  /**
+   * 删除会话
+   * @param sessionId 会话ID
+   */
+  static async deleteSession(sessionId: string): Promise<boolean> {
+    try {
+      const response = await window.electronAPI?.chat?.deleteSession(sessionId)
+      return response?.success || false
+    } catch (error) {
+      console.error('❌ [SessionService] 删除会话失败:', error)
+      throw error
     }
   }
 }
