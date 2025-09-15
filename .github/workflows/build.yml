@@ -71,7 +71,7 @@ jobs:
       if: matrix.platform == 'linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev libgconf-2-4
+        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
 
     # 6. 安装根目录依赖（workspace）
     - name: 📦 Install root dependencies
@@ -86,13 +86,8 @@ jobs:
     - name: 🔨 Rebuild native modules
       working-directory: app
       run: |
-        # Windows使用PowerShell执行bat脚本
-        if [ "${{ matrix.platform }}" = "win32" ]; then
-          powershell -Command "& {./scripts/rebuild-native.bat}"
-        else
-          # macOS/Linux使用sh脚本
-          ./scripts/rebuild-native.sh
-        fi
+        # 直接使用npx @electron/rebuild，避免脚本依赖nvm
+        npx @electron/rebuild
 
     # 9. 构建TypeScript
     - name: 🏗️ Build TypeScript
