@@ -156,12 +156,7 @@
       ],
       "icon": "assets/icon-512.png",
       "category": "Office",
-      "maintainer": "DeeChat Team <team@deechat.ai>",
-      "desktop": {
-        "Name": "DeeChat",
-        "Comment": "Advanced AI Chat Application with DDD Architecture",
-        "Keywords": "AI;Chat;Assistant;Productivity;"
-      }
+      "maintainer": "DeeChat Team <team@deechat.ai>"
     },
     "nsis": {
       "oneClick": false,
