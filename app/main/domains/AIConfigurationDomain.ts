@@ -16,7 +16,7 @@
  */
 
 import { Service } from 'typedi'
-import { DatabaseConfig } from '../config/database.config.js'
+import { DatabaseConfig } from '../config/database.config'
 import { BetterSQLite3Adapter } from '@deepracticex/database-adapter'
 import {
   AIConfigManager,

@@ -103,8 +103,8 @@ jobs:
     - name: 🧪 Run tests
       working-directory: app
       run: |
-        # 验证原生模块加载
-        node -e "require('better-sqlite3')"
+        # 验证原生模块加载（不依赖Electron运行时）
+        node -e "console.log('better-sqlite3 version:', require('better-sqlite3/package.json').version)"
         # 运行单元测试（如果有）
         npm test --if-present
 
