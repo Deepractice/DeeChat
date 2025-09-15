@@ -1,0 +1,168 @@
+name: 🚀 DeeChat Cross-Platform Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-11]
+        include:
+          - os: ubuntu-20.04
+            platform: linux
+            arch: x64
+            artifact: DeeChat-linux-x64.AppImage
+          - os: windows-2019
+            platform: win32
+            arch: x64
+            artifact: DeeChat-Setup-*.exe
+          - os: macos-11
+            platform: darwin
+            arch: x64
+            artifact: DeeChat-*.dmg
+
+    steps:
+    # 1. 检出代码
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    # 2. 设置Node.js环境
+    - name: 🟢 Setup Node.js 20.19.5
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.19.5'
+        cache: 'npm'
+        cache-dependency-path: app/package-lock.json
+
+    # 3. Windows特殊准备：配置MSBuild
+    - name: 🪟 Setup MSBuild (Windows)
+      if: matrix.os == 'windows-2019'
+      uses: microsoft/setup-msbuild@v1.3
+
+    # 4. macOS特殊准备：配置Apple证书
+    - name: 🍎 Setup Apple certificates (macOS)
+      if: matrix.os == 'macos-11'
+      env:
+        APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      run: |
+        if [ -n "$APPLE_CERTIFICATE" ]; then
+          echo "Setting up Apple certificates..."
+          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "" build.keychain
+          security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -s ~/Library/Keychains/build.keychain
+          security default-keychain -s ~/Library/Keychains/build.keychain
+          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+        fi
+
+    # 5. Linux特殊准备：安装系统依赖
+    - name: 🐧 Install Linux dependencies
+      if: matrix.os == 'ubuntu-20.04'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2-dev libxkbcommon-dev libxss1-dev libasound2-dev
+
+    # 6. 进入app目录并安装依赖
+    - name: 📦 Install dependencies
+      working-directory: app
+      run: |
+        npm ci
+
+    # 7. 重新编译原生模块（关键步骤）
+    - name: 🔨 Rebuild native modules
+      working-directory: app
+      run: |
+        # Windows使用bat脚本
+        if [ "${{ matrix.platform }}" = "win32" ]; then
+          ./scripts/rebuild-native.bat
+        else
+          # macOS/Linux使用sh脚本
+          ./scripts/rebuild-native.sh
+        fi
+
+    # 8. 构建TypeScript
+    - name: 🏗️ Build TypeScript
+      working-directory: app
+      run: npm run build
+
+    # 9. 运行测试
+    - name: 🧪 Run tests
+      working-directory: app
+      run: |
+        # 验证原生模块加载
+        node -e "require('better-sqlite3')"
+        # 运行单元测试（如果有）
+        npm test --if-present
+
+    # 10. 构建Electron应用
+    - name: 📱 Build Electron app
+      working-directory: app
+      env:
+        # macOS代码签名环境变量
+        CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-11' && 'true' || 'false' }}
+        # Windows代码签名环境变量
+        CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+        CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        # 公证相关环境变量
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        # 根据不同平台构建
+        if [ "${{ matrix.platform }}" = "win32" ]; then
+          npm run dist:win
+        elif [ "${{ matrix.platform }}" = "darwin" ]; then
+          npm run dist:mac
+        else
+          npm run dist:linux
+        fi
+
+    # 11. 上传构建产物
+    - name: 📤 Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: deechat-${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          app/dist/*.exe
+          app/dist/*.dmg
+          app/dist/*.AppImage
+          app/dist/*.deb
+          app/dist/*.rpm
+        retention-days: 30
+
+  # 12. 发布Job（仅在tag推送时运行）
+  release:
+    name: 🎉 Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - name: 📥 Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: 📝 Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/*.exe
+          **/*.dmg
+          **/*.AppImage
+          **/*.deb
+          **/*.rpm
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,14 +10,9 @@
   "scripts": {
     "dev": "cd app && npm run dev",
     "start": "cd app && npm start",
-    "build": "npm run build:packages && cd app && npm run build",
-    "build:packages": "npm run build:ai-config && npm run build:ai-chat && npm run build:mcp-client && npm run build:token-calculator",
-    "build:ai-config": "cd packages/ai-config && npm run build",
-    "build:ai-chat": "cd packages/ai-chat && npm run build",
-    "build:mcp-client": "cd packages/mcp-client && npm run build",
-    "build:token-calculator": "cd packages/token-calculator && npm run build",
-    "clean": "cd app && npm run clean && cd ../packages/ai-config && npm run clean && cd ../ai-chat && npm run clean",
-    "install:all": "npm install && cd app && npm install",
+    "build": "cd app && npm run build",
+    "clean": "cd app && npm run clean",
+    "install:all": "npm install && cd app && npm install && cd app/renderer && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
@@ -29,5 +24,8 @@
     "electron-rebuild": "^3.2.9",
     "rimraf": "^5.0.0",
     "typescript": "^5.2.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0"
   }
 }
