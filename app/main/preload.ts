@@ -217,3 +217,6 @@ declare global {
     }
   }
 }
+
+// 导出一个空对象以让TypeScript将此文件视为模块
+export {}

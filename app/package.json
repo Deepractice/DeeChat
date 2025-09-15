@@ -9,7 +9,7 @@
     "dev": "./scripts/run-app.sh dev",
     "dev:main": "tsc --build main/tsconfig.json --watch",
     "dev:renderer": "cd renderer && npm run dev",
-    "build": "./scripts/run-app.sh build",
+    "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc --build main/tsconfig.json",
     "build:renderer": "cd renderer && npm run build",
     "clean": "rimraf dist",
