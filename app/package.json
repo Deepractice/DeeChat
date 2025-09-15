@@ -24,7 +24,6 @@
     "publish": "npm run build && electron-builder --publish=always"
   },
   "dependencies": {
-    "@deechat/mcp-client": "^1.0.0",
     "@deepracticex/ai-chat": "^0.1.2",
     "@deepracticex/ai-config": "^0.3.0",
     "@deepracticex/conversation-storage": "^0.3.0",

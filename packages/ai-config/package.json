@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/ai-config",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "An minimalist AI configuration management library focused on configuration storage and preference management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -37,7 +37,7 @@
     "zod": "^3.22.4"
   },
   "peerDependencies": {
-    "better-sqlite3": ">=8.0.0"
+    "better-sqlite3": "^12.2.0"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {

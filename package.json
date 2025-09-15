@@ -4,8 +4,7 @@
   "description": "DeeChat - Advanced AI Chat Application with DDD Architecture",
   "private": true,
   "workspaces": [
-    "app",
-    "packages/*"
+    "app"
   ],
   "scripts": {
     "dev": "cd app && npm run dev",

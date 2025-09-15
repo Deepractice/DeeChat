@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/conversation-storage",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeeChat 对话存储管理包 - 纯存储层实现，支持统一数据库文件的表管理模式",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,7 +33,7 @@
     "zod": "^3.22.4"
   },
   "peerDependencies": {
-    "better-sqlite3": ">=8.0.0"
+    "better-sqlite3": "^12.2.0"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {

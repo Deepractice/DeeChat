@@ -82,19 +82,24 @@ jobs:
       working-directory: app
       run: npm ci
 
-    # 8. 重新编译原生模块（关键步骤）
+    # 8. 安装renderer目录依赖
+    - name: 📦 Install renderer dependencies
+      working-directory: app/renderer
+      run: npm ci
+
+    # 9. 重新编译原生模块（关键步骤）
     - name: 🔨 Rebuild native modules
       working-directory: app
       run: |
         # 直接使用npx @electron/rebuild，避免脚本依赖nvm
         npx @electron/rebuild
 
-    # 9. 构建TypeScript
-    - name: 🏗️ Build TypeScript
+    # 10. 构建TypeScript和前端
+    - name: 🏗️ Build TypeScript and Frontend
       working-directory: app
       run: npm run build
 
-    # 10. 运行测试
+    # 11. 运行测试
     - name: 🧪 Run tests
       working-directory: app
       run: |
@@ -103,7 +108,7 @@ jobs:
         # 运行单元测试（如果有）
         npm test --if-present
 
-    # 11. 构建Electron应用
+    # 12. 构建Electron应用
     - name: 📱 Build Electron app
       working-directory: app
       env:
@@ -126,7 +131,7 @@ jobs:
           npm run dist:linux
         fi
 
-    # 12. 上传构建产物
+    # 13. 上传构建产物
     - name: 📤 Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -139,7 +144,7 @@ jobs:
           app/dist/*.rpm
         retention-days: 30
 
-  # 13. 发布Job（仅在tag推送时运行）
+  # 14. 发布Job（仅在tag推送时运行）
   release:
     name: 🎉 Create Release
     needs: build
