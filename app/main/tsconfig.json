@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
+    "module": "Node16",
     "lib": ["ES2020"],
     "outDir": "../dist/main",
     "rootDir": "./",
@@ -15,7 +15,7 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "moduleResolution": "node",
+    "moduleResolution": "Node16",
     "allowImportingTsExtensions": false,
     "noEmit": false,
     "baseUrl": "./",
