@@ -25,7 +25,8 @@ export default defineConfig({
       alias: {
         '@': resolve(__dirname, 'main'),
         '@shared': resolve(__dirname, 'shared')
-      }
+      },
+      extensions: ['.ts', '.js', '.mjs', '.json']
     }
   },
   preload: {
