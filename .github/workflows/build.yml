@@ -11,7 +11,7 @@ jobs:
   build-macos:
     name: Build macOS
     runs-on: macos-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
 
     steps:
       - name: 📥 Checkout code
@@ -86,7 +86,7 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
 
     steps:
       - name: 📥 Checkout code
@@ -140,7 +140,7 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
 
     steps:
       - name: 📥 Checkout code
@@ -192,43 +192,6 @@ jobs:
             app/release/*.rpm
             app/release/latest-linux.yml
           retention-days: 30
-
-  # 开发分支快速验证（不构建所有平台）
-  quick-check:
-    name: Quick Check
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            app/package.json
-
-      - name: 📦 Install dependencies
-        run: |
-          npm ci
-          cd app && npm ci
-          cd renderer && npm ci
-
-      - name: 🏗️ Build check
-        working-directory: app
-        run: npm run build
-
-      - name: 🧪 Run tests
-        working-directory: app
-        run: |
-          # 验证构建产物
-          test -f "out/main/index.js" || (echo "Main process build failed" && exit 1)
-          test -d "out/renderer" || (echo "Renderer build failed" && exit 1)
-          echo "✅ Build verification passed"
 
   # 发布 Job（仅在 tag 推送时运行）
   release:
