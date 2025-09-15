@@ -24,24 +24,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      - name: 🐧 Install Linux dependencies (for better-sqlite3)
+      - name: 📦 Install all dependencies using workspace
         run: |
-          # macOS doesn't need additional system deps for better-sqlite3
+          # 使用根目录的 install:all 脚本，这会安装所有依赖
+          npm run install:all
 
-      - name: 📦 Install root dependencies
-        run: npm ci
-
-      - name: 📦 Install app dependencies
-        working-directory: app
-        run: npm install
-
-      - name: 📦 Install renderer dependencies
-        working-directory: app/renderer
-        run: npm ci
-
-      - name: 🏗️ Build app
-        working-directory: app
-        run: npm run build
+      - name: 🏗️ Build application
+        run: |
+          # 使用根目录的 build 脚本
+          npm run build
 
       - name: 🍎 Import Code-Signing Certificates
         if: startsWith(github.ref, 'refs/tags/v')
@@ -61,8 +52,8 @@ jobs:
           fi
 
       - name: 📱 Build macOS app
-        working-directory: app
         run: |
+          cd app
           npx electron-builder --mac --x64 --arm64 --publish=never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
@@ -100,24 +91,15 @@ jobs:
       - name: 🪟 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: 📦 Install root dependencies
-        run: npm ci
+      - name: 📦 Install all dependencies using workspace
+        run: npm run install:all
 
-      - name: 📦 Install app dependencies
-        working-directory: app
-        run: npm install
-
-      - name: 📦 Install renderer dependencies
-        working-directory: app/renderer
-        run: npm ci
-
-      - name: 🏗️ Build app
-        working-directory: app
+      - name: 🏗️ Build application
         run: npm run build
 
       - name: 📱 Build Windows app
-        working-directory: app
         run: |
+          cd app
           npx electron-builder --win --x64 --ia32 --publish=never
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
@@ -154,24 +136,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
 
-      - name: 📦 Install root dependencies
-        run: npm ci
+      - name: 📦 Install all dependencies using workspace
+        run: npm run install:all
 
-      - name: 📦 Install app dependencies
-        working-directory: app
-        run: npm install
-
-      - name: 📦 Install renderer dependencies
-        working-directory: app/renderer
-        run: npm ci
-
-      - name: 🏗️ Build app
-        working-directory: app
+      - name: 🏗️ Build application
         run: npm run build
 
       - name: 📱 Build Linux app
-        working-directory: app
         run: |
+          cd app
           npx electron-builder --linux --x64 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

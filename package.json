@@ -11,7 +11,7 @@
     "start": "cd app && npm start",
     "build": "cd app && npm run build",
     "clean": "cd app && npm run clean",
-    "install:all": "npm install && cd app && npm install && cd app/renderer && npm install",
+    "install:all": "npm install && cd app && npm install && cd renderer && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
