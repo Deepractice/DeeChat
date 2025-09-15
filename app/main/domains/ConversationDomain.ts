@@ -18,8 +18,8 @@ import { Service } from 'typedi'
 import { AIChat, Message, ChatOptions, ChatStreamChunk, AIChatConfig } from '@deepracticex/ai-chat'
 import { BetterSQLite3Adapter } from '@deepracticex/database-adapter'
 import { ConversationStorage } from '@deepracticex/conversation-storage'
-import { IDomain } from '../ipc/ipc-registry.js'
-import { DatabaseConfig } from '../config/database.config.js'
+import { IDomain } from '../ipc/ipc-registry'
+import { DatabaseConfig } from '../config/database.config'
 
 // ==================== 类型定义 ====================
 
@@ -517,7 +517,7 @@ export class ConversationDomain implements IDomain {
     })
 
     // 批量数据转换：存储层模型 → 领域模型
-    return storageSessions.map(session => ({
+    return storageSessions.map((session: any) => ({
       id: session.id,
       title: session.title,
       ai_model: session.ai_config_name,
