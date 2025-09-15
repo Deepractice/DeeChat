@@ -43,7 +43,11 @@
     "typescript": "^5.2.0",
     "wait-on": "^7.0.1"
   },
-  "author": "DeeChat Team",
+  "author": {
+    "name": "DeeChat Team",
+    "email": "team@deechat.ai"
+  },
+  "homepage": "https://github.com/Deepractice/DeeChat",
   "license": "MIT",
   "overrides": {
     "better-sqlite3": "^12.2.0"
@@ -151,7 +155,13 @@
         }
       ],
       "icon": "assets/icon-512.png",
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "DeeChat Team <team@deechat.ai>",
+      "desktop": {
+        "Name": "DeeChat",
+        "Comment": "Advanced AI Chat Application with DDD Architecture",
+        "Keywords": "AI;Chat;Assistant;Productivity;"
+      }
     },
     "nsis": {
       "oneClick": false,
