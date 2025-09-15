@@ -55,8 +55,10 @@
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "assets"
     },
+    "compression": "maximum",
     "files": [
       "out/**/*",
       "node_modules/**/*",
@@ -103,7 +105,11 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist"
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "$(APPLE_TEAM_ID)"
+      },
+      "minimumSystemVersion": "10.15.0"
     },
     "win": {
       "target": [
