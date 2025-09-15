@@ -1,180 +1,264 @@
-name: 🚀 DeeChat Cross-Platform Build
+name: 🚀 DeeChat Build & Release
 
 on:
   push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
+    branches: [main, develop]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            artifact: DeeChat-linux-x64.AppImage
-          - os: windows-latest
-            platform: win32
-            arch: x64
-            artifact: DeeChat-Setup-*.exe
-          - os: macos-latest
-            platform: darwin
-            arch: x64
-            artifact: DeeChat-*.dmg
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
 
     steps:
-    # 1. 检出代码
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
 
-    # 2. 设置Node.js环境
-    - name: 🟢 Setup Node.js 20.19.5
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.19.5'
-        cache: 'npm'
-        cache-dependency-path: package-lock.json
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package.json
 
-    # 3. Windows特殊准备：配置MSBuild
-    - name: 🪟 Setup MSBuild (Windows)
-      if: matrix.platform == 'win32'
-      uses: microsoft/setup-msbuild@v2
+      - name: 🐧 Install Linux dependencies (for better-sqlite3)
+        run: |
+          # macOS doesn't need additional system deps for better-sqlite3
 
-    # 4. macOS特殊准备：配置Apple证书
-    - name: 🍎 Setup Apple certificates (macOS)
-      if: matrix.platform == 'darwin'
-      env:
-        APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      run: |
-        if [ -n "$APPLE_CERTIFICATE" ]; then
-          echo "Setting up Apple certificates..."
-          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
-          security create-keychain -p "" build.keychain
-          security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -s ~/Library/Keychains/build.keychain
-          security default-keychain -s ~/Library/Keychains/build.keychain
-          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
-        fi
+      - name: 📦 Install root dependencies
+        run: npm ci
 
-    # 5. Linux特殊准备：安装系统依赖
-    - name: 🐧 Install Linux dependencies
-      if: matrix.platform == 'linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
+      - name: 📦 Install app dependencies
+        working-directory: app
+        run: npm ci
 
-    # 6. 安装根目录依赖（workspace）
-    - name: 📦 Install root dependencies
-      run: npm ci
+      - name: 📦 Install renderer dependencies
+        working-directory: app/renderer
+        run: npm ci
 
-    # 7. 安装app目录依赖
-    - name: 📦 Install app dependencies
-      working-directory: app
-      run: npm ci
+      - name: 🏗️ Build app
+        working-directory: app
+        run: npm run build
 
-    # 8. 安装renderer目录依赖
-    - name: 📦 Install renderer dependencies
-      working-directory: app/renderer
-      run: npm ci
+      - name: 🍎 Import Code-Signing Certificates
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            echo "Setting up Apple certificates..."
+            echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+            security create-keychain -p "" build.keychain
+            security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            security list-keychains -s ~/Library/Keychains/build.keychain
+            security default-keychain -s ~/Library/Keychains/build.keychain
+            security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+            security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+          fi
 
-    # 9. 重新编译原生模块（关键步骤）
-    - name: 🔨 Rebuild native modules
-      working-directory: app
-      run: |
-        # 直接使用npx @electron/rebuild，避免脚本依赖nvm
-        npx @electron/rebuild
+      - name: 📱 Build macOS app
+        working-directory: app
+        run: |
+          npx electron-builder --mac --x64 --arm64 --publish=never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 10. 确保Electron可用
-    - name: 🔧 Ensure Electron availability
-      working-directory: app
-      run: |
-        # 验证Electron安装和版本
-        npx electron --version
-        # 如果electron-builder找不到版本，尝试设置环境变量
-        echo "ELECTRON_CACHE=$HOME/.cache/electron" >> $GITHUB_ENV
+      - name: 📤 Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            app/release/*.dmg
+            app/release/*.zip
+            app/release/latest-mac.yml
+          retention-days: 30
 
-    # 11. 构建TypeScript和前端
-    - name: 🏗️ Build TypeScript and Frontend
-      working-directory: app
-      run: npm run build
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
 
-    # 12. 运行测试
-    - name: 🧪 Run tests
-      working-directory: app
-      run: |
-        # 验证原生模块加载（不依赖Electron运行时）
-        node -e "console.log('better-sqlite3 version:', require('better-sqlite3/package.json').version)"
-        # 运行单元测试（如果有）
-        npm test --if-present
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
 
-    # 13. 构建Electron应用
-    - name: 📱 Build Electron app
-      working-directory: app
-      env:
-        # macOS代码签名环境变量
-        CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'darwin' && 'true' || 'false' }}
-        # Windows代码签名环境变量
-        CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-        CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        # 公证相关环境变量
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      run: |
-        # 根据不同平台构建
-        if [ "${{ matrix.platform }}" = "win32" ]; then
-          npm run dist:win
-        elif [ "${{ matrix.platform }}" = "darwin" ]; then
-          npm run dist:mac
-        else
-          npm run dist:linux
-        fi
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package.json
 
-    # 14. 上传构建产物
-    - name: 📤 Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: deechat-${{ matrix.platform }}-${{ matrix.arch }}
-        path: |
-          app/dist/*.exe
-          app/dist/*.dmg
-          app/dist/*.AppImage
-          app/dist/*.deb
-          app/dist/*.rpm
-        retention-days: 30
+      - name: 🪟 Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-  # 15. 发布Job（仅在tag推送时运行）
+      - name: 📦 Install root dependencies
+        run: npm ci
+
+      - name: 📦 Install app dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: 📦 Install renderer dependencies
+        working-directory: app/renderer
+        run: npm ci
+
+      - name: 🏗️ Build app
+        working-directory: app
+        run: npm run build
+
+      - name: 📱 Build Windows app
+        working-directory: app
+        run: |
+          npx electron-builder --win --x64 --ia32 --publish=never
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            app/release/*.exe
+            app/release/latest.yml
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package.json
+
+      - name: 🐧 Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
+
+      - name: 📦 Install root dependencies
+        run: npm ci
+
+      - name: 📦 Install app dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: 📦 Install renderer dependencies
+        working-directory: app/renderer
+        run: npm ci
+
+      - name: 🏗️ Build app
+        working-directory: app
+        run: npm run build
+
+      - name: 📱 Build Linux app
+        working-directory: app
+        run: |
+          npx electron-builder --linux --x64 --publish=never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            app/release/*.AppImage
+            app/release/*.deb
+            app/release/*.rpm
+            app/release/latest-linux.yml
+          retention-days: 30
+
+  # 开发分支快速验证（不构建所有平台）
+  quick-check:
+    name: Quick Check
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package.json
+
+      - name: 📦 Install dependencies
+        run: |
+          npm ci
+          cd app && npm ci
+          cd renderer && npm ci
+
+      - name: 🏗️ Build check
+        working-directory: app
+        run: npm run build
+
+      - name: 🧪 Run tests
+        working-directory: app
+        run: |
+          # 验证构建产物
+          test -f "out/main/index.js" || (echo "Main process build failed" && exit 1)
+          test -d "out/renderer" || (echo "Renderer build failed" && exit 1)
+          echo "✅ Build verification passed"
+
+  # 发布 Job（仅在 tag 推送时运行）
   release:
     name: 🎉 Create Release
-    needs: build
+    needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
 
     steps:
-    - name: 📥 Download all artifacts
-      uses: actions/download-artifact@v4
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
 
-    - name: 📝 Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          **/*.exe
-          **/*.dmg
-          **/*.AppImage
-          **/*.deb
-          **/*.rpm
-        generate_release_notes: true
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 📝 Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          files: |
+            macos-build/*.dmg
+            macos-build/*.zip
+            macos-build/latest-mac.yml
+            windows-build/*.exe
+            windows-build/latest.yml
+            linux-build/*.AppImage
+            linux-build/*.deb
+            linux-build/*.rpm
+            linux-build/latest-linux.yml
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
