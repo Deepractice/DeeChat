@@ -71,7 +71,7 @@ jobs:
       if: matrix.platform == 'linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2-dev libxkbcommon-dev libxss1-dev libasound2-dev
+        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev libgconf-2-4
 
     # 6. 进入app目录并安装依赖
     - name: 📦 Install dependencies
