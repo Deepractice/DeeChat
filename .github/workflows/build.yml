@@ -22,12 +22,17 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
 
       - name: 📦 Install all dependencies using workspace
         run: |
-          # 使用根目录的 install:all 脚本，这会安装所有依赖
-          npm run install:all
+          # 优化安装：利用workspace和缓存加速
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: |
@@ -86,13 +91,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
 
       - name: 🪟 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: 📦 Install all dependencies using workspace
-        run: npm run install:all
+        run: |
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: npm run build
@@ -129,7 +140,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
 
       - name: 🐧 Install Linux dependencies
         run: |
@@ -137,7 +151,10 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
 
       - name: 📦 Install all dependencies using workspace
-        run: npm run install:all
+        run: |
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: npm run build

@@ -126,7 +126,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon-512.png",
       "verifyUpdateCodeSignature": false
     },
     "linux": {
