@@ -22,9 +22,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            app/package.json
+          cache-dependency-path: package-lock.json
 
       - name: 🐧 Install Linux dependencies (for better-sqlite3)
         run: |
@@ -35,7 +33,7 @@ jobs:
 
       - name: 📦 Install app dependencies
         working-directory: app
-        run: npm ci
+        run: npm install
 
       - name: 📦 Install renderer dependencies
         working-directory: app/renderer
@@ -97,9 +95,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            app/package.json
+          cache-dependency-path: package-lock.json
 
       - name: 🪟 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -109,7 +105,7 @@ jobs:
 
       - name: 📦 Install app dependencies
         working-directory: app
-        run: npm ci
+        run: npm install
 
       - name: 📦 Install renderer dependencies
         working-directory: app/renderer
@@ -151,9 +147,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            app/package.json
+          cache-dependency-path: package-lock.json
 
       - name: 🐧 Install Linux dependencies
         run: |
@@ -165,7 +159,7 @@ jobs:
 
       - name: 📦 Install app dependencies
         working-directory: app
-        run: npm ci
+        run: npm install
 
       - name: 📦 Install renderer dependencies
         working-directory: app/renderer
