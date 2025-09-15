@@ -15,17 +15,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             platform: linux
             arch: x64
             artifact: DeeChat-linux-x64.AppImage
-          - os: windows-2019
+          - os: windows-latest
             platform: win32
             arch: x64
             artifact: DeeChat-Setup-*.exe
-          - os: macos-11
+          - os: macos-latest
             platform: darwin
             arch: x64
             artifact: DeeChat-*.dmg
@@ -45,12 +45,12 @@ jobs:
 
     # 3. Windows特殊准备：配置MSBuild
     - name: 🪟 Setup MSBuild (Windows)
-      if: matrix.os == 'windows-2019'
-      uses: microsoft/setup-msbuild@v1.3
+      if: matrix.platform == 'win32'
+      uses: microsoft/setup-msbuild@v2
 
     # 4. macOS特殊准备：配置Apple证书
     - name: 🍎 Setup Apple certificates (macOS)
-      if: matrix.os == 'macos-11'
+      if: matrix.platform == 'darwin'
       env:
         APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -68,7 +68,7 @@ jobs:
 
     # 5. Linux特殊准备：安装系统依赖
     - name: 🐧 Install Linux dependencies
-      if: matrix.os == 'ubuntu-20.04'
+      if: matrix.platform == 'linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2-dev libxkbcommon-dev libxss1-dev libasound2-dev
@@ -110,7 +110,7 @@ jobs:
       working-directory: app
       env:
         # macOS代码签名环境变量
-        CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-11' && 'true' || 'false' }}
+        CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'darwin' && 'true' || 'false' }}
         # Windows代码签名环境变量
         CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
         CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
