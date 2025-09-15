@@ -116,9 +116,14 @@ src/renderer/src/components/archive/*
 
 # User data and config (for development)
 user-data/
-config/
+/config/
 *.sqlite
 *.db
+
+# Allow source code config directories
+!app/main/config/
+!*/config/*.ts
+!*/config/*.js
 
 # PromptX specific
 .promptx/
