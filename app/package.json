@@ -31,7 +31,7 @@
     "typedi": "^0.10.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
+    "@electron/rebuild": "^3.6.2",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
     "electron": "^30.5.1",
