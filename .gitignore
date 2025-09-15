@@ -1,5 +1,4 @@
-Electron 32.3.3需要NODE_MODULE_VERSION 128，但我们用NODE_MODULE_VERSION
-  127编译的better-sqlite3# Dependencies
+# Dependencies
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -96,8 +95,8 @@ jspm_packages/
 .tern-port
 
 # Electron specific
-app/
-packages/
+# app/ - Don't ignore this! It contains the main application code
+# packages/ - Don't ignore this! It contains important package code
 
 # Test files
 test-results/
@@ -132,7 +131,7 @@ resources/promptx/
 .cursor/
 .superdesign/
 .windsurfrules
-CLAUDE.md
+# CLAUDE.md - Keep this important project documentation file
 
 # Vercel deployment
 .vercel/
