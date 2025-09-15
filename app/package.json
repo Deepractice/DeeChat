@@ -51,6 +51,7 @@
   "build": {
     "appId": "com.deechat.app",
     "productName": "DeeChat",
+    "electronVersion": "30.5.1",
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
     "directories": {

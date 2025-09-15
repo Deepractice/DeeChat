@@ -94,12 +94,21 @@ jobs:
         # 直接使用npx @electron/rebuild，避免脚本依赖nvm
         npx @electron/rebuild
 
-    # 10. 构建TypeScript和前端
+    # 10. 确保Electron可用
+    - name: 🔧 Ensure Electron availability
+      working-directory: app
+      run: |
+        # 验证Electron安装和版本
+        npx electron --version
+        # 如果electron-builder找不到版本，尝试设置环境变量
+        echo "ELECTRON_CACHE=$HOME/.cache/electron" >> $GITHUB_ENV
+
+    # 11. 构建TypeScript和前端
     - name: 🏗️ Build TypeScript and Frontend
       working-directory: app
       run: npm run build
 
-    # 11. 运行测试
+    # 12. 运行测试
     - name: 🧪 Run tests
       working-directory: app
       run: |
@@ -108,7 +117,7 @@ jobs:
         # 运行单元测试（如果有）
         npm test --if-present
 
-    # 12. 构建Electron应用
+    # 13. 构建Electron应用
     - name: 📱 Build Electron app
       working-directory: app
       env:
@@ -131,7 +140,7 @@ jobs:
           npm run dist:linux
         fi
 
-    # 13. 上传构建产物
+    # 14. 上传构建产物
     - name: 📤 Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -144,7 +153,7 @@ jobs:
           app/dist/*.rpm
         retention-days: 30
 
-  # 14. 发布Job（仅在tag推送时运行）
+  # 15. 发布Job（仅在tag推送时运行）
   release:
     name: 🎉 Create Release
     needs: build
