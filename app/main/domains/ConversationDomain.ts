@@ -18,7 +18,7 @@ import { Service } from 'typedi'
 import { AIChat, Message, ChatOptions, ChatStreamChunk, AIChatConfig } from '@deepracticex/ai-chat'
 import { BetterSQLite3Adapter } from '@deepracticex/database-adapter'
 import { ConversationStorage } from '@deepracticex/conversation-storage'
-import { IDomain } from '../ipc/ipc-registry'
+import { IDomain } from '../ipc/ipc-registry.js'
 import { DatabaseConfig } from '../config/database.config.js'
 
 // ==================== 类型定义 ====================
