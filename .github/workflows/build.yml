@@ -73,30 +73,33 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev libgconf-2-4
 
-    # 6. 进入app目录并安装依赖
-    - name: 📦 Install dependencies
-      working-directory: app
-      run: |
-        npm ci
+    # 6. 安装根目录依赖（workspace）
+    - name: 📦 Install root dependencies
+      run: npm ci
 
-    # 7. 重新编译原生模块（关键步骤）
+    # 7. 安装app目录依赖
+    - name: 📦 Install app dependencies
+      working-directory: app
+      run: npm ci
+
+    # 8. 重新编译原生模块（关键步骤）
     - name: 🔨 Rebuild native modules
       working-directory: app
       run: |
-        # Windows使用bat脚本
+        # Windows使用PowerShell执行bat脚本
         if [ "${{ matrix.platform }}" = "win32" ]; then
-          ./scripts/rebuild-native.bat
+          powershell -Command "& {./scripts/rebuild-native.bat}"
         else
           # macOS/Linux使用sh脚本
           ./scripts/rebuild-native.sh
         fi
 
-    # 8. 构建TypeScript
+    # 9. 构建TypeScript
     - name: 🏗️ Build TypeScript
       working-directory: app
       run: npm run build
 
-    # 9. 运行测试
+    # 10. 运行测试
     - name: 🧪 Run tests
       working-directory: app
       run: |
@@ -105,7 +108,7 @@ jobs:
         # 运行单元测试（如果有）
         npm test --if-present
 
-    # 10. 构建Electron应用
+    # 11. 构建Electron应用
     - name: 📱 Build Electron app
       working-directory: app
       env:
@@ -128,7 +131,7 @@ jobs:
           npm run dist:linux
         fi
 
-    # 11. 上传构建产物
+    # 12. 上传构建产物
     - name: 📤 Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -141,7 +144,7 @@ jobs:
           app/dist/*.rpm
         retention-days: 30
 
-  # 12. 发布Job（仅在tag推送时运行）
+  # 13. 发布Job（仅在tag推送时运行）
   release:
     name: 🎉 Create Release
     needs: build
