@@ -1,6 +1,6 @@
 {
   "name": "deechat-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DeeChat Electron Application",
   "main": "main.cjs",
   "type": "module",
@@ -25,9 +25,9 @@
   },
   "dependencies": {
     "@deepracticex/ai-chat": "^0.1.2",
-    "@deepracticex/ai-config": "^0.3.0",
-    "@deepracticex/conversation-storage": "^0.3.0",
-    "@deepracticex/database-adapter": "^1.0.0",
+    "@deepracticex/ai-config": "^0.3.1",
+    "@deepracticex/conversation-storage": "^0.3.1",
+    "@deepracticex/database-adapter": "^1.0.1",
     "@deepracticex/token-calculator": "latest",
     "better-sqlite3": "^12.2.0",
     "reflect-metadata": "^0.2.2",
