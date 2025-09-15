@@ -15,7 +15,9 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
     "baseUrl": "./",
     "paths": {
       "@/*": ["./src/*"],

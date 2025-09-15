@@ -19,7 +19,7 @@ import { AIChat, Message, ChatOptions, ChatStreamChunk, AIChatConfig } from '@de
 import { BetterSQLite3Adapter } from '@deepracticex/database-adapter'
 import { ConversationStorage } from '@deepracticex/conversation-storage'
 import { IDomain } from '../ipc/ipc-registry'
-import { DatabaseConfig } from '../config/database.config'
+import { DatabaseConfig } from '../config/database.config.js'
 
 // ==================== 类型定义 ====================
 

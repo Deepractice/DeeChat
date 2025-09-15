@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { getViteDevUrl, getWindowConfig, isDevelopment, printDevConfig } from '../config/dev.config'
+import { getViteDevUrl, getWindowConfig, isDevelopment, printDevConfig } from '../config/dev.config.js'
 
 // ESM中获取__dirname等价物
 const __filename = fileURLToPath(import.meta.url)
