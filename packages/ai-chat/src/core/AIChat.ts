@@ -21,10 +21,10 @@ import {
   ToolExecutionError,
   HttpError,
   APIRequest
-} from '../types'
-import { createErrorChunk } from '../streaming/StreamUtils'
-import { ToolExecutionManager } from '../tools/ToolExecutionManager'
-import { HttpClient } from '../http/HttpClient'
+} from '../types/index.js'
+import { createErrorChunk } from '../streaming/StreamUtils.js'
+import { ToolExecutionManager } from '../tools/ToolExecutionManager.js'
+import { HttpClient } from '../http/HttpClient.js'
 
 /**
  * AIChat类 - 简化的AI聊天协调器

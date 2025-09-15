@@ -3,7 +3,7 @@
  * 无需复杂的Provider抽象层
  */
 
-import { AIChatConfig, HttpError, APIRequest, APIResponse, APIStreamChunk } from '../types'
+import { AIChatConfig, HttpError, APIRequest, APIResponse, APIStreamChunk } from '../types/index.js'
 
 export class HttpClient {
   private readonly timeout: number

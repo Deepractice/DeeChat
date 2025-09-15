@@ -10,7 +10,7 @@ import {
   ToolExecuting, 
   ToolExecutionError, 
   ChatStreamChunk 
-} from '../types'
+} from '../types/index.js'
 
 export interface ToolCallHandler {
   (call: ToolCall): Promise<ToolResult>

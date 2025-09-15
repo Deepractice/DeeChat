@@ -98,7 +98,7 @@ case "${1:-start}" in
     "dev")
         echo "🔧 Starting in development mode..."
         export NODE_ENV=development
-        npm run dev
+        npm run electron:dev
         ;;
     "start")
         echo "🎬 Starting application..."

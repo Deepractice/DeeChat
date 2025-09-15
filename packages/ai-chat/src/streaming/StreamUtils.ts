@@ -4,7 +4,7 @@
  * 提供流式响应的通用处理方法
  */
 
-import { ChatStreamChunk } from '../types'
+import { ChatStreamChunk } from '../types/index.js'
 
 /**
  * 创建错误chunk

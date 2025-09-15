@@ -1,11 +1,8 @@
 import { BrowserWindow } from 'electron'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { join } from 'path'
 import { getViteDevUrl, getWindowConfig, isDevelopment, printDevConfig } from '../config/dev.config.js'
 
-// ESM中获取__dirname等价物
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+// electron-vite 自动提供 __filename 和 __dirname
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null
@@ -28,7 +25,7 @@ export class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: join(__dirname, '../preload.js')
+        preload: join(__dirname, '../preload/preload.js')
       },
       show: false // 先隐藏，加载完成后显示
     })

@@ -4,19 +4,19 @@
  */
 
 // ============== 主要类导出 ==============
-export { AIChat } from './core/AIChat'
+export { AIChat } from './core/AIChat.js'
 
 // ============== 工具导出 ==============
-export { ToolExecutionManager } from './tools/ToolExecutionManager'
+export { ToolExecutionManager } from './tools/ToolExecutionManager.js'
 
 // ============== HTTP 客户端导出 ==============
-export { HttpClient } from './http/HttpClient'
+export { HttpClient } from './http/HttpClient.js'
 
 // ============== 流处理导出 ==============
-export { createErrorChunk } from './streaming/StreamUtils'
+export { createErrorChunk } from './streaming/StreamUtils.js'
 
 // ============== 类型导出 ==============
-export * from './types'
+export * from './types/index.js'
 
 // ============== 版本信息 ==============
 export const version = '0.2.0' // 版本升级，表示重大重构

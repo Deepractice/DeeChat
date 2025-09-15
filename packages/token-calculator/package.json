@@ -1,7 +1,8 @@
 {
   "name": "@deepracticex/token-calculator",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "Token calculation and cost estimation for AI models",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

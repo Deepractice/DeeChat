@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/database-adapter",
-  "version": "1.0.1",
+  "version": "2.0.1",
   "description": "Database adapter interfaces for DeeChat packages",
   "type": "module",
   "main": "dist/index.js",
