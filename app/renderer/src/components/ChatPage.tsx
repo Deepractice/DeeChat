@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Layout, Button, Drawer, Select, message, Spin } from 'antd'
 import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined } from '@ant-design/icons'
 import MessageList from './MessageList'
@@ -36,7 +36,141 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
   useEffect(() => {
     loadAIConfigs()
     loadSessions()
+    setupStreamListeners()
+
+    // 清理事件监听器
+    return () => {
+      window.electronAPI.removeStreamListeners()
+    }
   }, [])
+
+  // 流式响应状态
+  const [currentAiMessage, setCurrentAiMessage] = useState<ConversationMessage | null>(null)
+  const [streamingContent, setStreamingContent] = useState<string>('')
+
+  // 使用 useRef 来保持 currentSession 的最新值
+  const currentSessionRef = useRef<ConversationSession | null>(null)
+  // 使用 useRef 来保持 currentAiMessage 的最新值
+  const currentAiMessageRef = useRef<ConversationMessage | null>(null)
+
+  // 更新 ref 当 currentSession 改变时
+  useEffect(() => {
+    currentSessionRef.current = currentSession
+  }, [currentSession])
+
+  // 更新 ref 当 currentAiMessage 改变时
+  useEffect(() => {
+    currentAiMessageRef.current = currentAiMessage
+  }, [currentAiMessage])
+
+  // 处理实时流式事件
+  const handleStreamEvent = (event: any) => {
+    console.log('🎯 前端收到流式事件:', JSON.stringify(event, null, 2))
+    const sessionFromRef = currentSessionRef.current
+    console.log('🔍 当前会话状态 (ref):', sessionFromRef ? `ID: ${sessionFromRef.id}` : 'null')
+
+    // 如果没有当前会话，但事件中有sessionId，可以继续处理
+    if (!sessionFromRef && !event.sessionId) {
+      console.log('❌ 没有当前会话且事件无sessionId，忽略事件')
+      return
+    }
+
+    switch (event.type) {
+      case 'message_saved':
+        // 用户消息已保存，替换临时消息
+        const finalUserMessage = event.data
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id.startsWith('temp_') ? finalUserMessage : msg
+          )
+        )
+        break
+
+      case 'ai_chunk':
+        // 实时累积AI响应内容
+        const chunkContent = event.data.content || ''
+
+        // 只有当有实际内容时才处理消息创建/更新
+        if (chunkContent) {
+          // 第一次收到内容时，隐藏loading状态
+          setSendingMessage(false)
+
+          setStreamingContent(prev => {
+            const newContent = prev + chunkContent
+            const currentAiFromRef = currentAiMessageRef.current
+
+            if (!currentAiFromRef) {
+              // 创建新的AI消息
+              const newAiMessage: ConversationMessage = {
+                id: `ai_${Date.now()}`,
+                session_id: sessionFromRef?.id || event.sessionId || '',
+                role: 'assistant',
+                content: newContent,
+                timestamp: new Date().toISOString()
+              }
+              setCurrentAiMessage(newAiMessage)
+              setMessages(prev => [...prev, newAiMessage])
+            } else {
+              // 更新现有AI消息内容
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === currentAiFromRef.id
+                    ? { ...msg, content: newContent }
+                    : msg
+                )
+              )
+            }
+
+            return newContent
+          })
+        }
+        break
+
+      case 'ai_complete':
+        // AI响应完成，用最终消息替换
+        const finalAiMessage = event.data
+        const currentAiFromRefComplete = currentAiMessageRef.current
+        if (currentAiFromRefComplete) {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === currentAiFromRefComplete.id ? finalAiMessage : msg
+            )
+          )
+        }
+        // 重置流式状态
+        setCurrentAiMessage(null)
+        setStreamingContent('')
+        break
+
+      case 'error':
+        console.error('AI响应错误:', event.data.error)
+        message.error(event.data.error || 'AI响应失败')
+        // 重置流式状态
+        setCurrentAiMessage(null)
+        setStreamingContent('')
+        break
+    }
+  }
+
+  // 设置流式事件监听器
+  const setupStreamListeners = () => {
+    // 实时流式事件
+    window.electronAPI.onStreamEvent((data: any) => {
+      handleStreamEvent(data.event)
+    })
+
+    // 流式完成事件
+    window.electronAPI.onStreamComplete((data: any) => {
+      setSendingMessage(false)
+    })
+
+    // 流式错误事件
+    window.electronAPI.onStreamError((data: any) => {
+      console.error('流式处理错误:', data.error)
+      setSendingMessage(false)
+      message.error(data.error || '流式处理失败')
+    })
+  }
 
   // 模型加载
   useEffect(() => {
@@ -188,7 +322,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
     }
   }
 
-  // 发送消息
+  // 发送消息（流式版本）
   const sendMessage = async (content: string) => {
     if (!currentSession) {
       message.error('请先选择会话')
@@ -202,7 +336,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
 
     try {
       setSendingMessage(true)
-      
+
       // 立即显示用户消息
       const userMessage: ConversationMessage = {
         id: `temp_${Date.now()}`,
@@ -214,22 +348,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
       const userMessageId = userMessage.id
       setMessages(prev => [...prev, userMessage])
 
-      // 发送消息到后端 - 需要获取当前会话的AI配置
+      // 获取AI配置
       if (!selectedConfig) {
         message.error('无法确定AI配置，请重新选择')
         return
       }
-      
-      // 根据配置名称获取完整配置对象
+
       const configResult = await window.electronAPI.aiConfig.get(selectedConfig)
       if (!configResult.success || !configResult.data) {
         message.error('无法获取AI配置详情')
         return
       }
-      
+
       const config = configResult.data
-      
-      const result = await window.electronAPI.conversation.sendMessage({
+
+      // 重置流式状态
+      setCurrentAiMessage(null)
+      setStreamingContent('')
+
+      // 发送流式请求（触发实时流式响应）
+      const result = await window.electronAPI.conversation.sendMessageStream({
         session_id: currentSession.id,
         content: content.trim(),
         ai_config: {
@@ -241,22 +379,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
         }
       })
 
-      if (result.success && result.data) {
-        // 更新消息列表（替换临时用户消息，添加AI回复）
-        setMessages(prev => {
-          const filtered = prev.filter(msg => msg.id !== userMessageId)
-          return [...filtered, result.data!.userMessage, result.data!.aiMessage]
-        })
-        message.success('消息发送成功')
-      } else {
-        // 移除临时消息
-        setMessages(prev => prev.filter(msg => msg.id !== userMessageId))
-        message.error(result.error || '发送消息失败')
+      if (!result.success) {
+        throw new Error(result.error || '发送流式消息失败')
       }
-    } catch (error) {
+
+      console.log('✅ 流式请求已发送，开始等待实时事件...')
+
+    } catch (error: any) {
+      console.error('发送消息失败:', error)
+
       // 移除临时消息
       setMessages(prev => prev.filter(msg => msg.id.startsWith('temp_')))
-      message.error('发送消息失败')
+      message.error(error.message || '发送消息失败')
     } finally {
       setSendingMessage(false)
     }

@@ -274,22 +274,48 @@ export class ConversationDomain implements IDomain {
 
   /**
    * 发送消息（流式版本，用于IPC调用）
-   * 
-   * 将流式事件序列化为JSON字符串数组，便于IPC传输
+   *
+   * 通过IPC事件实时发送流式响应，不等待完成
    * 适用于需要实时显示AI响应的场景
-   * 
+   *
    * @param input 发送消息的输入参数
-   * @returns JSON格式的事件流数组
+   * @param event Electron IPC事件对象，用于发送实时事件
+   * @returns 操作结果
    */
-  async sendMessageStream(input: SendMessageInput): Promise<string[]> {
-    const events: string[] = []
-    
-    // 收集所有流式事件并序列化
-    for await (const event of this.sendMessage(input)) {
-      events.push(JSON.stringify(event))
+  async sendMessageStream(input: SendMessageInput, event?: any): Promise<{ status: string }> {
+    try {
+      // 实时发送流式事件
+      for await (const streamEvent of this.sendMessage(input)) {
+        if (event && event.sender) {
+          // 发送实时流式事件到前端
+          console.log('📡 发送IPC流式事件:', JSON.stringify(streamEvent, null, 2))
+          event.sender.send('conversation:stream-event', {
+            sessionId: input.session_id,
+            event: streamEvent
+          })
+        } else {
+          console.log('❌ IPC事件发送失败: event或sender不存在')
+        }
+      }
+
+      // 发送完成信号
+      if (event && event.sender) {
+        event.sender.send('conversation:stream-complete', {
+          sessionId: input.session_id
+        })
+      }
+
+      return { status: 'streaming_started' }
+    } catch (error) {
+      // 发送错误事件
+      if (event && event.sender) {
+        event.sender.send('conversation:stream-error', {
+          sessionId: input.session_id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      throw error
     }
-    
-    return events
   }
 
   /**
@@ -365,7 +391,10 @@ export class ConversationDomain implements IDomain {
       let aiContent = ''           // 累积AI响应内容
       let finalUsage: any = undefined  // Token使用统计
 
+      console.log('🔄 开始AI流式请求...')
+
       for await (const chunk of aiClient.sendMessage(messages, chatOptions)) {
+        console.log('📦 收到AI流式chunk:', JSON.stringify(chunk, null, 2))
         // 实时转发AI响应块给前端
         yield {
           type: 'ai_chunk',

@@ -32,14 +32,22 @@ export class IPCRegistry {
         ipcMain.handle(channel, async (event, ...args) => {
           try {
             console.log(`📨 IPC请求: ${channel}`, args.length > 0 ? `(${args.length} 参数)` : '')
-            const result = await handler(...args)
+
+            // 特殊处理流式方法，传递event对象
+            let result
+            if (channel === 'conversation:send-message-stream') {
+              result = await handler(...args, event)
+            } else {
+              result = await handler(...args)
+            }
+
             console.log(`✅ IPC响应: ${channel}`)
             return { success: true, data: result }
           } catch (error: any) {
             console.error(`❌ IPC错误: ${channel}`, error.message)
-            return { 
-              success: false, 
-              error: error?.message || String(error) 
+            return {
+              success: false,
+              error: error?.message || String(error)
             }
           }
         })

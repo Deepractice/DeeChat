@@ -2,6 +2,21 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 流式事件监听
+  onStreamEvent: (callback: (data: any) => void) => {
+    ipcRenderer.on('conversation:stream-event', (event, data) => callback(data))
+  },
+  onStreamComplete: (callback: (data: any) => void) => {
+    ipcRenderer.on('conversation:stream-complete', (event, data) => callback(data))
+  },
+  onStreamError: (callback: (data: any) => void) => {
+    ipcRenderer.on('conversation:stream-error', (event, data) => callback(data))
+  },
+  removeStreamListeners: () => {
+    ipcRenderer.removeAllListeners('conversation:stream-event')
+    ipcRenderer.removeAllListeners('conversation:stream-complete')
+    ipcRenderer.removeAllListeners('conversation:stream-error')
+  },
   // AI配置相关API - 对应后端 AIConfigurationDomain (新版本)
   aiConfig: {
     // 创建AI配置 - ai-config:create
