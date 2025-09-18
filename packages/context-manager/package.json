@@ -1,0 +1,62 @@
+{
+  "name": "@deepracticex/context-manager",
+  "version": "1.0.0",
+  "description": "Simple and powerful AI context formatter with layered XML structure",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "prepublishOnly": "npm run clean && npm run build && npm run test"
+  },
+  "keywords": [
+    "ai",
+    "context",
+    "formatter",
+    "xml",
+    "prompt",
+    "conversation",
+    "role-based",
+    "typescript",
+    "esm",
+    "simple",
+    "layered"
+  ],
+  "author": "DeeChat Team <team@deechat.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deepractice/DeeChat.git",
+    "directory": "packages/context-manager"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "eslint": "^8.57.0",
+    "rimraf": "^5.0.0",
+    "tsc-alias": "^1.8.8",
+    "typescript": "^5.2.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {}
+}
