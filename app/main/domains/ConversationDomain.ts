@@ -18,6 +18,7 @@ import { Service } from 'typedi'
 import { AIChat, Message, ChatOptions, ChatStreamChunk, AIChatConfig } from '@deepracticex/ai-chat'
 import { BetterSQLite3Adapter } from '@deepracticex/database-adapter'
 import { ConversationStorage } from '@deepracticex/conversation-storage'
+import { ContextFormatter, ContextData } from '@deepracticex/context-manager'
 import { IDomain } from '../ipc/ipc-registry.js'
 import { DatabaseConfig } from '../config/database.config.js'
 
@@ -368,21 +369,31 @@ export class ConversationDomain implements IDomain {
 
       // 5. 构建对话上下文
       const messageHistory = await this.getMessageHistory(input.session_id)
-      
-      // 转换为AI客户端所需的消息格式
-      const messages: Message[] = messageHistory.map(msg => ({
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content
-      }))
+
+      // 使用ContextFormatter格式化上下文
+      const formattedContext = this.formatConversationContext(
+        messageHistory,
+        input.content,
+        input.options?.system_prompt
+      )
+
+      console.log('📝 格式化后的上下文:')
+      console.log(formattedContext)
+
+      // 将格式化的上下文作为系统消息发送
+      const messages: Message[] = [{
+        role: 'system',
+        content: formattedContext
+      }]
 
       console.log('📝 发送给AI的消息数量:', messages.length)
-      console.log('📝 最新消息:', messages[messages.length - 1])
+      console.log('📝 消息长度:', formattedContext.length, '字符')
 
       // 6. 配置AI请求参数
       const chatOptions: ChatOptions = {
         temperature: input.options?.temperature,
-        maxTokens: input.options?.max_tokens,
-        systemPrompt: input.options?.system_prompt
+        maxTokens: input.options?.max_tokens
+        // 注意：systemPrompt已经包含在formattedContext中，不需要单独设置
       }
 
       console.log('⚙️ 聊天选项:', chatOptions)
@@ -454,15 +465,63 @@ export class ConversationDomain implements IDomain {
   }
 
   // ============ 私有辅助方法 ============
-  
+
+  /**
+   * 格式化对话上下文为结构化XML格式
+   *
+   * 使用ContextFormatter将对话历史转换为4层XML结构：
+   * 1. 角色定义层
+   * 2. 工具列表层（可选）
+   * 3. 对话历史层
+   * 4. 当前消息层
+   *
+   * @param messageHistory 消息历史记录
+   * @param currentMessage 当前用户消息
+   * @param systemPrompt 系统提示词（可选）
+   * @returns 格式化后的上下文字符串
+   * @private
+   */
+  private formatConversationContext(
+    messageHistory: ConversationMessage[],
+    currentMessage: string,
+    systemPrompt?: string
+  ): string {
+    // 分离系统消息和对话消息
+    const systemMessages = messageHistory.filter(msg => msg.role === 'system')
+    const conversationMessages = messageHistory.filter(msg => msg.role !== 'system')
+
+    // 构建角色定义
+    let roleContent = 'You are a helpful AI assistant.'
+
+    // 如果有系统提示词，使用系统提示词
+    if (systemPrompt) {
+      roleContent = systemPrompt
+    } else if (systemMessages.length > 0) {
+      // 否则使用最新的系统消息
+      roleContent = systemMessages[systemMessages.length - 1].content
+    }
+
+    // 构建上下文数据（符合context-manager的简单接口）
+    const contextData: ContextData = {
+      role: roleContent,
+      conversation: conversationMessages.map(msg =>
+        `${msg.role}: ${msg.content}`
+      ),
+      current: currentMessage
+    }
+
+    // 使用ContextFormatter格式化
+    return ContextFormatter.format(contextData)
+  }
+
   /**
    * 获取或创建AI客户端（带缓存优化）
-   * 
+   *
    * 实现AI客户端的懒加载和缓存机制：
    * - 使用baseUrl+model作为唯一缓存键
    * - 避免重复创建相同配置的客户端
    * - 提高性能，减少资源消耗
-   * 
+   *
    * @param aiConfig AI配置参数
    * @returns AI客户端实例
    * @private

@@ -22,6 +22,7 @@
   "dependencies": {
     "@deepracticex/ai-chat": "^0.2.3",
     "@deepracticex/ai-config": "^0.4.1",
+    "@deepracticex/context-manager": "^1.0.0",
     "@deepracticex/conversation-storage": "^0.4.1",
     "@deepracticex/database-adapter": "^2.0.1",
     "@deepracticex/mcp-client": "^2.0.1",

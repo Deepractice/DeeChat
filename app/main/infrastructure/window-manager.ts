@@ -73,7 +73,7 @@ export class WindowManager {
         console.log(`🔗 已连接到Vite开发服务器: ${viteUrl}`)
       } else {
         // 📦 生产环境：加载打包后的文件
-        await this.mainWindow.loadFile(join(__dirname, '../renderer/dist/index.html'))
+        await this.mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
         console.log('📦 已加载生产构建文件')
       }
     } catch (error) {
