@@ -1,92 +1,131 @@
 /**
- * Context Formatter 测试
+ * Context Formatter 测试 - 极简模板驱动架构
  */
 
-import { describe, it, expect } from 'vitest';
-import { ContextFormatter, ContextData } from '../src/index.js';
+import { describe, it, expect } from "vitest";
+import { ContextFormatter, AIMessage } from "../src/index.js";
 
-describe('ContextFormatter', () => {
+describe("ContextFormatter - 模板驱动架构", () => {
+  describe("核心API: fromTemplateAsMessages", () => {
+    it("应该使用标准模板生成基本的消息数组", () => {
+      const input = {
+        role: "You are a helpful assistant",
+        current: "Hello world",
+      };
 
-  it('应该格式化基本的角色和当前消息', () => {
-    const data: ContextData = {
-      role: "You are a helpful assistant",
-      current: "Hello world"
-    };
+      const messages = ContextFormatter.fromTemplateAsMessages(
+        "standard",
+        input,
+      );
 
-    const result = ContextFormatter.format(data);
+      expect(messages).toHaveLength(2);
+      expect(messages[0]).toEqual({
+        role: "system",
+        content: "You are a helpful assistant",
+      });
+      expect(messages[1]).toEqual({
+        role: "user",
+        content: "Hello world",
+      });
+    });
 
-    expect(result).toContain('<context>');
-    expect(result).toContain('<role>You are a helpful assistant</role>');
-    expect(result).toContain('<current>Hello world</current>');
-    expect(result).toContain('</context>');
+    it("应该合并角色和工具为系统消息", () => {
+      const input = {
+        role: "You are a frontend developer",
+        tools: ["tool1: description", "tool2: description"],
+      };
+
+      const messages = ContextFormatter.fromTemplateAsMessages(
+        "standard",
+        input,
+      );
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].role).toBe("system");
+      expect(messages[0].content).toContain("You are a frontend developer");
+      expect(messages[0].content).toContain("可用工具：");
+      expect(messages[0].content).toContain("tool1: description");
+      expect(messages[0].content).toContain("tool2: description");
+    });
+
+    it("应该将对话历史转换为交替的用户/助手消息", () => {
+      const input = {
+        role: "Assistant",
+        conversation: [
+          "User question 1",
+          "Assistant answer 1",
+          "User question 2",
+        ],
+      };
+
+      const messages = ContextFormatter.fromTemplateAsMessages(
+        "standard",
+        input,
+      );
+
+      expect(messages).toHaveLength(4); // 1 system + 3 conversation
+      expect(messages[0].role).toBe("system");
+      expect(messages[1]).toEqual({ role: "user", content: "User question 1" });
+      expect(messages[2]).toEqual({
+        role: "assistant",
+        content: "Assistant answer 1",
+      });
+      expect(messages[3]).toEqual({ role: "user", content: "User question 2" });
+    });
+
+    it("应该处理完整的四层结构", () => {
+      const input = {
+        role: "You are a helpful assistant",
+        tools: ["search: 搜索功能"],
+        conversation: ["Hi", "Hello!"],
+        current: "Help me",
+      };
+
+      const messages = ContextFormatter.fromTemplateAsMessages(
+        "standard",
+        input,
+      );
+
+      expect(messages).toHaveLength(4); // system + conversation(2) + current(1)
+
+      // 检查系统消息
+      expect(messages[0].role).toBe("system");
+      expect(messages[0].content).toContain("You are a helpful assistant");
+      expect(messages[0].content).toContain("search: 搜索功能");
+
+      // 检查对话
+      expect(messages[1]).toEqual({ role: "user", content: "Hi" });
+      expect(messages[2]).toEqual({ role: "assistant", content: "Hello!" });
+
+      // 检查当前消息
+      expect(messages[3]).toEqual({ role: "user", content: "Help me" });
+    });
+
+    it("应该处理最小输入（只有角色）", () => {
+      const input = {
+        role: "Simple assistant",
+      };
+
+      const messages = ContextFormatter.fromTemplateAsMessages(
+        "standard",
+        input,
+      );
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toEqual({
+        role: "system",
+        content: "Simple assistant",
+      });
+    });
   });
 
-  it('应该格式化完整的四层结构', () => {
-    const data: ContextData = {
-      role: "You are a frontend developer",
-      tools: ["tool1: description", "tool2: description"],
-      conversation: ["User: Hello", "Assistant: Hi!"],
-      current: "Help me"
-    };
+  describe("模板管理器", () => {
+    it("应该提供模板管理器访问", () => {
+      const templates = ContextFormatter.templates;
 
-    const result = ContextFormatter.format(data);
-
-    expect(result).toContain('<role>You are a frontend developer</role>');
-    expect(result).toContain('<tools>');
-    expect(result).toContain('tool1: description');
-    expect(result).toContain('<conversation>');
-    expect(result).toContain('User: Hello');
-    expect(result).toContain('<current>Help me</current>');
-  });
-
-  it('应该处理字符串格式的对话', () => {
-    const data: ContextData = {
-      role: "Assistant",
-      conversation: "User: Hello\nAssistant: Hi there!"
-    };
-
-    const result = ContextFormatter.format(data);
-
-    expect(result).toContain('<conversation>');
-    expect(result).toContain('User: Hello\nAssistant: Hi there!');
-  });
-
-  it('应该跳过空的可选字段', () => {
-    const data: ContextData = {
-      role: "Assistant",
-      tools: [],
-      conversation: "",
-      current: undefined
-    };
-
-    const result = ContextFormatter.format(data);
-
-    expect(result).toContain('<role>Assistant</role>');
-    expect(result).not.toContain('<tools>');
-    expect(result).not.toContain('<conversation>');
-    expect(result).not.toContain('<current>');
-  });
-
-  it('应该处理只有角色的最简情况', () => {
-    const data: ContextData = {
-      role: "You are helpful"
-    };
-
-    const result = ContextFormatter.format(data);
-
-    expect(result).toBe('<context>\n<role>You are helpful</role>\n</context>');
-  });
-
-  it('应该过滤掉空白的工具和对话', () => {
-    const data: ContextData = {
-      role: "Assistant",
-      tools: ["tool1", "", "  ", "tool2"],
-      conversation: ["User: Hi", "", "Assistant: Hello"]
-    };
-
-    const result = ContextFormatter.format(data);
-
-    expect(result).toContain('tool1\ntool2');
-    expect(result).toContain('User: Hi\nAssistant: Hello');
+      expect(templates).toBeDefined();
+      expect(typeof templates.get).toBe("function");
+      expect(typeof templates.register).toBe("function");
+    });
   });
 });

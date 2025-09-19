@@ -2,7 +2,7 @@
  * 模板系统核心架构
  */
 
-import type { ContextData } from '../types.js';
+import type { ContextData, AIMessage } from '../core/CoreTypes.js';
 
 /**
  * 模板接口 - 所有模板都需要实现这个接口
@@ -27,6 +27,12 @@ export interface ContextTemplate<TInput = any> {
    * 将特定输入转换为标准的 ContextData
    */
   build(input: TInput): ContextData;
+
+  /**
+   * 将特定输入直接构建为 AI 消息数组 - 核心方法
+   * 所有模板都必须实现此方法，提供统一的消息构建接口
+   */
+  buildMessages(input: TInput): AIMessage[];
 }
 
 /**
@@ -48,8 +54,4 @@ export interface TemplateBuilder {
    */
   list(): Array<{id: string; name: string; description: string}>;
 
-  /**
-   * 使用模板构建上下文
-   */
-  build<T>(templateId: string, input: T): string;
 }

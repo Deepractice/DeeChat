@@ -2,10 +2,9 @@
  * 模板管理器 - 管理所有模板的注册和使用
  */
 
-import { ContextFormatter } from '../ContextFormatter.js';
-import type { ContextTemplate, TemplateBuilder } from './types.js';
+import type { ContextTemplate } from "../templates/types.js";
 
-export class TemplateManager implements TemplateBuilder {
+export class TemplateManager {
   private templates = new Map<string, ContextTemplate<any>>();
 
   /**
@@ -25,25 +24,12 @@ export class TemplateManager implements TemplateBuilder {
   /**
    * 列出所有模板
    */
-  list(): Array<{id: string; name: string; description: string}> {
-    return Array.from(this.templates.values()).map(template => ({
+  list(): Array<{ id: string; name: string; description: string }> {
+    return Array.from(this.templates.values()).map((template) => ({
       id: template.id,
       name: template.name,
-      description: template.description
+      description: template.description,
     }));
-  }
-
-  /**
-   * 使用模板构建上下文
-   */
-  build<T>(templateId: string, input: T): string {
-    const template = this.get<T>(templateId);
-    if (!template) {
-      throw new Error(`Template '${templateId}' not found`);
-    }
-
-    const contextData = template.build(input);
-    return ContextFormatter.format(contextData);
   }
 
   /**
