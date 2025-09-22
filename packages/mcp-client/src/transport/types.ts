@@ -57,3 +57,20 @@ export interface WebSocketTransportOptions extends TransportOptions {
   /** 请求头 */
   headers?: Record<string, string>;
 }
+
+export interface StreamableHttpTransportOptions extends TransportOptions {
+  /** URL */
+  url: string;
+  /** 请求头 */
+  headers?: Record<string, string>;
+  /** 会话 ID（可选，用于恢复会话） */
+  sessionId?: string;
+  /** 启用 DNS 重绑定保护 */
+  enableDnsRebindingProtection?: boolean;
+  /** 允许的主机列表 */
+  allowedHosts?: string[];
+  /** SSE 重连延迟 (ms) */
+  reconnectDelay?: number;
+  /** 最大重连次数 */
+  maxReconnectAttempts?: number;
+}

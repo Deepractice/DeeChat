@@ -29,7 +29,7 @@ export interface McpServerConfig {
 
 // ============== Transport Configuration ==============
 
-export type TransportType = 'stdio' | 'http' | 'websocket';
+export type TransportType = 'stdio' | 'http' | 'websocket' | 'streamable-http';
 
 export interface BaseTransportConfig {
   type: TransportType;
@@ -63,10 +63,29 @@ export interface WebSocketTransportConfig extends BaseTransportConfig {
   headers?: Record<string, string>;
 }
 
-export type TransportConfig = 
-  | StdioTransportConfig 
-  | HttpTransportConfig 
-  | WebSocketTransportConfig;
+export interface StreamableHttpTransportConfig extends BaseTransportConfig {
+  type: 'streamable-http';
+  /** URL */
+  url: string;
+  /** 请求头 */
+  headers?: Record<string, string>;
+  /** 会话 ID（可选，用于恢复会话） */
+  sessionId?: string;
+  /** 启用 DNS 重绑定保护 */
+  enableDnsRebindingProtection?: boolean;
+  /** 允许的主机列表 */
+  allowedHosts?: string[];
+  /** SSE 重连延迟 (ms) */
+  reconnectDelay?: number;
+  /** 最大重连次数 */
+  maxReconnectAttempts?: number;
+}
+
+export type TransportConfig =
+  | StdioTransportConfig
+  | HttpTransportConfig
+  | WebSocketTransportConfig
+  | StreamableHttpTransportConfig;
 
 // ============== Connection Status ==============
 

@@ -4,16 +4,18 @@
  * 根据传输配置创建相应的传输实例
  */
 
-import type { 
-  TransportConfig, 
-  StdioTransportConfig, 
-  HttpTransportConfig, 
-  WebSocketTransportConfig 
+import type {
+  TransportConfig,
+  StdioTransportConfig,
+  HttpTransportConfig,
+  WebSocketTransportConfig,
+  StreamableHttpTransportConfig
 } from '../types/index.js';
 import type { Transport } from './types.js';
 import { StdioTransport } from './StdioTransport.js';
 import { HttpTransport } from './HttpTransport.js';
 import { WebSocketTransport } from './WebSocketTransport.js';
+import { StreamableHttpTransport } from './StreamableHttpTransport.js';
 import { ConfigurationError } from '../utils/errors.js';
 
 export class TransportFactory {
@@ -30,7 +32,10 @@ export class TransportFactory {
       
       case 'websocket':
         return TransportFactory.createWebSocketTransport(config);
-      
+
+      case 'streamable-http':
+        return TransportFactory.createStreamableHttpTransport(config);
+
       default:
         throw new ConfigurationError(`Unsupported transport type: ${(config as any).type}`);
     }
@@ -69,16 +74,31 @@ export class TransportFactory {
   }
 
   /**
+   * 创建 Streamable HTTP 传输
+   */
+  private static createStreamableHttpTransport(config: StreamableHttpTransportConfig): StreamableHttpTransport {
+    return new StreamableHttpTransport({
+      url: config.url,
+      headers: config.headers,
+      sessionId: config.sessionId,
+      enableDnsRebindingProtection: config.enableDnsRebindingProtection,
+      allowedHosts: config.allowedHosts,
+      reconnectDelay: config.reconnectDelay,
+      maxReconnectAttempts: config.maxReconnectAttempts
+    });
+  }
+
+  /**
    * 验证传输配置是否受支持
    */
   static validateTransportType(type: string): boolean {
-    return ['stdio', 'http', 'websocket'].includes(type);
+    return ['stdio', 'http', 'websocket', 'streamable-http'].includes(type);
   }
 
   /**
    * 获取支持的传输类型列表
    */
   static getSupportedTypes(): string[] {
-    return ['stdio', 'http', 'websocket'];
+    return ['stdio', 'http', 'websocket', 'streamable-http'];
   }
 }
