@@ -7,14 +7,18 @@
 // 主要导出
 export { McpClient } from './McpClient.js';
 
+// Enum导出
+export { ConnectionStatus } from './types/index.js';
+
 // 类型导出
 export type {
   McpServerConfig,
   TransportConfig,
-  ConnectionStatus,
   ToolInfo,
   ResourceInfo,
-  PromptInfo
+  PromptInfo,
+  ToolCallResult,
+  ResourceContent
 } from './types/index.js';
 
 // 错误类型导出

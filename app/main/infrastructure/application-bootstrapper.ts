@@ -3,6 +3,7 @@ import { Container } from 'typedi'
 import { AIConfigurationDomain } from '../domains/AIConfigurationDomain.js'
 import { ConversationDomain } from '../domains/ConversationDomain.js'
 import { RoleManagementDomain } from '../domains/RoleManagementDomain.js'
+import { McpDomain } from '../domains/McpDomain.js'
 import { WindowManager } from './window-manager.js'
 
 /**
@@ -66,6 +67,13 @@ export class ApplicationBootstrapper {
     const roleManagementDomain = Container.get(RoleManagementDomain)
     await roleManagementDomain.initialize()
 
+    // 等待一小段时间，确保数据库完全释放资源
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // 4. 初始化MCP域 (外部工具集成)
+    const mcpDomain = Container.get(McpDomain)
+    await mcpDomain.initialize()
+
     console.log('🎯 核心Domain初始化完成')
   }
 
@@ -83,6 +91,9 @@ export class ApplicationBootstrapper {
       }
       if (serviceName === 'RoleManagementDomain') {
         return Container.get(RoleManagementDomain) as T
+      }
+      if (serviceName === 'McpDomain') {
+        return Container.get(McpDomain) as T
       }
 
       // 其他服务使用token解析

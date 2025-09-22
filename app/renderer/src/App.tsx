@@ -3,9 +3,10 @@ import { ConfigProvider } from 'antd'
 import ConfigPage from './components/ConfigPage'
 import ChatPage from './components/ChatPage'
 import RoleSelector from './components/RoleSelector'
+import McpConfigPage from './components/McpConfigPage'
 import { Role, RoleActivationResponse } from './types/role'
 
-type AppView = 'config' | 'role-selector' | 'chat'
+type AppView = 'config' | 'role-selector' | 'chat' | 'mcp-config'
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('config') // 默认先显示配置页面
@@ -16,6 +17,21 @@ const App: React.FC = () => {
   // 检查是否有AI配置
   useEffect(() => {
     checkAIConfigs()
+
+    // 监听hash变化来处理路由
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1) // 去掉#号
+      if (hash === 'mcp-config') {
+        setCurrentView('mcp-config')
+      }
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    handleHashChange() // 初始化时检查一次
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange)
+    }
   }, [])
 
   const checkAIConfigs = async () => {
@@ -49,10 +65,16 @@ const App: React.FC = () => {
 
   const switchToConfig = () => {
     setCurrentView('config')
+    window.location.hash = ''
   }
 
   const switchToRoleSelector = () => {
     setCurrentView('role-selector')
+  }
+
+  const switchToMcpConfig = () => {
+    setCurrentView('mcp-config')
+    window.location.hash = 'mcp-config'
   }
 
   const handleRoleSelect = (role: Role, activationResult: RoleActivationResponse) => {
@@ -79,7 +101,12 @@ const App: React.FC = () => {
         <ConfigPage
           onConfigChange={handleConfigChange}
           onStartChat={switchToRoleSelector}
+          onMcpConfig={switchToMcpConfig}
           hasConfigs={hasConfigs}
+        />
+      ) : currentView === 'mcp-config' ? (
+        <McpConfigPage
+          onBack={switchToConfig}
         />
       ) : currentView === 'role-selector' ? (
         <RoleSelector

@@ -15,6 +15,7 @@ export class IPCRegistry {
     await this.registerDomainHandlers('AIConfigurationDomain')
     await this.registerDomainHandlers('ConversationDomain')
     await this.registerDomainHandlers('RoleManagementDomain')
+    await this.registerDomainHandlers('McpDomain')
 
     // 未来可以自动发现并注册更多Domain
     // await this.registerDomainHandlers('FileManagementDomain')

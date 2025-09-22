@@ -1,67 +1,117 @@
 /**
  * Configuration Format Adapter
- * 
- * 支持多种MCP配置格式：
- * 1. 官方Claude Desktop格式
- * 2. 我们的扩展格式
+ *
+ * 统一使用 Claude Desktop 标准格式
  */
 
 import type { McpServerConfig } from '../types/index.js';
 
-// Claude Desktop格式接口
+// Claude Desktop格式接口 - 扩展支持多种传输类型
 export interface ClaudeDesktopConfig {
   mcpServers: Record<string, ClaudeDesktopServerConfig>;
 }
 
 export interface ClaudeDesktopServerConfig {
-  command: string;
+  // stdio 传输类型
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
   cwd?: string;
-}
 
-// 我们的扩展格式接口
-export interface DeeChatConfig {
-  servers: McpServerConfig[];
+  // HTTP 传输类型
+  url?: string;
+
+  // WebSocket 传输类型
+  websocket?: string;
+
+  // 传输类型标识（可选，如果没有会自动推断）
+  transport?: 'stdio' | 'http' | 'websocket' | 'streamable-http';
 }
 
 /**
- * 配置格式适配器
+ * 配置格式适配器 - 统一使用 Claude Desktop 格式
  */
 export class ConfigAdapter {
   /**
-   * 检测配置文件格式
+   * 从 Claude Desktop 格式解析配置
    */
-  static detectFormat(config: any): 'claude-desktop' | 'deechat' | 'unknown' {
-    if (config && typeof config === 'object') {
-      if ('mcpServers' in config) {
-        return 'claude-desktop';
-      }
-      if ('servers' in config && Array.isArray(config.servers)) {
-        return 'deechat';
-      }
+  static parseConfig(configData: any): McpServerConfig[] {
+    if (!configData || typeof configData !== 'object') {
+      throw new Error('Configuration must be an object');
     }
-    return 'unknown';
+
+    if (!('mcpServers' in configData)) {
+      throw new Error('Configuration must contain "mcpServers" field (Claude Desktop format)');
+    }
+
+    return this.fromClaudeDesktop(configData as ClaudeDesktopConfig);
   }
 
   /**
-   * 从Claude Desktop格式转换到统一格式
+   * 从 Claude Desktop 格式转换到内部格式
    */
   static fromClaudeDesktop(config: ClaudeDesktopConfig): McpServerConfig[] {
     const servers: McpServerConfig[] = [];
 
     for (const [serverId, serverConfig] of Object.entries(config.mcpServers)) {
+      // 推断传输类型
+      let transportType: 'stdio' | 'http' | 'websocket' = 'stdio';
+
+      if (serverConfig.transport) {
+        // 标准化传输类型
+        switch (serverConfig.transport) {
+          case 'streamable-http':
+          case 'http':
+            transportType = 'http';
+            break;
+          case 'websocket':
+            transportType = 'websocket';
+            break;
+          case 'stdio':
+          default:
+            transportType = 'stdio';
+            break;
+        }
+      } else if (serverConfig.url) {
+        transportType = 'http';
+      } else if (serverConfig.websocket) {
+        transportType = 'websocket';
+      } else if (serverConfig.command) {
+        transportType = 'stdio';
+      }
+
+      let transport: any;
+
+      switch (transportType) {
+        case 'http':
+          transport = {
+            type: 'http',
+            url: serverConfig.url || ''
+          };
+          break;
+        case 'websocket':
+          transport = {
+            type: 'websocket',
+            url: serverConfig.websocket || ''
+          };
+          break;
+        case 'stdio':
+        default:
+          transport = {
+            type: 'stdio',
+            command: serverConfig.command || '',
+            args: serverConfig.args || [],
+            cwd: serverConfig.cwd,
+            env: serverConfig.env
+          };
+          break;
+      }
+
       const mcpConfig: McpServerConfig = {
         id: serverId,
         name: serverId, // 使用ID作为名称
         description: `MCP Server: ${serverId}`,
-        transport: {
-          type: 'stdio',
-          command: serverConfig.command,
-          args: serverConfig.args || [],
-          cwd: serverConfig.cwd,
-          env: serverConfig.env
-        },
+        transport,
         enabled: true,
         autoReconnect: true,
         timeout: 30000,
@@ -75,16 +125,9 @@ export class ConfigAdapter {
   }
 
   /**
-   * 从我们的格式读取
+   * 转换为 Claude Desktop 格式
    */
-  static fromDeeChat(config: DeeChatConfig): McpServerConfig[] {
-    return config.servers;
-  }
-
-  /**
-   * 转换为Claude Desktop格式
-   */
-  static toClaudeDesktop(servers: McpServerConfig[]): ClaudeDesktopConfig {
+  static generateConfig(servers: McpServerConfig[]): ClaudeDesktopConfig {
     const mcpServers: Record<string, ClaudeDesktopServerConfig> = {};
 
     for (const server of servers) {
@@ -101,42 +144,5 @@ export class ConfigAdapter {
     }
 
     return { mcpServers };
-  }
-
-  /**
-   * 转换为我们的格式
-   */
-  static toDeeChat(servers: McpServerConfig[]): DeeChatConfig {
-    return { servers };
-  }
-
-  /**
-   * 统一解析配置
-   */
-  static parseConfig(configData: any): McpServerConfig[] {
-    const format = this.detectFormat(configData);
-    
-    switch (format) {
-      case 'claude-desktop':
-        return this.fromClaudeDesktop(configData as ClaudeDesktopConfig);
-      case 'deechat':
-        return this.fromDeeChat(configData as DeeChatConfig);
-      default:
-        throw new Error(`Unsupported configuration format. Expected 'mcpServers' (Claude Desktop) or 'servers' (DeeChat) format.`);
-    }
-  }
-
-  /**
-   * 生成配置文件内容
-   */
-  static generateConfig(servers: McpServerConfig[], format: 'claude-desktop' | 'deechat' = 'deechat'): any {
-    switch (format) {
-      case 'claude-desktop':
-        return this.toClaudeDesktop(servers);
-      case 'deechat':
-        return this.toDeeChat(servers);
-      default:
-        throw new Error(`Unsupported output format: ${format}`);
-    }
   }
 }

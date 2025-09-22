@@ -36,12 +36,35 @@ export class ConfigManager {
     try {
       await this.loadConfig();
     } catch (error) {
-      // 如果配置文件不存在，创建默认配置
+      // 如果配置文件不存在，创建 Claude Desktop 格式的模板文件
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        await this.saveConfig();
+        await this.createClaudeDesktopConfigFile();
       } else {
         throw error;
       }
+    }
+  }
+
+  /**
+   * 创建 Claude Desktop 格式的配置文件
+   */
+  private async createClaudeDesktopConfigFile(): Promise<void> {
+    try {
+      // 确保目录存在
+      const dir = path.dirname(this.configFile);
+      await fs.mkdir(dir, { recursive: true });
+
+      // 创建 Claude Desktop 格式的配置文件
+      const claudeConfig = this.createClaudeDesktopTemplate();
+      const configJson = JSON.stringify(claudeConfig, null, 2);
+      await fs.writeFile(this.configFile, configJson, 'utf-8');
+
+      // 重新加载配置以解析刚创建的文件
+      await this.loadConfig();
+    } catch (error) {
+      throw new ConfigurationError(
+        `Failed to create default configuration file: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -172,8 +195,10 @@ export class ConfigManager {
       const dir = path.dirname(this.configFile);
       await fs.mkdir(dir, { recursive: true });
 
-      // 写入配置文件
-      const configJson = JSON.stringify(this.config, null, 2);
+      // 总是以 Claude Desktop 格式保存
+      const servers = this.listServers();
+      const claudeConfig = ConfigAdapter.generateConfig(servers);
+      const configJson = JSON.stringify(claudeConfig, null, 2);
       await fs.writeFile(this.configFile, configJson, 'utf-8');
     } catch (error) {
       throw new ConfigurationError(
@@ -224,20 +249,13 @@ export class ConfigManager {
   }
 
   /**
-   * 导出配置为Claude Desktop格式
+   * 导出配置（现在统一为 Claude Desktop 格式）
    */
-  exportToClaudeDesktop(): any {
+  exportConfig(): any {
     const servers = this.listServers();
-    return ConfigAdapter.generateConfig(servers, 'claude-desktop');
+    return ConfigAdapter.generateConfig(servers);
   }
 
-  /**
-   * 导出配置为DeeChat格式
-   */
-  exportToDeeChat(): any {
-    const servers = this.listServers();
-    return ConfigAdapter.generateConfig(servers, 'deechat');
-  }
 
   // ============== Private Methods ==============
 
@@ -248,6 +266,7 @@ export class ConfigManager {
   }
 
   private createDefaultConfig(): McpConfigFile {
+    // 现在内部也使用扁平化的服务器存储结构
     return {
       version: '1.0.0',
       servers: {},
@@ -256,6 +275,21 @@ export class ConfigManager {
         autoReconnect: true,
         maxReconnectAttempts: 3,
         reconnectDelay: 1000
+      }
+    };
+  }
+
+  /**
+   * 创建 Claude Desktop 格式的默认配置模板
+   */
+  private createClaudeDesktopTemplate(): any {
+    return {
+      mcpServers: {
+        // 示例配置 - 用户可以根据需要修改或添加更多服务器
+        // "promptx": {
+        //   "command": "npx",
+        //   "args": ["-y", "@promptx/mcp-server"]
+        // }
       }
     };
   }

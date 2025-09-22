@@ -39,13 +39,15 @@ interface AIConfig {
 interface ConfigPageProps {
   onConfigChange?: () => void
   onStartChat?: () => void
+  onMcpConfig?: () => void
   hasConfigs?: boolean
 }
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ 
-  onConfigChange, 
-  onStartChat, 
-  hasConfigs = false 
+const ConfigPage: React.FC<ConfigPageProps> = ({
+  onConfigChange,
+  onStartChat,
+  onMcpConfig,
+  hasConfigs = false
 }) => {
   const [configs, setConfigs] = useState<AIConfig[]>([])
   const [loading, setLoading] = useState(false)
@@ -329,13 +331,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({
           </Title>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={onMcpConfig}
+            style={{
+              borderRadius: '6px'
+            }}
+          >
+            MCP配置
+          </Button>
           {hasConfigs && (
-            <Button 
-              type="primary" 
-              icon={<MessageOutlined />} 
+            <Button
+              type="primary"
+              icon={<MessageOutlined />}
               onClick={onStartChat}
-              style={{ 
-                background: '#1890ff', 
+              style={{
+                background: '#1890ff',
                 borderColor: '#1890ff',
                 borderRadius: '6px'
               }}

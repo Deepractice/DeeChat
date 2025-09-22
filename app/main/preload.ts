@@ -125,6 +125,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearCache: () => ipcRenderer.invoke('conversation:clear-cache')
   },
 
+  // PromptX 角色管理API - 对应后端 RoleManagementDomain
+  promptx: {
+    // 发现可用资源（角色、工具等）
+    discover: (focus?: 'all' | 'roles' | 'tools') =>
+      ipcRenderer.invoke('promptx:discover', focus),
+
+    // 激活指定角色
+    action: (roleId: string) =>
+      ipcRenderer.invoke('promptx:action', roleId),
+
+    // 通用执行接口（扩展功能时使用）
+    execute: (command: string, args?: any[]) =>
+      ipcRenderer.invoke('promptx:execute', command, args)
+  },
+
+  // MCP服务器管理API - 对应后端 McpDomain
+  mcp: {
+    // 服务器管理
+    listServers: () => ipcRenderer.invoke('mcp:list-servers'),
+    addServer: (config: McpServerConfig) => ipcRenderer.invoke('mcp:add-server', config),
+    updateServer: (serverId: string, updates: Partial<McpServerConfig>) =>
+      ipcRenderer.invoke('mcp:update-server', serverId, updates),
+    removeServer: (serverId: string) => ipcRenderer.invoke('mcp:remove-server', serverId),
+
+    // 连接管理
+    connect: (serverId: string) => ipcRenderer.invoke('mcp:connect', serverId),
+    disconnect: (serverId: string) => ipcRenderer.invoke('mcp:disconnect', serverId),
+
+    // MCP功能调用
+    listTools: (serverId: string) => ipcRenderer.invoke('mcp:list-tools', serverId),
+    callTool: (serverId: string, toolName: string, args?: any) =>
+      ipcRenderer.invoke('mcp:call-tool', serverId, toolName, args),
+    listResources: (serverId: string) => ipcRenderer.invoke('mcp:list-resources', serverId),
+    readResource: (serverId: string, uri: string) =>
+      ipcRenderer.invoke('mcp:read-resource', serverId, uri)
+  },
+
   // 系统API (预留扩展)
   system: {
     platform: process.platform,
@@ -200,6 +237,47 @@ interface SendMessageInput {
   }
 }
 
+// MCP相关类型定义
+interface McpServerConfig {
+  id: string
+  name: string
+  description?: string
+  transport: {
+    type: 'stdio' | 'http' | 'websocket'
+    command: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+    url?: string
+  }
+  enabled: boolean
+  autoReconnect?: boolean
+  timeout?: number
+  tags?: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface McpServerWithStatus extends McpServerConfig {
+  connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error'
+  toolCount?: number
+  resourceCount?: number
+  lastError?: string
+}
+
+interface McpToolInfo {
+  name: string
+  description?: string
+  inputSchema?: any
+}
+
+interface McpResourceInfo {
+  uri: string
+  name?: string
+  description?: string
+  mimeType?: string
+}
+
 // TypeScript类型声明
 declare global {
   interface Window {
@@ -224,6 +302,23 @@ declare global {
         getMessageHistory: (sessionId: string) => Promise<{ success: boolean; data?: ConversationMessage[]; error?: string }>
         deleteSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>
         clearCache: () => Promise<{ success: boolean; error?: string }>
+      }
+      promptx: {
+        discover: (focus?: 'all' | 'roles' | 'tools') => Promise<any>
+        action: (roleId: string) => Promise<any>
+        execute: (command: string, args?: any[]) => Promise<any>
+      }
+      mcp: {
+        listServers: () => Promise<{ success: boolean; data?: McpServerWithStatus[]; error?: string }>
+        addServer: (config: McpServerConfig) => Promise<{ success: boolean; error?: string }>
+        updateServer: (serverId: string, updates: Partial<McpServerConfig>) => Promise<{ success: boolean; error?: string }>
+        removeServer: (serverId: string) => Promise<{ success: boolean; error?: string }>
+        connect: (serverId: string) => Promise<{ success: boolean; error?: string }>
+        disconnect: (serverId: string) => Promise<{ success: boolean; error?: string }>
+        listTools: (serverId: string) => Promise<{ success: boolean; data?: McpToolInfo[]; error?: string }>
+        callTool: (serverId: string, toolName: string, args?: any) => Promise<{ success: boolean; data?: any; error?: string }>
+        listResources: (serverId: string) => Promise<{ success: boolean; data?: McpResourceInfo[]; error?: string }>
+        readResource: (serverId: string, uri: string) => Promise<{ success: boolean; data?: any; error?: string }>
       }
       system: {
         platform: string
