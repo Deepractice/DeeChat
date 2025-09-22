@@ -14,7 +14,8 @@ export class IPCRegistry {
     // 注册所有Domain的IPC处理器
     await this.registerDomainHandlers('AIConfigurationDomain')
     await this.registerDomainHandlers('ConversationDomain')
-    
+    await this.registerDomainHandlers('RoleManagementDomain')
+
     // 未来可以自动发现并注册更多Domain
     // await this.registerDomainHandlers('FileManagementDomain')
 

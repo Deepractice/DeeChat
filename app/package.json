@@ -27,6 +27,7 @@
     "@deepracticex/database-adapter": "^2.0.1",
     "@deepracticex/mcp-client": "^2.0.1",
     "@deepracticex/token-calculator": "^0.2.1",
+    "@promptx/core": "^1.18.0",
     "better-sqlite3": "^12.2.0",
     "reflect-metadata": "^0.2.2",
     "typedi": "^0.10.0"

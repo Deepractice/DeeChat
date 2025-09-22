@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Layout, Button, Drawer, Select, message, Spin } from 'antd'
-import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined } from '@ant-design/icons'
+import { Layout, Button, Drawer, Select, message, Spin, Space, Tag, Avatar } from 'antd'
+import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined, UserSwitchOutlined } from '@ant-design/icons'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import SessionList from './SessionList'
@@ -10,14 +10,23 @@ import type {
   ConversationMessage,
   AIConfig
 } from '../../../main/preload'
+import { Role, RoleActivationResponse } from '../types/role'
 
 const { Header, Content, Sider } = Layout
 
 interface ChatPageProps {
   onBackToConfig: () => void
+  onBackToRoleSelector?: () => void
+  selectedRole?: Role | null
+  roleActivationResult?: RoleActivationResponse | null
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
+const ChatPage: React.FC<ChatPageProps> = ({
+  onBackToConfig,
+  onBackToRoleSelector,
+  selectedRole,
+  roleActivationResult
+}) => {
   // 状态管理
   const [sessions, setSessions] = useState<ConversationSession[]>([])
   const [currentSession, setCurrentSession] = useState<ConversationSession | null>(null)
@@ -366,6 +375,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
       setCurrentAiMessage(null)
       setStreamingContent('')
 
+      // 准备系统提示词（如果有选择的角色）
+      let systemPrompt = undefined
+      if (selectedRole && roleActivationResult?.system_prompt) {
+        systemPrompt = roleActivationResult.system_prompt
+        console.log(`🎭 使用角色 "${selectedRole.name}" 的系统提示词:`, systemPrompt)
+      } else {
+        console.log('⚠️ 没有角色系统提示词:', {
+          hasRole: !!selectedRole,
+          hasActivationResult: !!roleActivationResult,
+          hasSystemPrompt: !!(roleActivationResult?.system_prompt)
+        })
+      }
+
       // 发送流式请求（触发实时流式响应）
       const result = await window.electronAPI.conversation.sendMessageStream({
         session_id: currentSession.id,
@@ -376,6 +398,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
           apiKey: config.api_key,
           temperature: 0.7,
           maxTokens: 4000
+        },
+        options: {
+          systemPrompt: systemPrompt
         }
       })
 
@@ -480,6 +505,31 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* 当前激活角色显示 */}
+            {selectedRole && (
+              <Space style={{
+                background: '#f6f8fa',
+                padding: '4px 12px',
+                borderRadius: '6px',
+                border: '1px solid #e1e4e8'
+              }}>
+                <Avatar size="small" icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff' }} />
+                <span style={{ fontSize: '12px', color: '#586069' }}>
+                  当前角色: <strong>{selectedRole.name}</strong>
+                </span>
+                {onBackToRoleSelector && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<UserSwitchOutlined />}
+                    onClick={onBackToRoleSelector}
+                    style={{ fontSize: '10px', padding: '0 4px' }}
+                    title="切换角色"
+                  />
+                )}
+              </Space>
+            )}
+
             <Select
               value={selectedConfig}
               onChange={setSelectedConfig}
@@ -495,14 +545,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToConfig }) => {
               onClick={openModelSelector}
               disabled={!selectedConfig || loadingModels}
               loading={loadingModels}
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
                 minWidth: '150px',
                 maxWidth: '200px'
               }}
             >
-              <span style={{ 
+              <span style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',

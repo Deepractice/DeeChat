@@ -2,6 +2,7 @@ import 'reflect-metadata'
 import { Container } from 'typedi'
 import { AIConfigurationDomain } from '../domains/AIConfigurationDomain.js'
 import { ConversationDomain } from '../domains/ConversationDomain.js'
+import { RoleManagementDomain } from '../domains/RoleManagementDomain.js'
 import { WindowManager } from './window-manager.js'
 
 /**
@@ -58,6 +59,13 @@ export class ApplicationBootstrapper {
     const conversationDomain = Container.get(ConversationDomain)
     await conversationDomain.initialize()
 
+    // 等待一小段时间，确保数据库完全释放资源
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // 3. 初始化角色管理域 (PromptX适配层)
+    const roleManagementDomain = Container.get(RoleManagementDomain)
+    await roleManagementDomain.initialize()
+
     console.log('🎯 核心Domain初始化完成')
   }
 
@@ -72,6 +80,9 @@ export class ApplicationBootstrapper {
       }
       if (serviceName === 'ConversationDomain') {
         return Container.get(ConversationDomain) as T
+      }
+      if (serviceName === 'RoleManagementDomain') {
+        return Container.get(RoleManagementDomain) as T
       }
 
       // 其他服务使用token解析
