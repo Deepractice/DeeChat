@@ -109,11 +109,12 @@
       ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "notarize": false,
+      "identity": null,
       "minimumSystemVersion": "10.15.0"
     },
     "win": {
