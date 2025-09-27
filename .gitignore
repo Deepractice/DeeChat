@@ -95,8 +95,8 @@ jspm_packages/
 .tern-port
 
 # Electron specific
-app/
-packages/
+# app/ - Don't ignore this! It contains the main application code
+# packages/ - Don't ignore this! It contains important package code
 
 # Test files
 test-results/
@@ -116,9 +116,14 @@ src/renderer/src/components/archive/*
 
 # User data and config (for development)
 user-data/
-config/
+/config/
 *.sqlite
 *.db
+
+# Allow source code config directories
+!app/main/config/
+!*/config/*.ts
+!*/config/*.js
 
 # PromptX specific
 .promptx/
@@ -131,7 +136,7 @@ resources/promptx/
 .cursor/
 .superdesign/
 .windsurfrules
-CLAUDE.md
+# CLAUDE.md - Keep this important project documentation file
 
 # Vercel deployment
 .vercel/
@@ -155,3 +160,5 @@ cherry-studio/
 *.AppImage
 *.deb
 *.rpm
+Roo-Code/
+system-prompts-and-models-of-ai-tools/

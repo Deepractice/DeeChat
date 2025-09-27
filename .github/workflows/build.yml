@@ -1,0 +1,211 @@
+name: 🚀 DeeChat Build & Release
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
+
+      - name: 📦 Install all dependencies using workspace
+        run: |
+          # 优化安装：利用workspace和缓存加速
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
+
+      - name: 🏗️ Build application
+        run: |
+          # 使用根目录的 build 脚本
+          npm run build
+
+      - name: 🍎 Import Code-Signing Certificates
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            echo "Setting up Apple certificates..."
+            echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+            security create-keychain -p "" build.keychain
+            security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            security list-keychains -s ~/Library/Keychains/build.keychain
+            security default-keychain -s ~/Library/Keychains/build.keychain
+            security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+            security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+          fi
+
+      - name: 📱 Build macOS app
+        run: |
+          cd app
+          npx electron-builder --mac --x64 --arm64 --publish=never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            app/release/*.dmg
+            app/release/*.zip
+            app/release/latest-mac.yml
+          retention-days: 30
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
+
+      - name: 🪟 Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: 📦 Install all dependencies using workspace
+        run: |
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
+
+      - name: 🏗️ Build application
+        run: npm run build
+
+      - name: 📱 Build Windows app
+        run: |
+          cd app
+          npx electron-builder --win --x64 --ia32 --publish=never
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            app/release/*.exe
+            app/release/latest.yml
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            app/renderer/package-lock.json
+
+      - name: 🐧 Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
+
+      - name: 📦 Install all dependencies using workspace
+        run: |
+          npm ci --prefer-offline
+          cd app && npm ci --prefer-offline
+          cd renderer && npm ci --prefer-offline
+
+      - name: 🏗️ Build application
+        run: npm run build
+
+      - name: 📱 Build Linux app
+        run: |
+          cd app
+          npx electron-builder --linux --x64 --publish=never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            app/release/*.AppImage
+            app/release/*.deb
+            app/release/*.rpm
+            app/release/latest-linux.yml
+          retention-days: 30
+
+  # 发布 Job（仅在 tag 推送时运行）
+  release:
+    name: 🎉 Create Release
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: 📝 Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          files: |
+            macos-build/*.dmg
+            macos-build/*.zip
+            macos-build/latest-mac.yml
+            windows-build/*.exe
+            windows-build/latest.yml
+            linux-build/*.AppImage
+            linux-build/*.deb
+            linux-build/*.rpm
+            linux-build/latest-linux.yml
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

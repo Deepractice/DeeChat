@@ -1,0 +1,190 @@
+/* 角色选择器样式 */
+
+.role-selector-layout {
+  height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.role-selector-header {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.role-selector-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  margin: 16px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  overflow: auto;
+}
+
+/* 角色卡片样式 */
+.role-card {
+  height: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.role-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-color: #1890ff;
+}
+
+.role-card-hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-color: #1890ff;
+}
+
+.role-card .ant-card-body {
+  padding: 16px;
+  height: calc(100% - 58px); /* 减去底部action的高度 */
+  display: flex;
+  flex-direction: column;
+}
+
+.role-card .ant-card-meta {
+  flex: 1;
+}
+
+.role-card .ant-card-meta-title {
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.role-card .ant-card-meta-description {
+  color: #666;
+  line-height: 1.4;
+}
+
+.role-card .ant-card-actions {
+  background: rgba(250, 250, 250, 0.8);
+  border-radius: 0 0 12px 12px;
+}
+
+.role-card .ant-card-actions li {
+  margin: 8px 0;
+}
+
+.role-card .ant-card-actions li:not(:last-child) {
+  border-right: none;
+}
+
+/* 角色头像样式 */
+.role-card .ant-avatar {
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 徽章样式 */
+.role-card .ant-badge {
+  font-size: 12px;
+}
+
+.role-card .ant-badge-count {
+  border-radius: 10px;
+  min-width: 20px;
+  height: 20px;
+  line-height: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .role-selector-content {
+    margin: 8px;
+    border-radius: 8px;
+  }
+
+  .role-card {
+    border-radius: 8px;
+  }
+
+  .role-card .ant-card-actions {
+    border-radius: 0 0 8px 8px;
+  }
+}
+
+@media (max-width: 576px) {
+  .role-selector-header .ant-typography {
+    font-size: 18px !important;
+  }
+
+  .role-card .ant-card-meta-title {
+    font-size: 14px;
+  }
+
+  .role-card .ant-card-body {
+    padding: 12px;
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.role-card {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.role-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.role-card:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.role-card:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+/* 加载状态样式 */
+.role-card.ant-card-loading .ant-card-body {
+  padding: 24px;
+}
+
+/* 选中状态样式 */
+.role-card.selected {
+  border-color: #1890ff;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f3ff 100%);
+}
+
+.role-card.selected::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: #1890ff;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.role-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 2;
+}

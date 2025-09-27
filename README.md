@@ -1,158 +1,285 @@
+# 🤖 DeeChat
+
 <div align="center">
-  <img src="src/renderer/public/logo.png" alt="DeeChat AI Desktop Assistant" width="120" height="120">
-  
-  # DeeChat
-  
-  ### 🧠 智能桌面AI助手 - 真正理解你的AI伙伴
-  
-  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/deepractice/deechat/releases)
-  [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/deepractice/deechat/releases)
-  
-  [English](README_EN.md) | 简体中文
+
+![DeeChat Logo](https://img.shields.io/badge/DeeChat-AI%20Chat%20Application-blue?style=for-the-badge&logo=electron)
+
+**基于DDD架构的高级AI聊天应用程序**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Electron](https://img.shields.io/badge/Electron-30.5.1-blue.svg)](https://electronjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.2.0-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
+
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [架构设计](#-架构设计) • [开发指南](#-开发指南) • [部署发布](#-部署发布)
+
 </div>
+
+## 📋 概述
+
+DeeChat 是一款现代化的AI聊天应用程序，采用领域驱动设计(DDD)架构，提供强大的AI对话能力和工具集成功能。支持多种AI模型，具备MCP(Model Context Protocol)工具调用能力，为用户提供智能化的对话体验。
+
+### 🎯 设计理念
+
+- **🏗️ DDD架构**: 采用领域驱动设计，清晰的业务边界和职责分离
+- **🔧 工具集成**: 支持MCP协议，可扩展的工具调用系统
+- **🎛️ 动态配置**: 实时调节AI参数（温度、Token限制等）
+- **💾 对话管理**: 完整的会话历史和上下文管理
+- **🚀 高性能**: 流式响应，优化的用户体验
+
+## ✨ 功能特性
+
+### 🤖 AI对话能力
+- **多模型支持**: 兼容OpenAI、Claude等主流AI模型
+- **流式响应**: 实时流式对话，即时反馈
+- **动态参数**: 聊天中可调节温度和Token限制
+- **上下文管理**: 智能的对话上下文保持和管理
+
+### 🛠️ 工具系统
+- **MCP协议**: 完整支持Model Context Protocol
+- **工具调用**: 无限制的工具调用链(可配置)
+- **扩展性**: 支持自定义工具和服务器连接
+- **实时监控**: 工具执行状态和结果追踪
+
+### 📊 会话管理
+- **多会话**: 支持创建和管理多个对话会话
+- **历史记录**: 完整的消息历史保存和检索
+- **搜索功能**: 快速查找历史对话内容
+- **导出功能**: 支持对话内容导出
+
+### ⚙️ 配置管理
+- **AI配置**: 灵活的AI服务配置管理
+- **MCP服务器**: 可视化的MCP服务器管理
+- **用户偏好**: 个性化的用户设置和偏好
+
+## 🚀 快速开始
+
+### 📋 系统要求
+
+- **Node.js**: >= 18.0.0
+- **npm**: >= 8.0.0
+- **操作系统**: macOS 10.15+, Windows 10+, Ubuntu 18.04+
+
+### 📦 安装
+
+```bash
+# 克隆项目
+git clone https://github.com/Deepractice/DeeChat.git
+cd DeeChat
+
+# 安装依赖
+npm install
+
+# 安装应用依赖
+cd app && npm install
+```
+
+### 🏃‍♂️ 运行
+
+```bash
+# 开发模式
+npm run dev
+
+# 生产模式
+npm run build
+npm start
+```
+
+### 🔧 首次配置
+
+1. **启动应用**: 运行开发模式或安装包
+2. **配置AI服务**: 在设置页面添加您的AI API配置
+3. **开始对话**: 创建新会话，开始AI对话
+
+## 🏗️ 架构设计
+
+### 📁 项目结构
+
+```
+DeeChat/
+├── app/                          # Electron应用主体
+│   ├── main/                     # 主进程
+│   │   ├── domains/              # 业务域(DDD架构)
+│   │   │   ├── ai-configuration/ # AI配置域
+│   │   │   ├── conversation/     # 对话域
+│   │   │   ├── mcp/              # MCP工具域
+│   │   │   └── role-management/  # 角色管理域
+│   │   ├── infrastructure/       # 基础设施层
+│   │   └── ipc/                  # 进程间通信
+│   └── renderer/                 # 渲染进程(前端)
+│       ├── src/
+│       │   ├── components/       # React组件
+│       │   ├── contexts/         # React上下文
+│       │   └── utils/            # 工具函数
+└── packages/                     # 共享包
+    ├── ai-chat/                  # AI聊天核心包
+    ├── context-manager/          # 上下文管理包
+    ├── conversation-storage/     # 对话存储包
+    ├── mcp-client/              # MCP客户端包
+    └── database-adapter/        # 数据库适配器包
+```
+
+### 🏛️ DDD架构层次
+
+```
+┌─────────────────────────────────────────────┐
+│                用户界面层                      │
+│              (React UI)                     │
+├─────────────────────────────────────────────┤
+│                应用服务层                      │
+│           (IPC Adapters)                   │
+├─────────────────────────────────────────────┤
+│                业务域层                       │
+│  ┌─────────────┬─────────────┬─────────────┐ │
+│  │ AI配置域    │   对话域    │   MCP域     │ │
+│  │ Services    │ Services    │ Services    │ │
+│  │ Types       │ Types       │ Types       │ │
+│  └─────────────┴─────────────┴─────────────┘ │
+├─────────────────────────────────────────────┤
+│                基础设施层                      │
+│     (Database, HTTP, File System)          │
+└─────────────────────────────────────────────┘
+```
+
+### 🔄 核心流程
+
+**对话流程**:
+```
+用户输入 → 会话服务 → AI聊天服务 → 工具调用服务 → MCP服务器 → 响应处理 → 用户界面
+```
+
+## 🛠️ 开发指南
+
+### 📂 添加新的业务域
+
+1. **创建域结构**:
+```bash
+mkdir app/main/domains/your-domain
+cd app/main/domains/your-domain
+mkdir services adapters types utils
+```
+
+2. **实现域服务**:
+```typescript
+// services/YourDomainService.ts
+import { Service } from 'typedi'
+
+@Service()
+export class YourDomainService {
+  // 业务逻辑实现
+}
+```
+
+3. **添加IPC适配器**:
+```typescript
+// adapters/IPCAdapter.ts
+export const yourDomainIPCHandlers = {
+  'your-domain:action': async (input: any) => {
+    // IPC处理逻辑
+  }
+}
+```
+
+### 🔧 添加新的MCP工具
+
+1. **配置MCP服务器**: 在MCP配置页面添加服务器
+2. **工具自动发现**: 系统自动发现并注册工具
+3. **调用测试**: 在对话中测试工具调用
+
+### 🎨 前端组件开发
+
+```typescript
+// 使用TypeScript + React + Ant Design
+import React from 'react'
+import { Button, Card } from 'antd'
+
+export const YourComponent: React.FC = () => {
+  return (
+    <Card title="Your Feature">
+      <Button type="primary">Action</Button>
+    </Card>
+  )
+}
+```
+
+### 🧪 测试
+
+```bash
+# 运行测试(待实现)
+npm test
+
+# 类型检查
+npm run build
+```
+
+## 📦 部署发布
+
+### 🖥️ 桌面应用打包
+
+```bash
+# 构建所有平台
+npm run dist:all
+
+# 单平台构建
+npm run dist:mac    # macOS
+npm run dist:win    # Windows
+npm run dist:linux  # Linux
+```
+
+### 📱 支持平台
+
+- **macOS**: DMG + ZIP (Intel & Apple Silicon)
+- **Windows**: NSIS安装包 + 便携版 (x64 & x86)
+- **Linux**: AppImage + DEB + RPM (x64)
+
+## 🤝 贡献指南
+
+我们欢迎社区贡献！请遵循以下步骤：
+
+1. **Fork项目** 并创建特性分支
+2. **遵循代码规范** 和架构设计
+3. **添加测试** 覆盖新功能
+4. **提交PR** 并描述变更内容
+
+### 📋 代码规范
+
+- **TypeScript**: 严格类型检查
+- **ESLint**: 代码风格检查
+- **Prettier**: 代码格式化
+- **DDD原则**: 遵循领域驱动设计
+
+## 📄 许可证
+
+本项目采用 [MIT License](LICENSE) 开源协议。
+
+## 👥 团队
+
+- **DeeChat Team** - 项目维护和开发
+- **Email**: team@deechat.ai
+- **GitHub**: [@Deepractice](https://github.com/Deepractice)
+
+## 🔗 相关链接
+
+- [项目主页](https://github.com/Deepractice/DeeChat)
+- [问题反馈](https://github.com/Deepractice/DeeChat/issues)
+- [功能请求](https://github.com/Deepractice/DeeChat/discussions)
+- [更新日志](CHANGELOG.md)
+
+## 📚 技术栈
+
+- **前端**: React + TypeScript + Ant Design
+- **后端**: Electron + Node.js + TypeScript
+- **架构**: DDD + 依赖注入(TypeDI)
+- **数据库**: SQLite + Better-SQLite3
+- **工具协议**: MCP (Model Context Protocol)
+- **构建**: Electron-Vite + Electron-Builder
 
 ---
 
-## ✨ 为什么选择 DeeChat？
-
-**DeeChat** 不是普通的AI聊天工具，而是一个**真正理解你**的桌面AI伙伴。
-
-### 🎯 **智能理解**
-- **懂你的情绪**：AI能感知你的心情和需求，提供贴心回应
-- **记住偏好**：跨对话记忆你的习惯，越用越懂你
-- **自动适应**：根据你的使用场景智能调整服务方式
-
-### 👤 **永远听你的**
-- **你说了算**：AI永远不会替你做决定，只提供建议让你选择
-- **透明可控**：清楚告诉你AI的想法，让你完全掌控
-- **安全放心**：所有数据本地存储，保护隐私安全
-
-### 🔥 **主要功能**
-
-#### 🤖 **支持多种AI模型**
-- 一键切换 OpenAI、Claude、Gemini 等主流AI
-- 自动配置API，使用简单
-- 智能优化，响应更快
-
-#### 🛠️ **强大工具集成**
-- 内置专业工具，开箱即用
-- 安全沙箱执行，放心使用
-- 结果自然展示，体验流畅
-
-#### 💡 **智能体验**
-- 根据使用场景自动调整
-- 聊天、文件、设置等功能无缝切换
-- 智能记忆，越用越好用
-
-#### 🎨 **精美界面**
-- 现代化设计，视觉舒适
-- 流畅动画，操作自然
-- 支持无障碍使用
-
-#### 🔒 **安全可靠**
-- 数据完全本地存储
-- API密钥加密保护
-- 工具调用安全隔离
-
-## 🖼️ 界面展示
-
 <div align="center">
-  <img src="docs/screenshots/main-interface.png" alt="主界面 - 智能对话体验" width="800">
-  <p><em>主界面 - 智能对话体验</em></p>
-</div>
 
-<details>
-<summary>查看更多界面 👇</summary>
+**🌟 如果这个项目对您有帮助，请给我们一个Star！**
 
-<div align="center">
-  <img src="docs/screenshots/intent-recognition.png" alt="智能意图识别" width="800">
-  <p><em>智能意图识别</em></p>
-  
-  <img src="docs/screenshots/mcp-tools.png" alt="工具集成" width="800">
-  <p><em>强大工具集成</em></p>
-
-  <img src="docs/screenshots/resources-management.png" alt="资源管理" width="800">
-  <p><em>资源管理中心</em></p>
-</div>
-
-</details>
-
-## 🚀 立即开始使用
-
-### 📥 **下载安装**
-
-| 平台 | 下载 | 系统要求 |
-|------|------|----------|
-| 🍎 **macOS** | [下载 .dmg](https://github.com/deepractice/deechat/releases) | macOS 11+ |
-| 🪟 **Windows** | [下载 .exe](https://github.com/deepractice/deechat/releases) | Windows 10+ |
-| 🐧 **Linux** | [下载 AppImage](https://github.com/deepractice/deechat/releases) | Ubuntu 20.04+ |
-
-### ⚡ **三步开始**
-
-1. **启动应用** - 双击安装包完成安装
-2. **配置AI** - 添加你的API密钥（支持OpenAI、Claude、Gemini等）
-3. **开始聊天** - 体验真正理解你的AI助手
-
-就这么简单！DeeChat会自动为你优化体验。
-
-## 💬 常见问题
-
-### ❓ **支持哪些AI模型？**
-DeeChat支持主流AI模型：
-- **OpenAI**: GPT-3.5、GPT-4系列
-- **Claude**: Claude-3系列 
-- **Gemini**: Gemini Pro系列
-- **其他**: 支持兼容OpenAI API格式的模型
-
-### ❓ **数据安全吗？**
-完全安全：
-- ✅ 所有对话数据本地存储
-- ✅ API密钥加密保护
-- ✅ 不上传任何用户数据
-- ✅ 工具执行沙箱隔离
-
-### ❓ **需要网络吗？**
-需要网络连接AI服务，但：
-- ✅ 应用本地运行
-- ✅ 对话历史本地保存
-- ✅ 离线时可查看历史记录
-- ✅ 未来计划支持本地模型
-
-### ❓ **如何获得API密钥？**
-各平台API密钥获取：
-- [OpenAI API Key](https://platform.openai.com/api-keys)
-- [Claude API Key](https://console.anthropic.com/)
-- [Gemini API Key](https://makersuite.google.com/app/apikey)
-
-### ❓ **遇到问题怎么办？**
-我们提供多种支持：
-- 📖 查看[用户手册](docs/)
-- 🐛 提交[Bug报告](https://github.com/deepractice/deechat/issues)
-- 💬 加入[社区讨论](https://github.com/deepractice/deechat/discussions)
-
-## 🛠️ 开发者
-
-如果你是开发者，想要：
-- 📁 查看源代码：`npm install && npm run dev`
-- 🔧 贡献代码：请先阅读[贡献指南](CONTRIBUTING.md)
-- 📚 技术文档：查看[docs/](docs/)目录
-
-## 📄 开源协议
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
----
-
-<div align="center">
-  
-### 🌟 加入DeeChat社区
-
-[![GitHub Stars](https://img.shields.io/github/stars/deepractice/deechat?style=social)](https://github.com/deepractice/deechat/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/deepractice/deechat?style=social)](https://github.com/deepractice/deechat/network/members)
-
-**让AI真正理解人类，从DeeChat开始** 🚀
-
-[⬆️ 返回顶部](#deechat)
+Made with ❤️ by DeeChat Team
 
 </div>

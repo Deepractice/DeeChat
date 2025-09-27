@@ -1,0 +1,52 @@
+{
+  "name": "@deepracticex/token-calculator",
+  "version": "0.2.1",
+  "description": "Token calculation and cost estimation for AI models",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "token",
+    "tokens",
+    "tokenizer",
+    "ai",
+    "openai",
+    "claude",
+    "anthropic",
+    "gpt",
+    "llm",
+    "cost-estimation",
+    "pricing",
+    "calculator"
+  ],
+  "author": "DeeChat Team",
+  "license": "MIT",
+  "homepage": "https://github.com/deechat/token-calculator#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deechat/token-calculator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deechat/token-calculator/issues"
+  },
+  "dependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4",
+    "gpt-tokenizer": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}

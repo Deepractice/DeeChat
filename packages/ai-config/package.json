@@ -1,0 +1,62 @@
+{
+  "name": "@deepracticex/ai-config",
+  "version": "0.4.1",
+  "description": "An minimalist AI configuration management library focused on configuration storage and preference management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist/**/*",
+    "sql/**/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "clean": "rimraf dist",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:api": "npx ts-node --transpile-only examples/test-api.ts"
+  },
+  "keywords": [
+    "ai",
+    "config",
+    "configuration",
+    "provider",
+    "openai",
+    "claude",
+    "anthropic",
+    "sqlite",
+    "database",
+    "management"
+  ],
+  "author": "DeeChat Team",
+  "license": "MIT",
+  "dependencies": {
+    "@deepracticex/database-adapter": "^2.0.0",
+    "zod": "^3.22.4"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^12.2.0"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^30.0.4",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

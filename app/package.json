@@ -1,0 +1,178 @@
+{
+  "name": "deechat-app",
+  "version": "1.0.3",
+  "description": "DeeChat Electron Application",
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "clean": "rimraf dist out",
+    "rebuild": "./scripts/rebuild-native.sh",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac --publish=never",
+    "dist:win": "npm run build && electron-builder --win --publish=never",
+    "dist:linux": "npm run build && electron-builder --linux --publish=never",
+    "dist:all": "npm run build && electron-builder --mac --win --linux --publish=never",
+    "publish": "npm run build && electron-builder --publish=always",
+    "legacy:start": "./scripts/run-app.sh start",
+    "legacy:dev": "./scripts/run-app.sh dev"
+  },
+  "dependencies": {
+    "@deepracticex/ai-chat": "file:../packages/ai-chat",
+    "@deepracticex/ai-config": "^0.4.1",
+    "@deepracticex/context-manager": "^1.0.1",
+    "@deepracticex/conversation-storage": "^0.4.5",
+    "@deepracticex/database-adapter": "^2.0.1",
+    "@deepracticex/mcp-client": "^1.0.8",
+    "@deepracticex/token-calculator": "^0.2.1",
+    "@promptx/core": "^1.18.0",
+    "better-sqlite3": "^12.2.0",
+    "lucide-react": "^0.544.0",
+    "reflect-metadata": "^0.2.2",
+    "typedi": "^0.10.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.2",
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.2.0",
+    "electron": "^30.5.1",
+    "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^4.0.0",
+    "rimraf": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.2.0",
+    "wait-on": "^7.0.1"
+  },
+  "author": {
+    "name": "DeeChat Team",
+    "email": "team@deechat.ai"
+  },
+  "homepage": "https://github.com/Deepractice/DeeChat",
+  "license": "MIT",
+  "overrides": {
+    "better-sqlite3": "^12.2.0"
+  },
+  "build": {
+    "appId": "com.deechat.app",
+    "productName": "DeeChat",
+    "electronVersion": "30.5.1",
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "compression": "maximum",
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache",
+      "!node_modules/@types",
+      "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/*/{test,__tests__,tests,powered-test,ai-example,examples}",
+      "!node_modules/*.d.ts",
+      "!node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": "**/*"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": false,
+      "minimumSystemVersion": "10.15.0"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "icon": "assets/icon-512.png",
+      "verifyUpdateCodeSignature": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon-512.png",
+      "category": "Office",
+      "maintainer": "DeeChat Team <team@deechat.ai>"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DeeChat"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "deechat",
+      "repo": "deechat",
+      "private": false
+    }
+  }
+}
