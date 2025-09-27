@@ -20,7 +20,7 @@
     "legacy:dev": "./scripts/run-app.sh dev"
   },
   "dependencies": {
-    "@deepracticex/ai-chat": "file:../packages/ai-chat",
+    "@deepracticex/ai-chat": "^0.5.0",
     "@deepracticex/ai-config": "^0.4.1",
     "@deepracticex/context-manager": "^1.0.1",
     "@deepracticex/conversation-storage": "^0.4.5",
@@ -133,7 +133,7 @@
           ]
         }
       ],
-      "icon": "assets/icon-512.png",
+      "icon": "assets/icon.ico",
       "verifyUpdateCodeSignature": false
     },
     "linux": {

@@ -25,14 +25,12 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
-            app/renderer/package-lock.json
 
       - name: 📦 Install all dependencies using workspace
         run: |
           # 优化安装：利用workspace和缓存加速
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
-          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: |
@@ -94,7 +92,6 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
-            app/renderer/package-lock.json
 
       - name: 🪟 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -103,7 +100,6 @@ jobs:
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
-          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: npm run build
@@ -143,7 +139,6 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
-            app/renderer/package-lock.json
 
       - name: 🐧 Install Linux dependencies
         run: |
@@ -154,7 +149,6 @@ jobs:
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
-          cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
         run: npm run build
