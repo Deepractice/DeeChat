@@ -1,18 +1,18 @@
-name: 🚀 DeeChat Build & Release
+name: "🚀 DeeChat Build & Release"
 
 on:
   push:
     branches: [main, develop]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
 jobs:
+  # ---------- macOS (x64 / Intel) ----------
   build-macos-x64:
     name: Build macOS x64
-    runs-on: macos-13  # Intel x64 环境
+    runs-on: macos-13
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -20,23 +20,30 @@ jobs:
       - name: 🟢 Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
             app/renderer/package-lock.json
 
-      - name: 📦 Install all dependencies using workspace
+      - name: 📦 Install dependencies (workspace)
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 🔍 Print Electron ABI
+        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+
       - name: 🔧 Rebuild native modules for Electron x64
-        run: |
-          cd app
-          npx electron-rebuild -f -w @lmdb/lmdb
+        working-directory: app
+        env:
+          npm_config_runtime: electron
+          npm_config_target: 30.0.0
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_arch: x64
+        run: npx electron-rebuild -f -w @lmdb/lmdb --arch=x64
 
       - name: 🏗️ Build application
         run: npm run build
@@ -48,8 +55,7 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -n "$APPLE_CERTIFICATE" ]; then
-            echo "Setting up Apple certificates..."
-            echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+            echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
             security create-keychain -p "" build.keychain
             security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
             security list-keychains -s ~/Library/Keychains/build.keychain
@@ -59,15 +65,14 @@ jobs:
           fi
 
       - name: 📱 Build macOS x64 app
-        run: |
-          cd app
-          npx electron-builder --mac --x64 --publish=never
+        working-directory: app
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac --x64 --publish=never
 
       - name: 📤 Upload macOS x64 artifacts
         uses: actions/upload-artifact@v4
@@ -79,11 +84,11 @@ jobs:
             app/release/latest-mac.yml
           retention-days: 30
 
+  # ---------- macOS (arm64 / Apple Silicon) ----------
   build-macos-arm64:
     name: Build macOS arm64
-    runs-on: macos-14  # Apple Silicon arm64 环境
+    runs-on: macos-14
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -91,23 +96,30 @@ jobs:
       - name: 🟢 Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
             app/renderer/package-lock.json
 
-      - name: 📦 Install all dependencies using workspace
+      - name: 📦 Install dependencies (workspace)
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 🔍 Print Electron ABI
+        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+
       - name: 🔧 Rebuild native modules for Electron arm64
-        run: |
-          cd app
-          npx electron-rebuild -f -w @lmdb/lmdb
+        working-directory: app
+        env:
+          npm_config_runtime: electron
+          npm_config_target: 30.0.0
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_arch: arm64
+        run: npx electron-rebuild -f -w @lmdb/lmdb --arch=arm64
 
       - name: 🏗️ Build application
         run: npm run build
@@ -119,8 +131,7 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -n "$APPLE_CERTIFICATE" ]; then
-            echo "Setting up Apple certificates..."
-            echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+            echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
             security create-keychain -p "" build.keychain
             security import certificate.p12 -k ~/Library/Keychains/build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
             security list-keychains -s ~/Library/Keychains/build.keychain
@@ -130,15 +141,14 @@ jobs:
           fi
 
       - name: 📱 Build macOS arm64 app
-        run: |
-          cd app
-          npx electron-builder --mac --arm64 --publish=never
+        working-directory: app
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac --arm64 --publish=never
 
       - name: 📤 Upload macOS arm64 artifacts
         uses: actions/upload-artifact@v4
@@ -150,11 +160,15 @@ jobs:
             app/release/latest-mac.yml
           retention-days: 30
 
+  # ---------- Windows (矩阵：x64 / ia32) ----------
   build-windows:
-    name: Build Windows
+    name: Build Windows (${{ matrix.arch }})
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, ia32]
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -162,8 +176,8 @@ jobs:
       - name: 🟢 Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
@@ -172,43 +186,63 @@ jobs:
       - name: 🪟 Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: 📦 Install all dependencies using workspace
+      - name: 🐍 Setup Python for node-gyp
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Install dependencies (workspace)
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
-      - name: 🔧 Rebuild native modules for Electron Windows
+      - name: 🔍 Print Electron ABI
+        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+
+      - name: 🔧 Rebuild native modules for Electron Windows (${{ matrix.arch }})
+        working-directory: app
+        env:
+          npm_config_runtime: electron
+          npm_config_target: 30.0.0
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_arch: ${{ matrix.arch }}
+          GYP_MSVS_VERSION: 2022
         run: |
-          cd app
-          npx electron-rebuild -f -w @lmdb/lmdb
+          npm config set msvs_version 2022
+          npm config set python $env:pythonLocation\python.exe
+          npx electron-rebuild -f -w @lmdb/lmdb --arch=${{ matrix.arch }}
 
       - name: 🏗️ Build application
         run: npm run build
 
-      - name: 📱 Build Windows app
-        run: |
-          cd app
-          npx electron-builder --win --x64 --ia32 --publish=never
+      - name: 📱 Build Windows app (${{ matrix.arch }})
+        working-directory: app
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ("${{ matrix.arch }}" -eq "ia32") {
+            npx electron-builder --win --ia32 --publish=never
+          } else {
+            npx electron-builder --win --x64 --publish=never
+          }
 
-      - name: 📤 Upload Windows artifacts
+      - name: 📤 Upload Windows artifacts (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
         with:
-          name: windows-build
+          name: windows-build-${{ matrix.arch }}
           path: |
             app/release/*.exe
             app/release/latest.yml
           retention-days: 30
 
+  # ---------- Linux (x64) ----------
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -216,38 +250,46 @@ jobs:
       - name: 🟢 Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
           cache-dependency-path: |
             package-lock.json
             app/package-lock.json
             app/renderer/package-lock.json
 
-      - name: 🐧 Install Linux dependencies
+      - name: 🐧 Install Linux build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxss1 libasound2-dev libgtk-3-dev
+          sudo apt-get install -y \
+            libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev \
+            libxss1 libasound2-dev libgtk-3-dev
 
-      - name: 📦 Install all dependencies using workspace
+      - name: 📦 Install dependencies (workspace)
         run: |
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
-      - name: 🔧 Rebuild native modules for Electron Linux
-        run: |
-          cd app
-          npx electron-rebuild -f -w @lmdb/lmdb
+      - name: 🔍 Print Electron ABI
+        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+
+      - name: 🔧 Rebuild native modules for Electron Linux (x64)
+        working-directory: app
+        env:
+          npm_config_runtime: electron
+          npm_config_target: 30.0.0
+          npm_config_disturl: https://electronjs.org/headers
+          npm_config_arch: x64
+        run: npx electron-rebuild -f -w @lmdb/lmdb --arch=x64
 
       - name: 🏗️ Build application
         run: npm run build
 
       - name: 📱 Build Linux app
-        run: |
-          cd app
-          npx electron-builder --linux --x64 --publish=never
+        working-directory: app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux --x64 --publish=never
 
       - name: 📤 Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -260,15 +302,18 @@ jobs:
             app/release/latest-linux.yml
           retention-days: 30
 
-  # 发布 Job（仅在 tag 推送时运行）
+  # ---------- Release (only on tag) ----------
   release:
-    name: 🎉 Create Release
-    needs: [build-macos-x64, build-macos-arm64, build-windows, build-linux]
+    name: "🎉 Create Release"
+    needs:
+      - build-macos-x64
+      - build-macos-arm64
+      - build-windows
+      - build-linux
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-
     steps:
       - name: 📥 Download all artifacts
         uses: actions/download-artifact@v4
@@ -283,8 +328,10 @@ jobs:
             macos-arm64-build/*.dmg
             macos-arm64-build/*.zip
             macos-x64-build/latest-mac.yml
-            windows-build/*.exe
-            windows-build/latest.yml
+            windows-build-x64/*.exe
+            windows-build-x64/latest.yml
+            windows-build-ia32/*.exe
+            windows-build-ia32/latest.yml
             linux-build/*.AppImage
             linux-build/*.deb
             linux-build/*.rpm
