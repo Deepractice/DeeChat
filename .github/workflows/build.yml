@@ -34,6 +34,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 🔧 Rebuild native modules for Electron
+        run: |
+          cd app
+          npm run rebuild
+
       - name: 🏗️ Build application
         run: |
           # 使用根目录的 build 脚本
@@ -105,6 +110,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 🔧 Rebuild native modules for Electron
+        run: |
+          cd app
+          npm run rebuild
+
       - name: 🏗️ Build application
         run: npm run build
 
@@ -155,6 +165,11 @@ jobs:
           npm ci --prefer-offline
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
+
+      - name: 🔧 Rebuild native modules for Electron
+        run: |
+          cd app
+          npm run rebuild
 
       - name: 🏗️ Build application
         run: npm run build

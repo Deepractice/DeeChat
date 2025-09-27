@@ -9,7 +9,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "clean": "rimraf dist out",
-    "rebuild": "./scripts/rebuild-native.sh",
+    "rebuild": "electron-rebuild -f -w better-sqlite3,lmdb",
+    "rebuild:all": "electron-rebuild -f",
+    "prebuild": "npm run rebuild",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac --publish=never",
     "dist:win": "npm run build && electron-builder --win --publish=never",
@@ -34,7 +36,7 @@
     "typedi": "^0.10.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.6.2",
+    "@electron/rebuild": "^3.7.2",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
     "electron": "^30.5.1",
