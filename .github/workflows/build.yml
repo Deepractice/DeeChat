@@ -216,26 +216,35 @@ jobs:
       - name: 🩹 Patch lmdb to disable V8 API (root & app)
         shell: pwsh
         run: |
-          function Patch-Lmdb($base) {
-            $paths = @(
-              Join-Path $base "node_modules/lmdb/binding.gyp",
-              Join-Path $base "node_modules/lmdb/binding.gypi"
-            )
-            foreach ($p in $paths) {
-              if (Test-Path $p) {
-                Write-Host "📝 Patching $p ..."
-                $c = Get-Content $p -Raw
-                $c = $c -replace '"ENABLE_V8_API=1"', '"ENABLE_V8_API=0"'
-                $c = $c -replace "'ENABLE_V8_API=1'", "'ENABLE_V8_API=0'"
-                Set-Content $p -Value $c
-                Write-Host "✅ V8 API disabled in $p"
-              }
+          function Patch-Lmdb {
+            param([string]$basePath)
+
+            $gypFile = Join-Path $basePath "node_modules/lmdb/binding.gyp"
+            $gypiFile = Join-Path $basePath "node_modules/lmdb/binding.gypi"
+
+            if (Test-Path $gypFile) {
+              Write-Host "📝 Patching $gypFile ..."
+              $content = Get-Content $gypFile -Raw
+              $content = $content -replace '"ENABLE_V8_API=1"', '"ENABLE_V8_API=0"'
+              $content = $content -replace "'ENABLE_V8_API=1'", "'ENABLE_V8_API=0'"
+              Set-Content $gypFile -Value $content
+              Write-Host "✅ V8 API disabled in $gypFile"
+            }
+
+            if (Test-Path $gypiFile) {
+              Write-Host "📝 Patching $gypiFile ..."
+              $content = Get-Content $gypiFile -Raw
+              $content = $content -replace '"ENABLE_V8_API=1"', '"ENABLE_V8_API=0"'
+              $content = $content -replace "'ENABLE_V8_API=1'", "'ENABLE_V8_API=0'"
+              Set-Content $gypiFile -Value $content
+              Write-Host "✅ V8 API disabled in $gypiFile"
             }
           }
+
           Write-Host "🔍 Patching LMDB in root directory..."
-          Patch-Lmdb "$PWD"
+          Patch-Lmdb -basePath $PWD
           Write-Host "🔍 Patching LMDB in app directory..."
-          Patch-Lmdb (Join-Path "$PWD" "app")
+          Patch-Lmdb -basePath (Join-Path $PWD "app")
 
       - name: 🔧 Rebuild native modules for Electron (Windows x64)
         working-directory: app
