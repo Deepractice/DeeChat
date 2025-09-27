@@ -35,7 +35,7 @@ import { FunctionService } from './services/FunctionService.js'
 import { IPCAdapter } from './adapters/IPCAdapter.js'
 
 // 导入类型定义
-import {
+import type {
   ToolCallResult,
   McpServerWithStatus
 } from './types/McpTypes.js'

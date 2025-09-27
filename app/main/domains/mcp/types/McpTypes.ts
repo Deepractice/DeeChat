@@ -8,13 +8,13 @@
  */
 
 import {
-  McpServerConfig,
   ConnectionStatus,
-  ToolCallResult,
-  ToolInfo,
-  ResourceInfo,
-  PromptInfo,
-  ResourceContent
+  type McpServerConfig,
+  type ToolCallResult,
+  type ToolInfo,
+  type ResourceInfo,
+  type PromptInfo,
+  type ResourceContent
 } from '@deepracticex/mcp-client'
 
 /**
