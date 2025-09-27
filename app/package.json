@@ -40,7 +40,7 @@
     "@electron/rebuild": "^3.7.2",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
-    "electron": "^30.5.1",
+    "electron": "^38.1.2",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^4.0.0",
@@ -61,7 +61,7 @@
   "build": {
     "appId": "com.deechat.app",
     "productName": "DeeChat",
-    "electronVersion": "30.5.1",
+    "electronVersion": "38.1.2",
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
     "directories": {

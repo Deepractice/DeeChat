@@ -1,6 +1,6 @@
 {
   "name": "deechat",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "DeeChat - Advanced AI Chat Application with DDD Architecture",
   "private": true,
   "workspaces": [

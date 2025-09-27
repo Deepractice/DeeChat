@@ -110,10 +110,15 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
-      - name: 🔧 Rebuild native modules for Electron
+      - name: 🔧 Rebuild native modules for Electron (Windows)
         run: |
           cd app
-          npm run rebuild
+          # Windows特定：只重建better-sqlite3，跳过有问题的lmdb
+          npx electron-rebuild -f -w better-sqlite3
+        env:
+          npm_config_cache: ${{ runner.temp }}/.npm
+          npm_config_prefer_offline: true
+          npm_config_target_arch: x64
 
       - name: 🏗️ Build application
         run: npm run build
