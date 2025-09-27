@@ -9,7 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "clean": "rimraf dist out",
-    "rebuild": "./scripts/rebuild-native.sh",
+    "rebuild": "npx @electron/rebuild",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac --publish=never",
     "dist:win": "npm run build && electron-builder --win --publish=never",
