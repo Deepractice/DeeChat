@@ -271,7 +271,7 @@ jobs:
           cd renderer && npm ci --prefer-offline
 
       - name: 🔍 Print Electron ABI
-        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+        run: ELECTRON_DISABLE_SANDBOX=1 npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
 
       - name: 🔧 Rebuild native modules for Electron Linux (x64)
         working-directory: app
