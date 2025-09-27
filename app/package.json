@@ -157,7 +157,7 @@
           ]
         }
       ],
-      "icon": "assets/icon-512.png",
+      "icon": "assets/icon.png",
       "category": "Office",
       "maintainer": "DeeChat Team <team@deechat.ai>"
     },
