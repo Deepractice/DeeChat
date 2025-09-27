@@ -9,10 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "clean": "rimraf dist out",
-    "rebuild": "electron-rebuild -f -o better-sqlite3",
-    "rebuild:windows": "electron-rebuild -f -o better-sqlite3",
-    "rebuild:all": "electron-rebuild -f",
-    "prebuild": "npm run rebuild",
+    "rebuild": "./scripts/rebuild-native.sh",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac --publish=never",
     "dist:win": "npm run build && electron-builder --win --publish=never",
@@ -30,7 +27,7 @@
     "@deepracticex/database-adapter": "^2.0.1",
     "@deepracticex/mcp-client": "^1.0.8",
     "@deepracticex/token-calculator": "^0.2.1",
-    "@promptx/core": "^1.20.0",
+    "@promptx/core": "^1.18.0",
     "better-sqlite3": "^12.2.0",
     "lucide-react": "^0.544.0",
     "reflect-metadata": "^0.2.2",
@@ -40,7 +37,7 @@
     "@electron/rebuild": "^3.7.2",
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.0",
-    "electron": "^38.1.2",
+    "electron": "^30.5.1",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
     "electron-vite": "^4.0.0",
@@ -61,10 +58,9 @@
   "build": {
     "appId": "com.deechat.app",
     "productName": "DeeChat",
-    "electronVersion": "38.1.2",
+    "electronVersion": "30.5.1",
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
-    "npmRebuild": false,
     "directories": {
       "output": "release",
       "buildResources": "assets"
@@ -172,7 +168,6 @@
       "createStartMenuShortcut": true,
       "shortcutName": "DeeChat"
     },
-    "beforePack": "npm run rebuild",
     "publish": {
       "provider": "github",
       "owner": "deechat",
