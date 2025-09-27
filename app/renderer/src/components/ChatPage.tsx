@@ -1,7 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Layout, Button, Drawer, Select, message, Spin, Space, Tag, Avatar } from 'antd'
+import { Layout, Button, Drawer, Select, message, Spin, Space, Tag, Avatar, Slider, InputNumber, Tooltip } from 'antd'
 import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined, UserSwitchOutlined } from '@ant-design/icons'
 import MessageList from './MessageList'
+import { VirtualToolMessage } from './ToolMessage'
+
+// 扩展的工具执行信息接口，用于在AI消息中嵌入工具执行状态
+interface EmbeddedToolExecution {
+  id: string
+  toolName: string
+  serverId: string
+  arguments?: any
+  result?: any
+  status: 'pending' | 'executing' | 'completed' | 'error'
+  error?: string
+  startTime?: number
+  endTime?: number
+}
+
+// 时间线内容项接口 - 支持文本和工具的混合显示
+interface TimelineItem {
+  id: string
+  type: 'text' | 'tool'
+  timestamp: number
+  // 文本内容
+  content?: string
+  // 工具执行信息
+  toolExecution?: EmbeddedToolExecution
+}
 import MessageInput from './MessageInput'
 import SessionList from './SessionList'
 import ModelSelectorModal from './ModelSelectorModal'
@@ -11,6 +36,7 @@ import type {
   AIConfig
 } from '../../../main/preload'
 import { Role, RoleActivationResponse } from '../types/role'
+import { useMcp } from '../contexts/McpContext'
 
 const { Header, Content, Sider } = Layout
 
@@ -30,16 +56,24 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // 状态管理
   const [sessions, setSessions] = useState<ConversationSession[]>([])
   const [currentSession, setCurrentSession] = useState<ConversationSession | null>(null)
-  const [messages, setMessages] = useState<ConversationMessage[]>([])
+  const [messages, setMessages] = useState<(ConversationMessage | VirtualToolMessage | ToolExecutionInfo)[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [selectedConfig, setSelectedConfig] = useState<string>('')
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [isCallingTool, setIsCallingTool] = useState(false)
   const [availableModels, setAvailableModels] = useState<any[]>([])
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelSelectorVisible, setModelSelectorVisible] = useState(false)
+
+  // AI 参数配置
+  const [temperature, setTemperature] = useState<number>(0.7)
+  const [maxTokens, setMaxTokens] = useState<number | undefined>(undefined)
+
+  // 使用MCP Context
+  const { tools, loading: loadingMcpTools, refreshMcpData, isDataStale } = useMcp()
 
   // 初始化数据
   useEffect(() => {
@@ -56,6 +90,15 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // 流式响应状态
   const [currentAiMessage, setCurrentAiMessage] = useState<ConversationMessage | null>(null)
   const [streamingContent, setStreamingContent] = useState<string>('')
+  // 当前消息的时间线内容（用于实现文本和工具的穿插显示）
+  const [currentTimeline, setCurrentTimeline] = useState<TimelineItem[]>([])
+  const currentTimelineRef = useRef<TimelineItem[]>([])
+
+  // 更新时间线 ref
+  useEffect(() => {
+    currentTimelineRef.current = currentTimeline
+  }, [currentTimeline])
+
 
   // 使用 useRef 来保持 currentSession 的最新值
   const currentSessionRef = useRef<ConversationSession | null>(null)
@@ -78,7 +121,307 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const sessionFromRef = currentSessionRef.current
     console.log('🔍 当前会话状态 (ref):', sessionFromRef ? `ID: ${sessionFromRef.id}` : 'null')
 
-    // 如果没有当前会话，但事件中有sessionId，可以继续处理
+    // 处理工具调用开始 - 集成到当前AI消息中
+    if (event.data && (event.data.toolExecuting || (event.data.phase === 'calling_tools' && event.data.toolCalls))) {
+      console.log('🔥 检测到工具调用事件:', event.data)
+      setIsCallingTool(true)
+
+      let toolCalls = []
+
+      // 处理 toolExecuting 格式 - 将其转换为 toolCalls 格式
+      if (event.data.toolExecuting) {
+        const toolExecuting = event.data.toolExecuting
+        toolCalls = [{
+          id: toolExecuting.id,
+          function: {
+            name: toolExecuting.name,
+            arguments: JSON.stringify(toolExecuting.arguments || {})
+          },
+          startTime: toolExecuting.startTime
+        }]
+      }
+      // 处理 toolCalls 格式
+      else if (event.data.toolCalls) {
+        toolCalls = event.data.toolCalls
+      }
+
+      // 更新时间线：添加工具执行项
+      toolCalls.forEach((toolCall: any, index: number) => {
+        const toolId = toolCall.id || `tool-${Date.now()}-${index}`
+        const toolName = toolCall.function?.name || toolCall.name || '未知工具'
+        let parameters = null
+
+        // 正确解析参数
+        if (toolCall.function?.arguments) {
+          try {
+            parameters = JSON.parse(toolCall.function.arguments)
+          } catch (e) {
+            parameters = toolCall.function.arguments
+          }
+        } else if (toolCall.arguments) {
+          parameters = toolCall.arguments
+        } else if (toolCall.input) {
+          parameters = toolCall.input
+        }
+
+        const toolExecution = {
+          id: toolId,
+          toolName: toolName,
+          serverId: 'mcp-server',
+          status: 'running' as const,
+          arguments: parameters,
+          startTime: toolCall.startTime || Date.now()
+        }
+
+        // 添加到时间线（避免重复添加）
+        setCurrentTimeline(prevTimeline => {
+          // 检查是否已存在相同的工具调用
+          const exists = prevTimeline.some(item =>
+            item.type === 'tool' && item.toolExecution?.id === toolId
+          )
+          if (exists) {
+            console.log('🔄 工具调用已存在，跳过重复添加:', toolId)
+            return prevTimeline
+          }
+
+          return [
+            ...prevTimeline,
+            {
+              id: toolId,
+              type: 'tool',
+              timestamp: Date.now(),
+              toolExecution
+            }
+          ]
+        })
+      })
+
+      // 更新当前AI消息的工具执行状态（保持兼容性）
+      const currentAiFromRef = currentAiMessageRef.current
+      if (currentAiFromRef) {
+        setMessages(prevMessages =>
+          prevMessages.map(msg => {
+            if (msg.id === currentAiFromRef.id) {
+              // 创建或更新工具执行步骤
+              const existingSteps = (msg.metadata?.toolExecutionSteps || []) as any[]
+              const newSteps = toolCalls.map((toolCall: any, index: number) => {
+                // 正确提取工具信息
+                const toolId = toolCall.id || `tool-${Date.now()}-${index}`
+                const toolName = toolCall.function?.name || toolCall.name || '未知工具'
+                let parameters = null
+
+                // 正确解析参数
+                if (toolCall.function?.arguments) {
+                  try {
+                    parameters = JSON.parse(toolCall.function.arguments)
+                  } catch (e) {
+                    parameters = toolCall.function.arguments
+                  }
+                } else if (toolCall.arguments) {
+                  parameters = toolCall.arguments
+                } else if (toolCall.input) {
+                  parameters = toolCall.input
+                }
+
+                return {
+                  id: toolId,
+                  toolName: toolName,
+                  serverId: 'mcp-server', // 可以从事件中获取
+                  status: 'running',
+                  parameters: parameters,
+                  startTime: toolCall.startTime || Date.now()
+                }
+              })
+
+              return {
+                ...msg,
+                metadata: {
+                  ...msg.metadata,
+                  toolExecutionSteps: [...existingSteps, ...newSteps],
+                  timeline: currentTimelineRef.current
+                }
+              }
+            }
+            return msg
+          })
+        )
+      }
+    }
+
+
+    // 处理工具执行结果：更新工具执行状态
+    if (event.data && event.data.toolResults && event.data.toolResults.length > 0) {
+      setIsCallingTool(false)
+      console.log('✅ 工具执行完成，更新结果:', event.data.toolResults)
+
+      // 更新时间线中的工具状态
+      setCurrentTimeline(prevTimeline => {
+        return prevTimeline.map(item => {
+          if (item.type === 'tool' && item.toolExecution) {
+            // 通过 tool_call_id 匹配结果
+            const matchingResult = event.data.toolResults.find((result: any) =>
+              result.tool_call_id === item.toolExecution?.id
+            )
+
+            if (matchingResult) {
+              // 提取结果文本
+              let resultText = ''
+              console.log('🔍 处理工具结果:', {
+                tool_call_id: matchingResult.tool_call_id,
+                resultType: typeof matchingResult.result,
+                resultIsArray: Array.isArray(matchingResult.result),
+                result: matchingResult.result
+              })
+              if (matchingResult.result) {
+                if (Array.isArray(matchingResult.result)) {
+                  // 合并所有结果文本
+                  resultText = matchingResult.result
+                    .map((item: any) => item.text || item.content || JSON.stringify(item))
+                    .join('\n')
+                } else if (typeof matchingResult.result === 'string') {
+                  resultText = matchingResult.result
+                } else {
+                  resultText = JSON.stringify(matchingResult.result, null, 2)
+                }
+              }
+              console.log('✅ 提取的结果文本:', { resultTextLength: resultText.length, resultText: resultText.substring(0, 100) + '...' })
+
+              return {
+                ...item,
+                toolExecution: {
+                  ...item.toolExecution,
+                  status: matchingResult.error ? 'error' as const : 'completed' as const,
+                  result: matchingResult.error ? undefined : resultText,
+                  error: matchingResult.error,
+                  endTime: Date.now()
+                }
+              }
+            }
+          }
+          return item
+        })
+      })
+
+      // 更新当前AI消息的工具执行状态（保持兼容性）
+      const currentAiFromRef = currentAiMessageRef.current
+      if (currentAiFromRef) {
+        setMessages(prevMessages =>
+          prevMessages.map(msg => {
+            if (msg.id === currentAiFromRef.id) {
+              const existingSteps = (msg.metadata?.toolExecutionSteps || []) as any[]
+
+              // 更新对应工具的执行状态
+              const updatedSteps = existingSteps.map((step: any) => {
+                // 通过 tool_call_id 匹配结果
+                const matchingResult = event.data.toolResults.find((result: any) =>
+                  result.tool_call_id === step.id
+                )
+
+                if (matchingResult) {
+                  // 提取结果文本
+                  let resultText = ''
+                  if (matchingResult.result) {
+                    if (Array.isArray(matchingResult.result)) {
+                      // 合并所有结果文本
+                      resultText = matchingResult.result
+                        .map((item: any) => item.text || item.content || JSON.stringify(item))
+                        .join('\n')
+                    } else if (typeof matchingResult.result === 'string') {
+                      resultText = matchingResult.result
+                    } else {
+                      resultText = JSON.stringify(matchingResult.result, null, 2)
+                    }
+                  }
+
+                  return {
+                    ...step,
+                    status: matchingResult.error ? 'error' : 'completed',
+                    result: matchingResult.error ? undefined : resultText,
+                    error: matchingResult.error,
+                    endTime: Date.now()
+                  }
+                }
+                return step
+              })
+
+              return {
+                ...msg,
+                metadata: {
+                  ...msg.metadata,
+                  toolExecutionSteps: updatedSteps,
+                  timeline: currentTimelineRef.current
+                }
+              }
+            }
+            return msg
+          })
+        )
+      }
+    }
+
+    // 处理工具执行错误：更新工具执行状态
+    if (event.data && event.data.toolError) {
+      setIsCallingTool(false)
+      const error = event.data.toolError
+      console.log('❌ 工具执行失败，更新错误状态')
+
+      // 更新时间线中最近的工具状态为错误
+      setCurrentTimeline(prevTimeline => {
+        const updatedTimeline = [...prevTimeline]
+        // 找到最后一个运行中的工具
+        for (let i = updatedTimeline.length - 1; i >= 0; i--) {
+          const item = updatedTimeline[i]
+          if (item.type === 'tool' && item.toolExecution?.status === 'running') {
+            updatedTimeline[i] = {
+              ...item,
+              toolExecution: {
+                ...item.toolExecution,
+                status: 'error' as const,
+                error: error.error || '未知错误',
+                endTime: Date.now()
+              }
+            }
+            break
+          }
+        }
+        return updatedTimeline
+      })
+
+      // 更新当前AI消息的工具执行状态（保持兼容性）
+      const currentAiFromRef = currentAiMessageRef.current
+      if (currentAiFromRef) {
+        setMessages(prevMessages =>
+          prevMessages.map(msg => {
+            if (msg.id === currentAiFromRef.id) {
+              const existingSteps = (msg.metadata?.toolExecutionSteps || []) as any[]
+
+              // 更新最近的工具执行状态为错误
+              const updatedSteps = [...existingSteps]
+              if (updatedSteps.length > 0) {
+                const lastStep = updatedSteps[updatedSteps.length - 1]
+                if (lastStep.status === 'running') {
+                  lastStep.status = 'error'
+                  lastStep.error = error.error || '未知错误'
+                  lastStep.endTime = Date.now()
+                }
+              }
+
+              return {
+                ...msg,
+                metadata: {
+                  ...msg.metadata,
+                  toolExecutionSteps: updatedSteps,
+                  timeline: currentTimelineRef.current
+                }
+              }
+            }
+            return msg
+          })
+        )
+      }
+    }
+
+    // 如果没有当前会话，但事件中有sessionId，可以继续处理其他事件
     if (!sessionFromRef && !event.sessionId) {
       console.log('❌ 没有当前会话且事件无sessionId，忽略事件')
       return
@@ -104,34 +447,67 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // 第一次收到内容时，隐藏loading状态
           setSendingMessage(false)
 
-          setStreamingContent(prev => {
-            const newContent = prev + chunkContent
-            const currentAiFromRef = currentAiMessageRef.current
+          // 先计算新的内容和时间线，避免嵌套状态更新
+          const newContent = streamingContent + chunkContent
+          const currentAiFromRef = currentAiMessageRef.current
 
-            if (!currentAiFromRef) {
-              // 创建新的AI消息
-              const newAiMessage: ConversationMessage = {
-                id: `ai_${Date.now()}`,
-                session_id: sessionFromRef?.id || event.sessionId || '',
-                role: 'assistant',
-                content: newContent,
-                timestamp: new Date().toISOString()
-              }
-              setCurrentAiMessage(newAiMessage)
-              setMessages(prev => [...prev, newAiMessage])
-            } else {
-              // 更新现有AI消息内容
-              setMessages(prev =>
-                prev.map(msg =>
-                  msg.id === currentAiFromRef.id
-                    ? { ...msg, content: newContent }
-                    : msg
-                )
-              )
+          // 计算新的时间线
+          const currentTimeline = currentTimelineRef.current
+          const updatedTimeline = [...currentTimeline]
+          const lastItem = updatedTimeline[updatedTimeline.length - 1]
+
+          if (lastItem && lastItem.type === 'text') {
+            // 如果最后一项是文本，追加内容（避免重复）
+            const currentContent = lastItem.content || ''
+            if (!currentContent.endsWith(chunkContent)) {
+              lastItem.content = currentContent + chunkContent
             }
+          } else {
+            // 创建新的文本时间线项
+            updatedTimeline.push({
+              id: `text_${Date.now()}`,
+              type: 'text',
+              timestamp: Date.now(),
+              content: chunkContent
+            })
+          }
 
-            return newContent
-          })
+          // 批量更新状态 - 避免嵌套调用
+          setStreamingContent(newContent)
+          setCurrentTimeline(updatedTimeline)
+
+          if (!currentAiFromRef) {
+            // 创建新的AI消息（可能是因为工具调用后的继续回复）
+            console.log('🆕 创建新的AI消息（工具调用后继续回复）')
+            const newAiMessage: ConversationMessage = {
+              id: `ai_${Date.now()}`,
+              session_id: sessionFromRef?.id || event.sessionId || '',
+              role: 'assistant',
+              content: newContent,
+              timestamp: new Date().toISOString(),
+              metadata: {
+                timeline: updatedTimeline
+              }
+            }
+            setCurrentAiMessage(newAiMessage)
+            setMessages(prev => [...prev, newAiMessage])
+          } else {
+            // 更新现有AI消息内容和时间线
+            setMessages(prev =>
+              prev.map(msg =>
+                msg.id === currentAiFromRef.id
+                  ? {
+                      ...msg,
+                      content: newContent,
+                      metadata: {
+                        ...msg.metadata,
+                        timeline: updatedTimeline
+                      }
+                    }
+                  : msg
+              )
+            )
+          }
         }
         break
 
@@ -142,27 +518,55 @@ const ChatPage: React.FC<ChatPageProps> = ({
         if (currentAiFromRefComplete) {
           setMessages(prev =>
             prev.map(msg =>
-              msg.id === currentAiFromRefComplete.id ? finalAiMessage : msg
+              msg.id === currentAiFromRefComplete.id ?
+                {
+                  ...finalAiMessage,
+                  metadata: {
+                    ...finalAiMessage.metadata,
+                    timeline: currentTimelineRef.current
+                  }
+                }
+                : msg
             )
           )
         }
-        // 重置流式状态
+        // 重置流式状态和工具状态
         setCurrentAiMessage(null)
         setStreamingContent('')
+        setIsCallingTool(false)
+        setCurrentTimeline([])
         break
 
       case 'error':
         console.error('AI响应错误:', event.data.error)
-        message.error(event.data.error || 'AI响应失败')
-        // 重置流式状态
+        // 显示友好的错误提示，支持多行内容
+        const errorMessage = event.data.error || 'AI响应失败'
+        message.error({
+          content: (
+            <div style={{ whiteSpace: 'pre-line', maxWidth: '400px', lineHeight: '1.5' }}>
+              {errorMessage}
+            </div>
+          ),
+          duration: 8 // 延长显示时间，让用户有足够时间阅读
+        })
+        // 重置流式状态和工具状态
         setCurrentAiMessage(null)
         setStreamingContent('')
+        setIsCallingTool(false)
+        setCurrentTimeline([])
         break
     }
   }
 
-  // 设置流式事件监听器
+  // 设置流式事件监听器（严格模式兼容）
   const setupStreamListeners = () => {
+    console.log('🔧 设置事件监听器')
+
+    // 先清理现有监听器，避免重复注册
+    if (window.electronAPI.removeStreamListeners) {
+      window.electronAPI.removeStreamListeners()
+    }
+
     // 实时流式事件
     window.electronAPI.onStreamEvent((data: any) => {
       handleStreamEvent(data.event)
@@ -177,7 +581,16 @@ const ChatPage: React.FC<ChatPageProps> = ({
     window.electronAPI.onStreamError((data: any) => {
       console.error('流式处理错误:', data.error)
       setSendingMessage(false)
-      message.error(data.error || '流式处理失败')
+      // 显示友好的错误提示，支持多行内容
+      const errorMessage = data.error || '流式处理失败'
+      message.error({
+        content: (
+          <div style={{ whiteSpace: 'pre-line', maxWidth: '400px', lineHeight: '1.5' }}>
+            {errorMessage}
+          </div>
+        ),
+        duration: 8 // 延长显示时间，让用户有足够时间阅读
+      })
     })
   }
 
@@ -257,6 +670,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setLoadingModels(false)
     }
   }
+
   // 创建新会话
   const createNewSession = async () => {
     if (!selectedConfig) {
@@ -267,7 +681,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     try {
       setLoading(true)
       console.log('🔄 开始创建会话，配置名称:', selectedConfig)
-      
+
       // 根据配置名称获取完整配置对象
       const configResult = await window.electronAPI.aiConfig.get(selectedConfig)
       console.log('🔍 AI配置获取结果:', configResult)
@@ -275,19 +689,32 @@ const ChatPage: React.FC<ChatPageProps> = ({
         message.error('无法获取AI配置详情')
         return
       }
-      
+
       const config = configResult.data
       console.log('📋 获取到配置详情:', config)
-      
+
+      // 实时获取模型偏好，确保使用最新的设置
+      let currentModel = selectedModel
+      if (!currentModel) {
+        const preferenceResult = await window.electronAPI.aiConfig.getModelPreference(selectedConfig)
+        if (preferenceResult.success && preferenceResult.data) {
+          currentModel = preferenceResult.data
+          console.log('🎯 实时获取到模型偏好:', currentModel)
+        } else {
+          console.warn('⚠️ 无法获取模型偏好，使用配置默认模型')
+          currentModel = config.default_model || 'gpt-4o-mini'
+        }
+      }
+
       // 构建会话创建参数
       const sessionInput = {
         title: `新对话 ${new Date().toLocaleString()}`,
         ai_config: {
           baseUrl: config.base_url,
-          model: selectedModel || 'gpt-3.5-turbo',
+          model: currentModel,
           apiKey: config.api_key,
-          temperature: 0.7,
-          maxTokens: 4000
+          temperature: temperature,
+          maxTokens: maxTokens
         }
       }
       console.log('📝 会话创建参数:', JSON.stringify(sessionInput, null, 2))
@@ -324,6 +751,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     try {
       const result = await window.electronAPI.conversation.getMessageHistory(session.id)
       if (result.success && result.data) {
+        // 只加载真实的聊天消息，工具消息会在下次工具调用时重新生成
         setMessages(result.data)
       }
     } catch (error) {
@@ -371,6 +799,19 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
       const config = configResult.data
 
+      // 实时获取模型偏好，确保使用最新的设置
+      let currentModel = selectedModel
+      if (!currentModel) {
+        const preferenceResult = await window.electronAPI.aiConfig.getModelPreference(selectedConfig)
+        if (preferenceResult.success && preferenceResult.data) {
+          currentModel = preferenceResult.data
+          console.log('🎯 实时获取到模型偏好:', currentModel)
+        } else {
+          console.warn('⚠️ 无法获取模型偏好，使用配置默认模型')
+          currentModel = config.default_model || 'gpt-4o-mini'
+        }
+      }
+
       // 重置流式状态
       setCurrentAiMessage(null)
       setStreamingContent('')
@@ -394,13 +835,16 @@ const ChatPage: React.FC<ChatPageProps> = ({
         content: content.trim(),
         ai_config: {
           baseUrl: config.base_url,
-          model: selectedModel || 'gpt-3.5-turbo',
+          model: currentModel,
           apiKey: config.api_key,
-          temperature: 0.7,
-          maxTokens: 4000
+          temperature: temperature,
+          maxTokens: maxTokens
         },
+        // 传递MCP工具信息
+        tools: tools.length > 0 ? tools : undefined,
+        enable_tool_calls: tools.length > 0,
         options: {
-          systemPrompt: systemPrompt
+          system_prompt: systemPrompt
         }
       })
 
@@ -437,6 +881,31 @@ const ChatPage: React.FC<ChatPageProps> = ({
       }
     } catch (error) {
       message.error('删除会话失败')
+    }
+  }
+
+  // 删除所有会话
+  const deleteAllSessions = async () => {
+    try {
+      const deletePromises = sessions.map(session =>
+        window.electronAPI.conversation.deleteSession(session.id)
+      )
+
+      const results = await Promise.all(deletePromises)
+      const failedCount = results.filter(r => !r.success).length
+
+      if (failedCount === 0) {
+        setSessions([])
+        setCurrentSession(null)
+        setMessages([])
+        message.success(`成功删除所有 ${sessions.length} 个会话`)
+      } else {
+        message.warning(`删除了 ${sessions.length - failedCount} 个会话，${failedCount} 个删除失败`)
+        // 重新加载会话列表以获取最新状态
+        loadSessions()
+      }
+    } catch (error) {
+      message.error('批量删除会话失败')
     }
   }
 
@@ -479,6 +948,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           currentSession={currentSession}
           onSelectSession={selectSession}
           onDeleteSession={deleteSession}
+          onDeleteAllSessions={deleteAllSessions}
         />
       </Drawer>
 
@@ -562,6 +1032,54 @@ const ChatPage: React.FC<ChatPageProps> = ({
               </span>
               <DownOutlined style={{ fontSize: '10px' }} />
             </Button>
+
+            {/* AI 参数控制 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 8 }}>
+              <Tooltip title="Temperature - 控制AI回复的创造性">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '12px', color: '#666', minWidth: '24px' }}>T:</span>
+                  <Slider
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={temperature}
+                    onChange={setTemperature}
+                    style={{ width: 80 }}
+                    tooltip={{
+                      formatter: (value) => `${value}`,
+                    }}
+                  />
+                  <InputNumber
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={temperature}
+                    onChange={(value) => setTemperature(value || 0.7)}
+                    style={{ width: 60 }}
+                    size="small"
+                  />
+                </div>
+              </Tooltip>
+
+              <Tooltip title="最大Token数 - 限制AI回复长度">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '12px', color: '#666', minWidth: '32px' }}>Max:</span>
+                  <InputNumber
+                    min={1}
+                    max={200000}
+                    step={1000}
+                    value={maxTokens}
+                    onChange={setMaxTokens}
+                    placeholder="无限制"
+                    style={{ width: 80 }}
+                    size="small"
+                    formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                    parser={(value) => value ? value.replace(/\$\s?|(,*)/g, '') : ''}
+                  />
+                </div>
+              </Tooltip>
+            </div>
+
             <Button
               type="text"
               icon={<SettingOutlined />}
@@ -595,6 +1113,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
                   onSendMessage={sendMessage}
                   disabled={sendingMessage}
                   placeholder={sendingMessage ? 'AI正在思考中...' : '输入消息...'}
+                  toolCount={tools.length}
+                  isCallingTool={isCallingTool}
                 />
               </div>
             </>

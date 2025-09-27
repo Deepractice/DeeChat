@@ -20,15 +20,16 @@
     "legacy:dev": "./scripts/run-app.sh dev"
   },
   "dependencies": {
-    "@deepracticex/ai-chat": "^0.2.3",
+    "@deepracticex/ai-chat": "file:../packages/ai-chat",
     "@deepracticex/ai-config": "^0.4.1",
-    "@deepracticex/context-manager": "^1.0.0",
-    "@deepracticex/conversation-storage": "^0.4.1",
+    "@deepracticex/context-manager": "^1.0.1",
+    "@deepracticex/conversation-storage": "^0.4.5",
     "@deepracticex/database-adapter": "^2.0.1",
-    "@deepracticex/mcp-client": "^3.0.1",
+    "@deepracticex/mcp-client": "^1.0.8",
     "@deepracticex/token-calculator": "^0.2.1",
     "@promptx/core": "^1.18.0",
     "better-sqlite3": "^12.2.0",
+    "lucide-react": "^0.544.0",
     "reflect-metadata": "^0.2.2",
     "typedi": "^0.10.0"
   },

@@ -100,7 +100,7 @@ export interface ConnectionInfo {
   serverId: string;
   status: ConnectionStatus;
   connectedAt?: Date;
-  lastError?: string;
+  error?: string;
 }
 
 // ============== MCP Protocol Types ==============
@@ -155,7 +155,49 @@ export interface PromptResult {
   messages: any[];
 }
 
-// ============== Configuration File ==============
+// ============== Claude Desktop Configuration ==============
+
+/**
+ * Claude Desktop 标准配置格式（官方格式 + 扩展）
+ * 这是统一的配置格式，支持 Claude Desktop 官方的 stdio 传输，
+ * 以及扩展的 HTTP、WebSocket、StreamableHTTP 传输类型
+ */
+export interface ClaudeDesktopServerConfig {
+  /** 服务器名称（可选） */
+  name?: string;
+  /** 服务器描述（可选） */
+  description?: string;
+  /** 是否启用（可选，默认 true） */
+  enabled?: boolean;
+
+  // Stdio 传输（Claude Desktop 标准）
+  /** 执行命令 */
+  command?: string;
+  /** 命令参数 */
+  args?: string[];
+  /** 环境变量 */
+  env?: Record<string, string>;
+
+  // HTTP/WebSocket/StreamableHTTP 传输（扩展支持）
+  /** 传输类型（扩展字段） */
+  type?: 'stdio' | 'http' | 'websocket' | 'streamable-http' | 'sse';
+  /** 连接地址（扩展字段） */
+  url?: string;
+  /** HTTP 头部（扩展字段） */
+  headers?: Record<string, string>;
+}
+
+/** Claude Desktop 配置文件格式 */
+export interface ClaudeDesktopConfig {
+  /** MCP 服务器配置（Claude Desktop 标准字段名） */
+  mcpServers: Record<string, ClaudeDesktopServerConfig>;
+  /** 配置版本（可选） */
+  version?: string;
+  /** 时间戳（可选） */
+  timestamp?: string;
+}
+
+// ============== 内部配置文件格式 ==============
 
 export interface McpConfigFile {
   /** 配置版本 */

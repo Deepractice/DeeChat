@@ -15,10 +15,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,                 -- 消息ID
     session_id TEXT NOT NULL,            -- 所属会话ID
-    role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')), -- 消息角色
-    content TEXT NOT NULL,               -- 消息内容
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool')), -- 消息角色，支持工具调用
+    content TEXT,                        -- 消息内容（允许空内容，工具调用时需要）
     timestamp TEXT NOT NULL,             -- 消息时间戳
     token_usage TEXT,                    -- Token使用情况(JSON格式)
+    tool_calls TEXT,                     -- 工具调用信息(JSON格式)
+    tool_call_id TEXT,                   -- 工具调用ID（用于工具响应消息）
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 

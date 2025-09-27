@@ -1,11 +1,12 @@
+import 'reflect-metadata'
 import { app, BrowserWindow } from 'electron'
 import { ApplicationBootstrapper } from './infrastructure/application-bootstrapper.js'
 import { IPCRegistry } from './ipc/ipc-registry.js'
 import { WindowManager } from './infrastructure/window-manager.js'
 
 // 导入Domain类以触发@Service装饰器注册
-import './domains/AIConfigurationDomain.js'
-import './domains/ConversationDomain.js'
+import './domains/ai-configuration/index.js'
+import './domains/conversation/index.js'
 
 let mainWindow: BrowserWindow | null = null
 

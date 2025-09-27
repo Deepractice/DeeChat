@@ -1,13 +1,34 @@
-# @ai-chat/core
+# @deepracticex/ai-chat
 
-A focused AI chat client for handling AI requests and tool calling in Node.js applications.
+Universal AI chat client with intelligent tool calling format adapter. Supports OpenAI, Claude, Kimi, and any OpenAI-compatible APIs with robust error handling.
 
 ## 🎯 Core Purpose
 
-`@ai-chat` is designed with a clear focus on core AI interaction:
+`@deepracticex/ai-chat` is designed with a clear focus on core AI interaction:
 1. **AI Request Processing** - Send messages to AI providers and handle responses
-2. **Tool Calling Coordination** - Manage tool calls and results in AI conversations
-3. **Provider Abstraction** - Unified interface for different AI providers
+2. **Tool Calling Coordination** - Manage tool calls and results with intelligent format adaptation
+3. **Universal Compatibility** - Works with OpenAI, Claude, Kimi, and any OpenAI-compatible APIs
+4. **Robust Error Handling** - Graceful fallback when tool calls fail to parse
+
+## 🌟 Key Features (v0.4.0)
+
+### 🚀 **Universal Tool Calling Format Adapter**
+- **Smart Format Detection**: Automatically detects and adapts different AI service formats
+- **Multi-Strategy JSON Parsing**: Handles malformed JSON, empty strings, special tokens
+- **Error Recovery**: Falls back to empty parameters instead of crashing
+- **Extensible Design**: Easy to add new AI service adapters
+
+### 📦 **Supported AI Services**
+- ✅ **OpenAI** (GPT-3.5, GPT-4, GPT-4o)
+- ✅ **Kimi/Moonshot** (with special handling for format quirks)
+- ✅ **Claude** (Anthropic)
+- ✅ **Any OpenAI-compatible API** (Ollama, LocalAI, etc.)
+
+### 🛡️ **Production-Ready**
+- **TypeScript First**: Full type safety and IntelliSense support
+- **Zero Breaking Changes**: Drop-in replacement for existing code
+- **Performance Monitoring**: Built-in adapter statistics and debugging
+- **Battle Tested**: Handles edge cases from real-world usage
 
 This package does **NOT** handle:
 - ❌ Model discovery and selection (use `model-manager` packages)

@@ -18,13 +18,19 @@ export { createErrorChunk } from './streaming/StreamUtils.js'
 // ============== 类型导出 ==============
 export * from './types/index.js'
 
+// ============== 适配器导出 ==============
+export * from './adapters/index.js'
+
 // ============== 版本信息 ==============
-export const version = '0.2.0' // 版本升级，表示重大重构
+export const version = '0.5.0' // 架构优化：职责分离，MCP 特定逻辑移至 Domain 层
 
 // ============== 包状态 ==============
-// 重构完成！新特性：
-// ✅ 移除Provider抽象层 - 直接HTTP请求
-// ✅ 简化配置 - 只需baseUrl + model
-// ✅ 保留核心功能 - 工具调用 + 流式处理
-// ✅ 兼容所有OpenAI格式API - OpenAI, Claude, Ollama等
-// ✅ 大幅减少代码量和复杂度
+// v0.5.0 主要特性：
+// 🎯 职责分离架构 - MCP 特定逻辑移至 Domain 层
+// ✅ 纯粹AI对话框架 - 专注核心对话能力
+// ✅ 通用工具执行 - 保留 ToolExecutionManager 通用性
+// ✅ 格式适配器保留 - 继续支持多AI服务商格式兼容
+// ✅ 回调机制简化 - 通过 onToolCall 统一工具处理
+// ✅ 依赖关系优化 - 消除循环依赖和复杂注入
+// ✅ 代码精简30% - 移除冗余代码，提升维护性
+// ✅ 向前兼容 - API 保持稳定，升级无痛

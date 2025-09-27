@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/context-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Simple and powerful AI context formatter with layered XML structure",
   "type": "module",
   "main": "./dist/index.js",

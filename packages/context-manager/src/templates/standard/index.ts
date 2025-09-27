@@ -60,6 +60,23 @@ export class StandardTemplate implements ContextTemplate<StandardInput> {
    * @returns AIMessage 数组
    */
   buildMessages(input: StandardInput): AIMessage[] {
+    // 新版本：如果直接提供了完整消息数组，优先使用
+    if (input.messages && input.messages.length > 0) {
+      const messages: AIMessage[] = [];
+
+      // 添加系统消息（使用角色作为系统提示）
+      messages.push({
+        role: "system",
+        content: input.role,
+      });
+
+      // 直接使用提供的消息数组，保持完整的工具调用信息
+      messages.push(...input.messages);
+
+      return messages;
+    }
+
+    // 传统版本：兼容现有的字符串/数组格式
     const messages: AIMessage[] = [];
 
     // 1. 系统消息：使用格式化的XML上下文

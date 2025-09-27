@@ -9,7 +9,10 @@ interface MessageListProps {
   loading?: boolean
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, loading = false }) => {
+const MessageList: React.FC<MessageListProps> = ({
+  messages,
+  loading = false
+}) => {
   const listRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
@@ -44,13 +47,14 @@ const MessageList: React.FC<MessageListProps> = ({ messages, loading = false }) 
         </div>
       ) : (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          {messages.map((message) => (
+          {messages.map((message, index) => (
             <MessageBubble
               key={message.id}
               message={message}
             />
           ))}
-          
+
+
           {/* 加载状态 */}
           {loading && (
             <div style={{

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { 
-  Button, 
-  Table, 
-  Modal, 
-  Form, 
-  Input, 
-  message, 
+import {
+  Button,
+  Table,
+  Modal,
+  Form,
+  Input,
+  message,
   Popconfirm,
   Space,
   Badge,
@@ -501,8 +501,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({
             label="API地址"
             rules={[{ required: true, message: '请输入API地址' }]}
           >
-            <Input 
-              placeholder="https://api.openai.com/v1" 
+            <Input
+              placeholder="https://api.openai.com/v1"
               style={{ borderRadius: '6px' }}
             />
           </Form.Item>

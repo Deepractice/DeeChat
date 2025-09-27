@@ -150,10 +150,12 @@ export class InjectedDatabaseAdapter {
         CREATE TABLE IF NOT EXISTS conversation_messages (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
-          role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-          content TEXT NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+          content TEXT,
           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
           token_usage TEXT,
+          tool_calls TEXT,
+          tool_call_id TEXT,
           FOREIGN KEY (session_id) REFERENCES conversation_sessions (id) ON DELETE CASCADE
         )
       `);
@@ -204,8 +206,10 @@ export class InjectedDatabaseAdapter {
         END
       `);
 
+
     } catch (error) {
       throw new DatabaseError(`Failed to setup database tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
 }

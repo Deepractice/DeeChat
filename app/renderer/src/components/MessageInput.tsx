@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
-import { Input, Button } from 'antd'
-import { SendOutlined } from '@ant-design/icons'
+import { Input, Button, Space, Badge } from 'antd'
+import { SendOutlined, ToolOutlined } from '@ant-design/icons'
 
 const { TextArea } = Input
 
@@ -8,12 +8,16 @@ interface MessageInputProps {
   onSendMessage: (content: string) => void
   disabled?: boolean
   placeholder?: string
+  toolCount?: number
+  isCallingTool?: boolean
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ 
-  onSendMessage, 
-  disabled = false, 
-  placeholder = '输入消息...' 
+const MessageInput: React.FC<MessageInputProps> = ({
+  onSendMessage,
+  disabled = false,
+  placeholder = '输入消息...',
+  toolCount = 0,
+  isCallingTool = false
 }) => {
   const [content, setContent] = useState('')
   const textAreaRef = useRef<any>(null)
@@ -67,9 +71,24 @@ const MessageInput: React.FC<MessageInputProps> = ({
           marginTop: '4px',
           fontSize: '12px',
           color: '#999',
-          textAlign: 'right'
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}>
-          Enter 发送 • Shift+Enter 换行
+          <Space size="small">
+            {toolCount > 0 && (
+              <Space size={4}>
+                <Badge count={toolCount} size="small">
+                  <ToolOutlined style={{ color: '#1890ff' }} />
+                </Badge>
+                <span style={{ color: '#1890ff' }}>工具可用</span>
+              </Space>
+            )}
+            {isCallingTool && (
+              <span style={{ color: '#52c41a' }}>🔧 正在调用工具...</span>
+            )}
+          </Space>
+          <span>Enter 发送 • Shift+Enter 换行</span>
         </div>
       </div>
       

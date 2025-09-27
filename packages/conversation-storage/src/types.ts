@@ -16,10 +16,12 @@ export interface ConversationSession {
 export interface ConversationMessage {
   id: string;
   session_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';  // ✅ 支持tool角色
   content: string;
   timestamp: string;                   // ISO格式时间戳
   token_usage?: TokenUsage;            // 可选的token使用统计
+  tool_calls?: any[];                  // ✅ 支持工具调用
+  tool_call_id?: string;               // ✅ 支持工具调用ID
 }
 
 // Token使用统计
@@ -47,6 +49,8 @@ export interface ConversationMessageRow {
   content: string;
   timestamp: string;
   token_usage?: string;                // JSON 字符串
+  tool_calls?: string;                 // JSON 字符串
+  tool_call_id?: string;               // 工具调用ID
 }
 
 // === 输入/输出 Schema ===
@@ -66,13 +70,15 @@ export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 // 创建消息输入
 export const CreateMessageSchema = z.object({
   session_id: z.string().min(1, '会话ID不能为空'),
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().min(1, '消息内容不能为空'),
+  role: z.enum(['user', 'assistant', 'system', 'tool']),  // ✅ 支持tool角色
+  content: z.string(),  // ✅ 允许空内容（工具调用场景需要）
   token_usage: z.object({
     prompt_tokens: z.number().min(0),
     completion_tokens: z.number().min(0),
     total_tokens: z.number().min(0),
   }).optional(),
+  tool_calls: z.array(z.any()).optional(),  // ✅ 支持工具调用
+  tool_call_id: z.string().optional(),      // ✅ 支持工具调用ID
 });
 
 export type CreateMessageInput = z.infer<typeof CreateMessageSchema>;
@@ -92,7 +98,7 @@ export interface SessionQueryOptions extends QueryOptions {
 
 export interface MessageQueryOptions extends QueryOptions {
   session_id?: string;
-  role?: 'user' | 'assistant' | 'system';
+  role?: 'user' | 'assistant' | 'system' | 'tool';  // ✅ 支持tool角色
 }
 
 // === 错误类型 ===

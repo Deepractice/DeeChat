@@ -6,6 +6,7 @@
 
 // 主要导出
 export { McpClient } from './McpClient.js';
+export type { McpClientOptions } from './McpClient.js';
 
 // Enum导出
 export { ConnectionStatus } from './types/index.js';
@@ -18,7 +19,8 @@ export type {
   ResourceInfo,
   PromptInfo,
   ToolCallResult,
-  ResourceContent
+  ResourceContent,
+  PromptResult
 } from './types/index.js';
 
 // 错误类型导出

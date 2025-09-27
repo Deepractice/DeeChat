@@ -1,28 +1,85 @@
 /**
- * 工具执行管理器
- * 
- * 负责管理工具调用的生命周期和状态跟踪
+ * 工具执行管理器 - Function Calling生命周期管理的核心组件
+ *
+ * 这个管理器是AI工具调用系统的执行引擎，负责协调和管理所有工具调用的执行过程。
+ * 它提供了完整的生命周期管理、状态跟踪、错误处理和并发控制能力。
+ *
+ * 核心功能：
+ * - 生命周期管理：从工具调用开始到结果返回的全程管理
+ * - 状态跟踪：实时跟踪每个工具的执行状态
+ * - 并发执行：支持多个工具同时执行，提升效率
+ * - 错误处理：完善的异常捕获和错误恢复机制
+ * - 流式反馈：实时向调用者报告执行进度
+ *
+ * 设计特点：
+ * - 状态机模式：工具执行状态的清晰转换
+ * - 观察者模式：通过回调实时通知状态变化
+ * - 责任委托：将具体工具执行委托给外部处理器
+ * - 内存管理：合理管理执行状态，避免内存泄露
+ *
+ * 使用场景：
+ * - AI需要调用外部API（搜索、天气查询等）
+ * - 执行复杂的计算任务
+ * - 访问数据库或文件系统
+ * - 与其他服务进行交互
+ *
+ * @author DeeChat Team
+ * @since v0.5.0
+ * @example
+ * ```typescript
+ * const manager = new ToolExecutionManager();
+ * manager.addHandler(async (call) => {
+ *   // 执行具体的工具逻辑
+ *   return { tool_call_id: call.id, result: 'success' };
+ * });
+ *
+ * const results = await manager.executeToolCalls(toolCalls, (chunk) => {
+ *   console.log('工具执行状态:', chunk.phase);
+ * });
+ * ```
  */
 
-import { 
-  ToolCall, 
-  ToolResult, 
-  ToolExecuting, 
-  ToolExecutionError, 
-  ChatStreamChunk 
+import {
+  ToolCall,
+  ToolResult,
+  ToolExecuting,
+  ToolExecutionError,
+  ChatStreamChunk
 } from '../types/index.js'
 
+/**
+ * 工具调用处理器接口
+ *
+ * 这是实际执行工具逻辑的函数接口。外部可以注册多个处理器，
+ * 管理器会选择合适的处理器来执行具体的工具调用。
+ *
+ * @param call 标准化的工具调用对象
+ * @returns Promise解析为工具执行结果
+ */
 export interface ToolCallHandler {
   (call: ToolCall): Promise<ToolResult>
 }
 
 /**
- * 工具执行状态
+ * 工具执行状态接口
+ *
+ * 定义了工具执行的三种状态，每种状态都用Map管理，
+ * 以tool_call_id为键，便于快速查询和更新。
+ *
+ * 状态转换流程：
+ * 1. 工具调用开始 -> executing
+ * 2. 执行成功 -> completed
+ * 3. 执行失败 -> failed
  */
 export interface ToolExecutionState {
-  executing: Map<string, ToolExecuting>  // 正在执行的工具
-  completed: Map<string, ToolResult>     // 已完成的工具
-  failed: Map<string, ToolExecutionError>         // 失败的工具
+  /** 正在执行的工具：id -> 执行信息 */
+  executing: Map<string, ToolExecuting>
+
+  /** 已成功完成的工具：id -> 执行结果 */
+  completed: Map<string, ToolResult>
+
+  /** 执行失败的工具：id -> 错误信息 */
+  failed: Map<string, ToolExecutionError>
 }
 
 /**

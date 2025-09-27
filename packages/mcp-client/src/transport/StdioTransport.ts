@@ -1,198 +1,193 @@
 /**
- * Stdio Transport Implementation
- * 
+ * 简化的 Stdio Transport Implementation
+ *
  * 通过标准输入/输出与子进程通信
  */
 
 import { spawn, ChildProcess } from 'child_process';
-import { createReadStream, createWriteStream } from 'fs';
-import { BaseTransport } from './BaseTransport.js';
-import type { StdioTransportOptions } from './types.js';
-import { ConnectionError } from '../utils/errors.js';
+import { EventEmitter } from 'events';
+import type { StdioTransportConfig, JsonRpcRequest, JsonRpcResponse } from '../types/index.js';
 
-export class StdioTransport extends BaseTransport {
+export class StdioTransport extends EventEmitter {
   private process: ChildProcess | null = null;
   private messageBuffer = '';
-  private messageHandlers: Array<(message: string) => void> = [];
+  private pendingRequests = new Map<string | number, {
+    resolve: (result: any) => void;
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+  }>();
 
-  constructor(private stdioOptions: StdioTransportOptions) {
-    super(stdioOptions);
+  constructor(private config: StdioTransportConfig) {
+    super();
   }
-
-  // ============== Transport Implementation ==============
 
   async connect(): Promise<void> {
-    if (this.connected) {
-      throw new ConnectionError('Already connected');
-    }
-
-    try {
-      await this.withTimeout(this.startProcess());
-      this.setConnected(true);
-    } catch (error) {
-      throw this.createConnectionError(
-        `Failed to start process: ${this.stdioOptions.command}`,
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  async send(message: string): Promise<void> {
-    if (!this.connected || !this.process || !this.process.stdin) {
-      throw new ConnectionError('Not connected');
-    }
-
-    try {
-      // 确保消息以换行符结尾
-      const messageToSend = message.endsWith('\\n') ? message : message + '\\n';
-      
-      return new Promise((resolve, reject) => {
-        this.process!.stdin!.write(messageToSend, 'utf-8', (error) => {
-          if (error) {
-            reject(this.createConnectionError('Failed to send message', error));
-          } else {
-            resolve();
-          }
-        });
-      });
-    } catch (error) {
-      throw this.createConnectionError(
-        'Failed to send message',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  async receive(): Promise<string | null> {
-    // Stdio transport 主要通过事件驱动，这个方法返回 null
-    // 实际消息通过 onMessage 事件处理
-    return null;
-  }
-
-  async close(): Promise<void> {
-    if (!this.connected || !this.process) {
+    if (this.isConnected()) {
       return;
     }
 
     try {
-      // 优雅关闭：先发送 SIGTERM
-      this.process.kill('SIGTERM');
+      this.process = spawn(this.config.command, this.config.args || [], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.config.cwd,
+        env: { ...process.env, ...this.config.env }
+      });
 
-      // 等待进程结束，或在超时后强制结束
-      await new Promise<void>((resolve) => {
+      this.setupProcessHandlers();
+
+      // 等待进程启动
+      await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          if (this.process && !this.process.killed) {
-            this.process.kill('SIGKILL');
-          }
-          resolve();
+          reject(new Error('Process startup timeout'));
         }, 5000);
 
-        this.process!.on('exit', () => {
+        this.process!.on('spawn', () => {
           clearTimeout(timeout);
           resolve();
         });
+
+        this.process!.on('error', (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
       });
 
-      this.cleanup();
     } catch (error) {
       this.cleanup();
-      throw this.createConnectionError(
-        'Error during close',
-        error instanceof Error ? error : undefined
-      );
+      throw new Error(`Failed to start process: ${error}`);
     }
   }
 
-  // ============== Private Methods ==============
+  async sendRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+    if (!this.isConnected()) {
+      throw new Error('Not connected');
+    }
 
-  private async startProcess(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.process = spawn(this.stdioOptions.command, this.stdioOptions.args || [], {
-          cwd: this.stdioOptions.cwd,
-          env: {
-            ...process.env,
-            ...this.stdioOptions.env
-          },
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
+    return new Promise<JsonRpcResponse>((resolve, reject) => {
+      // 设置请求超时
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(request.id);
+        reject(new Error(`Request timeout: ${request.method}`));
+      }, 30000);
 
-        // 设置事件处理器
-        this.setupProcessHandlers();
+      this.pendingRequests.set(request.id, { resolve, reject, timeout });
 
-        // 等待进程启动
-        this.process.once('spawn', () => {
-          resolve();
-        });
-
-        this.process.once('error', (error) => {
-          reject(error);
-        });
-
-      } catch (error) {
-        reject(error);
-      }
+      // 发送请求
+      const message = JSON.stringify(request) + '\n';
+      this.process!.stdin!.write(message, 'utf-8', (error) => {
+        if (error) {
+          this.pendingRequests.delete(request.id);
+          clearTimeout(timeout);
+          reject(new Error(`Failed to send request: ${error.message}`));
+        }
+      });
     });
+  }
+
+  async close(): Promise<void> {
+    if (!this.process) {
+      return;
+    }
+
+    try {
+      // 清理所有待处理的请求
+      for (const [id, { reject, timeout }] of this.pendingRequests) {
+        clearTimeout(timeout);
+        reject(new Error('Connection closed'));
+      }
+      this.pendingRequests.clear();
+
+      // 关闭子进程
+      if (this.process.stdin) {
+        this.process.stdin.end();
+      }
+
+      this.process.kill();
+      this.process = null;
+
+      this.emit('close');
+    } catch (error) {
+      // 忽略关闭错误
+    }
+  }
+
+  isConnected(): boolean {
+    return this.process !== null && !this.process.killed;
   }
 
   private setupProcessHandlers(): void {
     if (!this.process) return;
 
-    // 处理标准输出（消息接收）
-    this.process.stdout?.setEncoding('utf-8');
-    this.process.stdout?.on('data', (data: string) => {
-      this.handleIncomingData(data);
+    // 处理标准输出
+    this.process.stdout!.on('data', (data: Buffer) => {
+      this.handleData(data.toString());
     });
 
     // 处理标准错误
-    this.process.stderr?.setEncoding('utf-8');
-    this.process.stderr?.on('data', (data: string) => {
-      // 可以选择记录错误日志或忽略
-      console.warn(`MCP Server stderr: ${data}`);
+    this.process.stderr!.on('data', (data: Buffer) => {
+      console.error(`Process stderr: ${data.toString()}`);
     });
 
     // 处理进程退出
     this.process.on('exit', (code, signal) => {
+      console.log(`Process exited with code ${code}, signal ${signal}`);
       this.cleanup();
-      if (code !== 0 && code !== null) {
-        this.emitError(new ConnectionError(`Process exited with code ${code}`));
-      }
+      this.emit('close');
     });
 
     // 处理进程错误
     this.process.on('error', (error) => {
+      console.error('Process error:', error);
       this.cleanup();
-      this.emitError(this.createConnectionError('Process error', error));
+      this.emit('error', error);
     });
   }
 
-  private handleIncomingData(data: string): void {
+  private handleData(data: string): void {
     this.messageBuffer += data;
 
     // 按行分割消息
-    const lines = this.messageBuffer.split('\\n');
-    
-    // 保留最后一个可能不完整的行
-    this.messageBuffer = lines.pop() || '';
+    const lines = this.messageBuffer.split('\n');
+    this.messageBuffer = lines.pop() || ''; // 保留最后一个可能不完整的行
 
-    // 处理完整的行
     for (const line of lines) {
       if (line.trim()) {
-        this.emitMessage(line.trim());
+        this.handleMessage(line.trim());
       }
+    }
+  }
+
+  private handleMessage(message: string): void {
+    try {
+      const parsed = JSON.parse(message) as JsonRpcResponse;
+
+      if (parsed.id !== undefined) {
+        // 这是一个响应
+        const pending = this.pendingRequests.get(parsed.id);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          this.pendingRequests.delete(parsed.id);
+
+          if (parsed.error) {
+            pending.reject(new Error(parsed.error.message));
+          } else {
+            pending.resolve(parsed);
+          }
+        }
+      } else {
+        // 这是一个通知，暂时忽略
+        console.log('Received notification:', parsed);
+      }
+
+    } catch (error) {
+      console.error('Failed to parse message:', error, 'Message:', message);
     }
   }
 
   private cleanup(): void {
     if (this.process) {
       this.process.removeAllListeners();
-      this.process.stdout?.removeAllListeners();
-      this.process.stderr?.removeAllListeners();
-      this.process.stdin?.removeAllListeners();
       this.process = null;
     }
-
-    this.messageBuffer = '';
-    this.setConnected(false);
   }
 }

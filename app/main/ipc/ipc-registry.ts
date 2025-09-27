@@ -6,6 +6,8 @@ export interface IDomain {
 }
 
 export class IPCRegistry {
+  private registeredChannels = new Set<string>()
+
   constructor(private container: ApplicationBootstrapper) {}
 
   async registerAllDomains(): Promise<void> {
@@ -29,8 +31,19 @@ export class IPCRegistry {
       const handlers = domain.exposeToIPC()
 
       let registeredCount = 0
-      
+      let skippedCount = 0
+
       Object.entries(handlers).forEach(([channel, handler]) => {
+        // 检查是否已经注册过
+        if (this.registeredChannels.has(channel)) {
+          console.log(`🔄 IPC频道已注册，跳过: ${channel}`)
+          skippedCount++
+          return
+        }
+
+        // 先移除可能存在的旧处理器
+        ipcMain.removeHandler(channel)
+
         ipcMain.handle(channel, async (event, ...args) => {
           try {
             console.log(`📨 IPC请求: ${channel}`, args.length > 0 ? `(${args.length} 参数)` : '')
@@ -53,10 +66,13 @@ export class IPCRegistry {
             }
           }
         })
+
+        // 标记为已注册
+        this.registeredChannels.add(channel)
         registeredCount++
       })
 
-      console.log(`  ✅ ${domainName}: 注册了 ${registeredCount} 个处理器`)
+      console.log(`  ✅ ${domainName}: 注册了 ${registeredCount} 个处理器${skippedCount > 0 ? `，跳过 ${skippedCount} 个已注册频道` : ''}`)
     } catch (error: any) {
       console.error(`❌ 注册${domainName}失败:`, error.message)
     }
@@ -65,8 +81,20 @@ export class IPCRegistry {
   // 动态注册新的Domain
   registerDomain(domainName: string, domain: IDomain): void {
     const handlers = domain.exposeToIPC()
-    
+    let registeredCount = 0
+    let skippedCount = 0
+
     Object.entries(handlers).forEach(([channel, handler]) => {
+      // 检查是否已经注册过
+      if (this.registeredChannels.has(channel)) {
+        console.log(`🔄 动态注册时跳过已注册频道: ${channel}`)
+        skippedCount++
+        return
+      }
+
+      // 先移除可能存在的旧处理器
+      ipcMain.removeHandler(channel)
+
       ipcMain.handle(channel, async (event, ...args) => {
         try {
           const result = await handler(...args)
@@ -75,21 +103,33 @@ export class IPCRegistry {
           return { success: false, error: error?.message || String(error) }
         }
       })
+
+      // 标记为已注册
+      this.registeredChannels.add(channel)
+      registeredCount++
     })
 
-    console.log(`📡 动态注册Domain: ${domainName}`)
+    console.log(`📡 动态注册Domain: ${domainName}，注册了 ${registeredCount} 个处理器${skippedCount > 0 ? `，跳过 ${skippedCount} 个已注册频道` : ''}`)
   }
 
   // 注销IPC处理器 (用于热重载等场景)
   unregisterChannel(channel: string): void {
     ipcMain.removeHandler(channel)
+    this.registeredChannels.delete(channel)
     console.log(`🗑️  注销IPC处理器: ${channel}`)
   }
 
   // 获取所有已注册的频道
   getRegisteredChannels(): string[] {
-    // 这个功能需要Electron更新版本支持
-    // 目前只能通过内部记录来实现
-    return []
+    return Array.from(this.registeredChannels)
+  }
+
+  // 清除所有注册
+  clearAll(): void {
+    for (const channel of this.registeredChannels) {
+      ipcMain.removeHandler(channel)
+    }
+    this.registeredChannels.clear()
+    console.log('🧹 清除所有IPC处理器')
   }
 }

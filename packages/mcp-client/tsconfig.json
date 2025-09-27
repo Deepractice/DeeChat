@@ -24,7 +24,6 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/*.spec.ts",
-    "src/transport/WebSocketTransport.ts"
+    "**/*.spec.ts"
   ]
 }

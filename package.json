@@ -27,6 +27,7 @@
     "typescript": "^5.2.0"
   },
   "dependencies": {
+    "@deepracticex/mcp-client": "^1.0.3",
     "better-sqlite3": "^12.2.0"
   }
 }

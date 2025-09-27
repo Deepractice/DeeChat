@@ -1,9 +1,9 @@
 import 'reflect-metadata'
 import { Container } from 'typedi'
-import { AIConfigurationDomain } from '../domains/AIConfigurationDomain.js'
-import { ConversationDomain } from '../domains/ConversationDomain.js'
-import { RoleManagementDomain } from '../domains/RoleManagementDomain.js'
-import { McpDomain } from '../domains/McpDomain.js'
+import { AIConfigurationDomain } from '../domains/ai-configuration/index.js'
+import { ConversationDomain } from '../domains/conversation/index.js'
+import { RoleManagementDomain } from '../domains/role-management/index.js'
+import { McpDomain } from '../domains/mcp/index.js'
 import { WindowManager } from './window-manager.js'
 
 /**
@@ -56,23 +56,33 @@ export class ApplicationBootstrapper {
     // 等待一小段时间，确保数据库完全释放资源
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    // 2. 初始化对话域 (简化架构，配置由前端传递)
+    // 2. 初始化MCP域 (外部工具集成) - 必须在ConversationDomain之前初始化
+    const mcpDomain = Container.get(McpDomain)
+    await mcpDomain.initialize()
+
+    // 等待一小段时间，确保数据库完全释放资源
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // 3. 初始化对话域 (依赖McpDomain，必须在其之后)
+
+    // 🚨 DEBUG: 验证Container中McpDomain的状态
+    console.log('🔍 [DEBUG] Container中McpDomain验证:', {
+      mcpDomainFromContainer: Container.get(McpDomain),
+      mcpDomainType: typeof Container.get(McpDomain),
+      mcpDomainConstructor: Container.get(McpDomain)?.constructor?.name,
+      hasCallTool: typeof Container.get(McpDomain)?.callTool,
+      mcpDomainInstance: Container.get(McpDomain) === mcpDomain
+    })
+
     const conversationDomain = Container.get(ConversationDomain)
     await conversationDomain.initialize()
 
     // 等待一小段时间，确保数据库完全释放资源
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    // 3. 初始化角色管理域 (PromptX适配层)
+    // 4. 初始化角色管理域 (PromptX适配层)
     const roleManagementDomain = Container.get(RoleManagementDomain)
     await roleManagementDomain.initialize()
-
-    // 等待一小段时间，确保数据库完全释放资源
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // 4. 初始化MCP域 (外部工具集成)
-    const mcpDomain = Container.get(McpDomain)
-    await mcpDomain.initialize()
 
     console.log('🎯 核心Domain初始化完成')
   }

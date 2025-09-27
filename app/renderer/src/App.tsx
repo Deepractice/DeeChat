@@ -5,6 +5,7 @@ import ChatPage from './components/ChatPage'
 import RoleSelector from './components/RoleSelector'
 import McpConfigPage from './components/McpConfigPage'
 import { Role, RoleActivationResponse } from './types/role'
+import { McpProvider } from './contexts/McpContext'
 
 type AppView = 'config' | 'role-selector' | 'chat' | 'mcp-config'
 
@@ -89,39 +90,41 @@ const App: React.FC = () => {
   }
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: '#1890ff',
-          borderRadius: 8,
-        }
-      }}
-    >
-      {currentView === 'config' ? (
-        <ConfigPage
-          onConfigChange={handleConfigChange}
-          onStartChat={switchToRoleSelector}
-          onMcpConfig={switchToMcpConfig}
-          hasConfigs={hasConfigs}
-        />
-      ) : currentView === 'mcp-config' ? (
-        <McpConfigPage
-          onBack={switchToConfig}
-        />
-      ) : currentView === 'role-selector' ? (
-        <RoleSelector
-          onRoleSelect={handleRoleSelect}
-          onBack={switchToConfig}
-        />
-      ) : (
-        <ChatPage
-          onBackToConfig={switchToConfig}
-          onBackToRoleSelector={switchToRoleSelector}
-          selectedRole={selectedRole}
-          roleActivationResult={roleActivationResult}
-        />
-      )}
-    </ConfigProvider>
+    <McpProvider>
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: '#1890ff',
+            borderRadius: 8,
+          }
+        }}
+      >
+        {currentView === 'config' ? (
+          <ConfigPage
+            onConfigChange={handleConfigChange}
+            onStartChat={switchToRoleSelector}
+            onMcpConfig={switchToMcpConfig}
+            hasConfigs={hasConfigs}
+          />
+        ) : currentView === 'mcp-config' ? (
+          <McpConfigPage
+            onBack={switchToConfig}
+          />
+        ) : currentView === 'role-selector' ? (
+          <RoleSelector
+            onRoleSelect={handleRoleSelect}
+            onBack={switchToConfig}
+          />
+        ) : (
+          <ChatPage
+            onBackToConfig={switchToConfig}
+            onBackToRoleSelector={switchToRoleSelector}
+            selectedRole={selectedRole}
+            roleActivationResult={roleActivationResult}
+          />
+        )}
+      </ConfigProvider>
+    </McpProvider>
   )
 }
 

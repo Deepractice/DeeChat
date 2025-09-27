@@ -148,10 +148,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateServer: (serverId: string, updates: Partial<McpServerConfig>) =>
       ipcRenderer.invoke('mcp:update-server', serverId, updates),
     removeServer: (serverId: string) => ipcRenderer.invoke('mcp:remove-server', serverId),
+    getServer: (serverId: string) => ipcRenderer.invoke('mcp:get-server', serverId),
 
     // 连接管理
     connect: (serverId: string) => ipcRenderer.invoke('mcp:connect', serverId),
     disconnect: (serverId: string) => ipcRenderer.invoke('mcp:disconnect', serverId),
+    isConnected: (serverId: string) => ipcRenderer.invoke('mcp:is-connected', serverId),
+    listConnections: () => ipcRenderer.invoke('mcp:list-connections'),
 
     // MCP功能调用
     listTools: (serverId: string) => ipcRenderer.invoke('mcp:list-tools', serverId),
@@ -159,7 +162,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('mcp:call-tool', serverId, toolName, args),
     listResources: (serverId: string) => ipcRenderer.invoke('mcp:list-resources', serverId),
     readResource: (serverId: string, uri: string) =>
-      ipcRenderer.invoke('mcp:read-resource', serverId, uri)
+      ipcRenderer.invoke('mcp:read-resource', serverId, uri),
+    listPrompts: (serverId: string) => ipcRenderer.invoke('mcp:list-prompts', serverId),
+    getPrompt: (serverId: string, name: string, args?: any) =>
+      ipcRenderer.invoke('mcp:get-prompt', serverId, name, args)
   },
 
   // 系统API (预留扩展)
@@ -262,7 +268,7 @@ interface McpServerWithStatus extends McpServerConfig {
   connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error'
   toolCount?: number
   resourceCount?: number
-  lastError?: string
+  error?: string
 }
 
 interface McpToolInfo {

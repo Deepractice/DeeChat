@@ -11,7 +11,9 @@ import {
   Typography,
   Tooltip,
   Tag,
-  Card
+  Card,
+  Collapse,
+  List
 } from 'antd'
 import {
   DeleteOutlined,
@@ -21,8 +23,10 @@ import {
   ToolOutlined,
   FileTextOutlined,
   SettingOutlined,
-  ImportOutlined
+  ImportOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
+import { useMcp } from '../contexts/McpContext'
 
 const { Title } = Typography
 const { TextArea } = Input
@@ -32,12 +36,18 @@ interface McpServerConfig {
   name: string
   description?: string
   transport: {
-    type: 'stdio' | 'http' | 'websocket'
+    type: 'stdio' | 'http' | 'websocket' | 'streamable-http'
     command: string
     args?: string[]
     env?: Record<string, string>
     cwd?: string
     url?: string
+    headers?: Record<string, string>
+    sessionId?: string
+    enableDnsRebindingProtection?: boolean
+    allowedHosts?: string[]
+    reconnectDelay?: number
+    maxReconnectAttempts?: number
   }
   enabled: boolean
   autoReconnect?: boolean
@@ -51,7 +61,9 @@ interface McpServerWithStatus extends McpServerConfig {
   connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error'
   toolCount?: number
   resourceCount?: number
+  promptCount?: number
   lastError?: string
+  connectedAt?: Date
 }
 
 interface McpConfigPageProps {
@@ -64,19 +76,32 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
   const [modalVisible, setModalVisible] = useState(false)
   const [jsonConfig, setJsonConfig] = useState('')
 
-  // 加载所有MCP服务器
+  // 工具列表弹窗相关状态
+  const [toolsModalVisible, setToolsModalVisible] = useState(false)
+  const [currentServerTools, setCurrentServerTools] = useState<any[]>([])
+  const [currentServerName, setCurrentServerName] = useState('')
+  const [toolsLoading, setToolsLoading] = useState(false)
+
+  // 使用MCP Context
+  const {
+    tools,
+    roles,
+    servers: mcpServers,
+    loading: mcpLoading,
+    refreshMcpData,
+    getToolsByServer,
+    getRolesByServer,
+    isDataStale,
+    lastUpdated
+  } = useMcp()
+
+  // 加载所有MCP服务器（现在使用MCP Context）
   const loadServers = async () => {
     setLoading(true)
     try {
-      console.log('🔄 请求获取MCP服务器列表...')
-      const result = await window.electronAPI.mcp.listServers()
-      console.log('📥 后端响应:', result)
-
-      if (result.success) {
-        setServers(result.data || [])
-      } else {
-        message.error('获取MCP服务器失败: ' + result.error)
-      }
+      console.log('🔄 使用MCP Context刷新数据...')
+      await refreshMcpData()
+      setServers(mcpServers)
     } catch (error) {
       console.error('获取MCP服务器异常:', error)
       message.error('获取MCP服务器异常: ' + error)
@@ -120,9 +145,10 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
           const serverConfigTyped = serverConfig as any
 
           // 支持的传输类型映射
-          const normalizeTransportType = (type: string): 'stdio' | 'http' | 'websocket' => {
+          const normalizeTransportType = (type: string): 'stdio' | 'http' | 'websocket' | 'streamable-http' => {
             switch (type) {
               case 'streamable-http':
+                return 'streamable-http'
               case 'http':
                 return 'http'
               case 'websocket':
@@ -242,6 +268,31 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
     }
   }
 
+  // 显示服务器工具列表
+  const showServerTools = async (serverId: string, serverName: string) => {
+    try {
+      setToolsLoading(true)
+      setCurrentServerName(serverName)
+      setToolsModalVisible(true)
+
+      console.log('🔧 获取服务器工具列表:', serverId)
+      const result = await window.electronAPI.mcp.listTools(serverId)
+
+      if (result.success) {
+        setCurrentServerTools(result.data || [])
+      } else {
+        message.error('❌ 获取工具列表失败: ' + result.error)
+        setCurrentServerTools([])
+      }
+    } catch (error) {
+      console.error('获取工具列表异常:', error)
+      message.error('❌ 获取工具列表异常: ' + error)
+      setCurrentServerTools([])
+    } finally {
+      setToolsLoading(false)
+    }
+  }
+
   // 获取连接状态标识
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -286,11 +337,22 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
       dataIndex: ['transport', 'type'],
       key: 'transportType',
       width: 100,
-      render: (type: string) => (
-        <Tag color={type === 'stdio' ? 'blue' : type === 'http' ? 'green' : 'orange'}>
-          {type.toUpperCase()}
-        </Tag>
-      )
+      render: (type: string) => {
+        const getColor = (t: string) => {
+          switch (t) {
+            case 'stdio': return 'blue'
+            case 'http': return 'green'
+            case 'websocket': return 'orange'
+            case 'streamable-http': return 'purple'
+            default: return 'default'
+          }
+        }
+        return (
+          <Tag color={getColor(type)}>
+            {type === 'streamable-http' ? 'STREAM-HTTP' : type.toUpperCase()}
+          </Tag>
+        )
+      }
     },
     {
       title: '命令/地址',
@@ -317,29 +379,37 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
       title: '状态',
       dataIndex: 'connectionStatus',
       key: 'status',
-      width: 120,
-      render: (status: string, record: McpServerWithStatus) => (
-        <Space direction="vertical" size="small">
-          {getStatusBadge(status)}
-          {status === 'connected' && (
-            <Space size="small" style={{ fontSize: '12px', color: '#666' }}>
-              {record.toolCount !== undefined && (
-                <span><ToolOutlined /> {record.toolCount}</span>
-              )}
-              {record.resourceCount !== undefined && (
-                <span><FileTextOutlined /> {record.resourceCount}</span>
-              )}
-            </Space>
-          )}
-          {record.lastError && (
-            <Tooltip title={record.lastError}>
-              <div style={{ fontSize: '12px', color: '#ff4d4f', cursor: 'pointer' }}>
-                错误信息
-              </div>
-            </Tooltip>
-          )}
-        </Space>
-      )
+      width: 180,
+      render: (status: string, record: McpServerWithStatus) => {
+        const serverTools = getToolsByServer(record.id)
+        const serverRoles = getRolesByServer(record.id)
+
+        return (
+          <Space direction="vertical" size="small">
+            {getStatusBadge(status)}
+            {status === 'connected' && (
+              <Space size="small" style={{ fontSize: '12px', color: '#666' }}>
+                {serverTools.length > 0 && (
+                  <Tooltip title={`工具: ${serverTools.map(t => t._meta.originalName).join(', ')}`}>
+                    <span><ToolOutlined /> {serverTools.length}</span>
+                  </Tooltip>
+                )}
+                {serverRoles.length > 0 && (
+                  <Tooltip title={`角色: ${serverRoles.map(r => r.name).join(', ')}`}>
+                    <span><RobotOutlined /> {serverRoles.length}</span>
+                  </Tooltip>
+                )}
+                {record.resourceCount !== undefined && (
+                  <span><FileTextOutlined /> {record.resourceCount}</span>
+                )}
+                {record.promptCount !== undefined && (
+                  <span>💬 {record.promptCount}</span>
+                )}
+              </Space>
+            )}
+          </Space>
+        )
+      }
     },
     {
       title: '操作',
@@ -348,20 +418,36 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
       render: (record: McpServerWithStatus) => (
         <Space size="small" wrap>
           {record.connectionStatus === 'connected' ? (
-            <Button
-              type="text"
-              icon={<DisconnectOutlined />}
-              size="small"
-              onClick={() => disconnectServer(record.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '4px 8px',
-                color: '#ff4d4f'
-              }}
-            >
-              断开
-            </Button>
+            <>
+              <Button
+                type="text"
+                icon={<ToolOutlined />}
+                size="small"
+                onClick={() => showServerTools(record.id, record.name)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '4px 8px',
+                  color: '#1890ff'
+                }}
+              >
+                工具
+              </Button>
+              <Button
+                type="text"
+                icon={<DisconnectOutlined />}
+                size="small"
+                onClick={() => disconnectServer(record.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '4px 8px',
+                  color: '#ff4d4f'
+                }}
+              >
+                断开
+              </Button>
+            </>
           ) : (
             <Button
               type="text"
@@ -406,6 +492,11 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
       )
     }
   ]
+
+  // 同步MCP Context的服务器数据到本地状态
+  useEffect(() => {
+    setServers(mcpServers)
+  }, [mcpServers])
 
   useEffect(() => {
     loadServers()
@@ -507,6 +598,116 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
             style={{ border: 'none' }}
           />
         </div>
+
+        {/* MCP工具和角色详细展示 */}
+        {(tools.length > 0 || roles.length > 0) && (
+          <div style={{
+            marginTop: '24px',
+            background: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+            border: '1px solid #e8e8e8'
+          }}>
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ color: '#6b7280', fontSize: '14px' }}>
+                MCP资源详情 ({tools.length} 工具, {roles.length} 角色)
+                {lastUpdated && (
+                  <span style={{ marginLeft: '12px', fontSize: '12px', color: '#999' }}>
+                    更新时间: {lastUpdated.toLocaleString()}
+                    {isDataStale && <Tag color="orange" style={{ marginLeft: '8px' }}>数据过期</Tag>}
+                  </span>
+                )}
+              </div>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => refreshMcpData()}
+                loading={mcpLoading}
+                size="small"
+              >
+                刷新数据
+              </Button>
+            </div>
+
+            <Collapse
+              defaultActiveKey={tools.length > 0 ? ['tools'] : []}
+              style={{ border: 'none' }}
+              items={[
+                ...(tools.length > 0 ? [{
+                  key: 'tools',
+                  label: (
+                    <span>
+                      <ToolOutlined style={{ marginRight: '8px' }} />
+                      可用工具 ({tools.length})
+                    </span>
+                  ),
+                  children: (
+                    <List
+                      dataSource={tools}
+                      renderItem={(tool) => (
+                        <List.Item>
+                          <List.Item.Meta
+                            avatar={<ToolOutlined style={{ color: '#1890ff' }} />}
+                            title={
+                              <Space>
+                                <code style={{ fontSize: '13px' }}>{tool.function.name}</code>
+                                <Tag size="small" color="blue">{tool._meta.serverName}</Tag>
+                              </Space>
+                            }
+                            description={tool.function.description}
+                          />
+                        </List.Item>
+                      )}
+                      pagination={{
+                        pageSize: 5,
+                        size: 'small',
+                        showSizeChanger: false
+                      }}
+                    />
+                  )
+                }] : []),
+                ...(roles.length > 0 ? [{
+                  key: 'roles',
+                  label: (
+                    <span>
+                      <RobotOutlined style={{ marginRight: '8px' }} />
+                      可用角色 ({roles.length})
+                    </span>
+                  ),
+                  children: (
+                    <List
+                      dataSource={roles}
+                      renderItem={(role) => (
+                        <List.Item>
+                          <List.Item.Meta
+                            avatar={<RobotOutlined style={{ color: '#52c41a' }} />}
+                            title={
+                              <Space>
+                                <strong>{role.name}</strong>
+                                <Tag size="small" color="green">{role.serverName}</Tag>
+                              </Space>
+                            }
+                            description={role.description || `来自 ${role.serverName} 的角色`}
+                          />
+                        </List.Item>
+                      )}
+                      pagination={{
+                        pageSize: 5,
+                        size: 'small',
+                        showSizeChanger: false
+                      }}
+                    />
+                  )
+                }] : [])
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       {/* JSON导入Modal */}
@@ -597,6 +798,95 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
               导入配置
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* 工具列表弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <ToolOutlined style={{ color: '#1890ff' }} />
+            <span>{currentServerName} - 工具列表</span>
+          </Space>
+        }
+        open={toolsModalVisible}
+        onCancel={() => setToolsModalVisible(false)}
+        footer={null}
+        width={800}
+        centered
+      >
+        <div style={{ marginTop: '20px' }}>
+          {toolsLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Space direction="vertical">
+                <div style={{ fontSize: '16px' }}>🔄 加载工具列表中...</div>
+              </Space>
+            </div>
+          ) : currentServerTools.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Space direction="vertical">
+                <div style={{ fontSize: '24px' }}>🚫</div>
+                <div style={{ fontSize: '16px', color: '#666' }}>该服务器暂无可用工具</div>
+              </Space>
+            </div>
+          ) : (
+            <List
+              dataSource={currentServerTools}
+              renderItem={(tool: any) => (
+                <List.Item style={{ border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: '8px', padding: '16px' }}>
+                  <div style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div>
+                        <Space>
+                          <ToolOutlined style={{ color: '#1890ff' }} />
+                          <Typography.Text strong style={{ fontSize: '16px' }}>
+                            {tool.name}
+                          </Typography.Text>
+                        </Space>
+                      </div>
+                    </div>
+
+                    {tool.description && (
+                      <div style={{ marginBottom: '12px', color: '#666', fontSize: '14px' }}>
+                        {tool.description}
+                      </div>
+                    )}
+
+                    {tool.inputSchema && (
+                      <Collapse
+                        size="small"
+                        ghost
+                        items={[{
+                          key: 'schema',
+                          label: (
+                            <Space>
+                              <Typography.Text style={{ fontSize: '12px', color: '#666' }}>
+                                📋 参数结构
+                              </Typography.Text>
+                            </Space>
+                          ),
+                          children: (
+                            <pre style={{
+                              background: '#f8f9fa',
+                              padding: '12px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              overflow: 'auto',
+                              maxHeight: '200px',
+                              margin: 0
+                            }}>
+                              {JSON.stringify(tool.inputSchema, null, 2)}
+                            </pre>
+                          )
+                        }]}
+                      />
+                    )}
+                  </div>
+                </List.Item>
+              )}
+              style={{ maxHeight: '500px', overflow: 'auto' }}
+            />
+          )}
         </div>
       </Modal>
     </div>

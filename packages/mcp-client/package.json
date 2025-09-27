@@ -1,7 +1,7 @@
 {
   "name": "@deepracticex/mcp-client",
-  "version": "3.0.1",
-  "description": "MCP (Model Context Protocol) client for DeeChat - A comprehensive client library for managing MCP server connections, tools, resources, and prompts",
+  "version": "1.0.8",
+  "description": "MCP (Model Context Protocol) client for DeeChat - Simplified domain-rich model implementation for managing MCP server connections, tools, resources, and prompts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",

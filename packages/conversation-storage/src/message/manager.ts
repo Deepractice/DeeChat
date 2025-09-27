@@ -44,21 +44,27 @@ export class MessageManager {
     const timestamp = new Date().toISOString();
 
     try {
-      // 准备token_usage数据
-      const tokenUsageJson = validatedInput.token_usage 
+      // 准备JSON数据
+      const tokenUsageJson = validatedInput.token_usage
         ? JSON.stringify(validatedInput.token_usage)
         : null;
 
+      const toolCallsJson = validatedInput.tool_calls
+        ? JSON.stringify(validatedInput.tool_calls)
+        : null;
+
       const result = this.db.run(`
-        INSERT INTO ${this.tableName} (id, session_id, role, content, timestamp, token_usage)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO ${this.tableName} (id, session_id, role, content, timestamp, token_usage, tool_calls, tool_call_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         messageId,
         validatedInput.session_id,
         validatedInput.role,
         validatedInput.content,
         timestamp,
-        tokenUsageJson
+        tokenUsageJson,
+        toolCallsJson,
+        validatedInput.tool_call_id || null
       ]);
 
       if (result.changes === 0) {
@@ -201,7 +207,8 @@ export class MessageManager {
       const result: Record<string, number> = {
         user: 0,
         assistant: 0,
-        system: 0
+        system: 0,
+        tool: 0
       };
 
       rows.forEach(row => {
@@ -228,7 +235,8 @@ export class MessageManager {
    */
   private mapRowToMessage(row: ConversationMessageRow): ConversationMessage {
     let tokenUsage: TokenUsage | undefined;
-    
+    let toolCalls: any[] | undefined;
+
     if (row.token_usage) {
       try {
         tokenUsage = JSON.parse(row.token_usage);
@@ -238,13 +246,24 @@ export class MessageManager {
       }
     }
 
+    // 处理tool_calls字段（需要更新ConversationMessageRow类型）
+    if ((row as any).tool_calls) {
+      try {
+        toolCalls = JSON.parse((row as any).tool_calls);
+      } catch (error) {
+        console.warn('Failed to parse tool_calls JSON:', error);
+      }
+    }
+
     return {
       id: row.id,
       session_id: row.session_id,
-      role: row.role as 'user' | 'assistant' | 'system',
+      role: row.role as 'user' | 'assistant' | 'system' | 'tool',
       content: row.content,
       timestamp: row.timestamp,
       token_usage: tokenUsage,
+      tool_calls: toolCalls,
+      tool_call_id: (row as any).tool_call_id
     };
   }
 }
