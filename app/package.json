@@ -1,6 +1,6 @@
 {
   "name": "deechat-app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "DeeChat Electron Application",
   "main": "out/main/index.js",
   "type": "module",
