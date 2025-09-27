@@ -24,13 +24,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
+            app/package-lock.json
             app/renderer/package-lock.json
 
       - name: 📦 Install all dependencies using workspace
         run: |
           # 优化安装：利用workspace和缓存加速
           npm ci --prefer-offline
-          cd app && npm install --prefer-offline
+          cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
       - name: 🔧 Rebuild native modules for Electron
@@ -97,6 +98,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
+            app/package-lock.json
             app/renderer/package-lock.json
 
       - name: 🪟 Setup MSBuild
@@ -105,7 +107,7 @@ jobs:
       - name: 📦 Install all dependencies using workspace
         run: |
           npm ci --prefer-offline
-          cd app && npm install --prefer-offline
+          cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
@@ -145,6 +147,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
+            app/package-lock.json
             app/renderer/package-lock.json
 
       - name: 🐧 Install Linux dependencies
@@ -155,7 +158,7 @@ jobs:
       - name: 📦 Install all dependencies using workspace
         run: |
           npm ci --prefer-offline
-          cd app && npm install --prefer-offline
+          cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
       - name: 🔧 Rebuild native modules for Electron
