@@ -166,15 +166,11 @@ jobs:
             app/release/latest-mac.yml
           retention-days: 30
 
-  # ---------- Windows (矩阵：x64 / ia32) ----------
+  # ---------- Windows (x64 only) ----------
   build-windows:
-    name: Build Windows (${{ matrix.arch }})
+    name: Build Windows x64
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, ia32]
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -209,39 +205,34 @@ jobs:
       - name: 🔍 Print Electron ABI
         run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
-      - name: 🔧 Rebuild native modules for Electron Windows (${{ matrix.arch }})
+      - name: 🔧 Rebuild native modules for Electron Windows x64
         working-directory: app
         env:
           npm_config_runtime: electron
           npm_config_target: 30.0.0
           npm_config_disturl: https://electronjs.org/headers
-          npm_config_arch: ${{ matrix.arch }}
+          npm_config_arch: x64
           GYP_MSVS_VERSION: 2022
         run: |
           npm config set msvs_version 2022
           npm config set python $env:pythonLocation\python.exe
-          npx electron-rebuild -f -w @lmdb/lmdb --arch=${{ matrix.arch }}
+          npx electron-rebuild -f -w @lmdb/lmdb --arch=x64
 
       - name: 🏗️ Build application
         run: npm run build
 
-      - name: 📱 Build Windows app (${{ matrix.arch }})
+      - name: 📱 Build Windows x64 app
         working-directory: app
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if ("${{ matrix.arch }}" -eq "ia32") {
-            npx electron-builder --win --ia32 --publish=never
-          } else {
-            npx electron-builder --win --x64 --publish=never
-          }
+        run: npx electron-builder --win --x64 --publish=never
 
-      - name: 📤 Upload Windows artifacts (${{ matrix.arch }})
+      - name: 📤 Upload Windows x64 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-build-${{ matrix.arch }}
+          name: windows-build
           path: |
             app/release/*.exe
             app/release/latest.yml
@@ -340,10 +331,8 @@ jobs:
             macos-arm64-build/*.dmg
             macos-arm64-build/*.zip
             macos-x64-build/latest-mac.yml
-            windows-build-x64/*.exe
-            windows-build-x64/latest.yml
-            windows-build-ia32/*.exe
-            windows-build-ia32/latest.yml
+            windows-build/*.exe
+            windows-build/latest.yml
             linux-build/*.AppImage
             linux-build/*.deb
             linux-build/*.rpm
