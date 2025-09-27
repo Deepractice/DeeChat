@@ -30,7 +30,7 @@
     "@deepracticex/database-adapter": "^2.0.1",
     "@deepracticex/mcp-client": "^1.0.8",
     "@deepracticex/token-calculator": "^0.2.1",
-    "@promptx/core": "^1.18.0",
+    "@promptx/core": "^1.20.0",
     "better-sqlite3": "^12.2.0",
     "lucide-react": "^0.544.0",
     "reflect-metadata": "^0.2.2",
@@ -64,6 +64,7 @@
     "electronVersion": "38.1.2",
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
+    "npmRebuild": false,
     "directories": {
       "output": "release",
       "buildResources": "assets"
@@ -171,6 +172,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "DeeChat"
     },
+    "beforePack": "npm run rebuild",
     "publish": {
       "provider": "github",
       "owner": "deechat",
