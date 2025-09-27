@@ -67,7 +67,7 @@
     "compression": "maximum",
     "asar": true,
     "asarUnpack": [
-      "node_modules/@lmdb/lmdb/**/*",
+      "node_modules/lmdb/**/*",
       "node_modules/@lmdb/lmdb-*/**/*"
     ],
     "artifactName": "${productName}-${os}-${arch}.${ext}",

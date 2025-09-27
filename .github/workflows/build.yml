@@ -171,16 +171,6 @@ jobs:
     name: Build Windows x64
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request' || github.ref == 'refs/heads/develop'
-    env:
-      # Electron 构建环境
-      npm_config_runtime: electron
-      npm_config_target: 30.0.0
-      npm_config_disturl: https://electronjs.org/headers
-      npm_config_arch: x64
-      npm_config_target_arch: x64
-      # VS2022 + node-gyp 环境变量
-      GYP_MSVS_VERSION: '2022'
-      npm_config_msvs_version: '2022'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -195,13 +185,21 @@ jobs:
             app/package-lock.json
             app/renderer/package-lock.json
 
-      - name: 🪟 Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: 🐍 Setup Python for node-gyp
+      - name: 🐍 Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: 🔧 Force x64 + Electron headers for node-gyp
+        shell: bash
+        run: |
+          echo "GYP_MSVS_VERSION=2022" >> $GITHUB_ENV
+          echo "npm_config_arch=x64" >> $GITHUB_ENV
+          echo "npm_config_target_arch=x64" >> $GITHUB_ENV
+          echo "npm_config_runtime=electron" >> $GITHUB_ENV
+          echo "npm_config_target=30.0.0" >> $GITHUB_ENV
+          echo "npm_config_disturl=https://electronjs.org/headers" >> $GITHUB_ENV
+          echo "npm_config_build_from_source=false" >> $GITHUB_ENV
 
       - name: 📦 Install dependencies (workspace)
         run: |
@@ -215,9 +213,9 @@ jobs:
       - name: 🔍 Print Electron ABI
         run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
-      - name: 🔧 Rebuild native modules (x64 only)
+      - name: 🔧 Rebuild native modules for Electron (Windows x64)
         working-directory: app
-        run: npx electron-rebuild -f -w @lmdb/lmdb --arch=x64
+        run: npx electron-rebuild -f -a x64 -w lmdb
 
       - name: 🏗️ Build application
         run: npm run build
