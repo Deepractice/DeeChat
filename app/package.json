@@ -9,7 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "clean": "rimraf dist out",
-    "rebuild": "electron-rebuild -f -w better-sqlite3,lmdb",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:windows": "electron-rebuild -f -w better-sqlite3",
     "rebuild:all": "electron-rebuild -f",
     "prebuild": "npm run rebuild",
