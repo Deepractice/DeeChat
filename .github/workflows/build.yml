@@ -30,7 +30,8 @@ jobs:
         run: |
           # 优化安装：利用workspace和缓存加速
           npm ci --prefer-offline
-          cd app/renderer && npm ci --prefer-offline
+          cd app && npm install --prefer-offline
+          cd renderer && npm ci --prefer-offline
 
       - name: 🔧 Rebuild native modules for Electron
         run: |
@@ -104,7 +105,7 @@ jobs:
       - name: 📦 Install all dependencies using workspace
         run: |
           npm ci --prefer-offline
-          cd app && npm ci --prefer-offline
+          cd app && npm install --prefer-offline
           cd renderer && npm ci --prefer-offline
 
       - name: 🏗️ Build application
@@ -154,7 +155,7 @@ jobs:
       - name: 📦 Install all dependencies using workspace
         run: |
           npm ci --prefer-offline
-          cd app && npm ci --prefer-offline
+          cd app && npm install --prefer-offline
           cd renderer && npm ci --prefer-offline
 
       - name: 🔧 Rebuild native modules for Electron
