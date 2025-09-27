@@ -33,8 +33,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 📦 Install node-abi for ABI checking
+        run: npm install -g node-abi
+
       - name: 🔍 Print Electron ABI
-        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+        run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
       - name: 🔧 Rebuild native modules for Electron x64
         working-directory: app
@@ -109,8 +112,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 📦 Install node-abi for ABI checking
+        run: npm install -g node-abi
+
       - name: 🔍 Print Electron ABI
-        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+        run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
       - name: 🔧 Rebuild native modules for Electron arm64
         working-directory: app
@@ -197,8 +203,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 📦 Install node-abi for ABI checking
+        run: npm install -g node-abi
+
       - name: 🔍 Print Electron ABI
-        run: npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+        run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
       - name: 🔧 Rebuild native modules for Electron Windows (${{ matrix.arch }})
         working-directory: app
@@ -270,8 +279,11 @@ jobs:
           cd app && npm ci --prefer-offline
           cd renderer && npm ci --prefer-offline
 
+      - name: 📦 Install node-abi for ABI checking
+        run: npm install -g node-abi
+
       - name: 🔍 Print Electron ABI
-        run: ELECTRON_DISABLE_SANDBOX=1 npx electron -p "process.versions.electron + ' | abi=' + process.versions.modules"
+        run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
       - name: 🔧 Rebuild native modules for Electron Linux (x64)
         working-directory: app
