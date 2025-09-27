@@ -360,16 +360,16 @@ jobs:
         with:
           name: Release ${{ github.ref_name }}
           files: |
-            macos-x64-build/*.dmg
-            macos-x64-build/*.zip
-            macos-arm64-build/*.dmg
-            macos-arm64-build/*.zip
+            macos-x64-build/DeeChat-mac-x64.dmg
+            macos-x64-build/DeeChat-mac-x64.zip
+            macos-arm64-build/DeeChat-mac-arm64.dmg
+            macos-arm64-build/DeeChat-mac-arm64.zip
             macos-x64-build/latest-mac.yml
-            windows-build/*.exe
+            windows-build/DeeChat-win-x64.exe
             windows-build/latest.yml
-            linux-build/*.AppImage
-            linux-build/*.deb
-            linux-build/*.rpm
+            linux-build/DeeChat-linux-x64.AppImage
+            linux-build/DeeChat-linux-x64.deb
+            linux-build/DeeChat-linux-x64.rpm
             linux-build/latest-linux.yml
           generate_release_notes: true
           draft: false
