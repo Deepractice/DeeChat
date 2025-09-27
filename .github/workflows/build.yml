@@ -213,6 +213,32 @@ jobs:
       - name: 🔍 Print Electron ABI
         run: node -e "console.log('Electron 30 | abi=' + require('node-abi').getAbi('30.0.0','electron'))"
 
+      - name: 🩹 Patch lmdb to disable V8 API on Windows
+        working-directory: app
+        shell: pwsh
+        run: |
+          $gypFile = "node_modules/lmdb/binding.gyp"
+          if (Test-Path $gypFile) {
+            Write-Host "📝 Patching $gypFile to disable V8 API..."
+            $content = Get-Content $gypFile -Raw
+            $content = $content -replace '"ENABLE_V8_API=1"', '"ENABLE_V8_API=0"'
+            $content = $content -replace "'ENABLE_V8_API=1'", "'ENABLE_V8_API=0'"
+            Set-Content $gypFile -Value $content
+            Write-Host "✅ LMDB V8 API disabled, using pure N-API path"
+          } else {
+            Write-Host "⚠️ binding.gyp not found, checking for binding.gypi..."
+            $gypiFile = "node_modules/lmdb/binding.gypi"
+            if (Test-Path $gypiFile) {
+              $content = Get-Content $gypiFile -Raw
+              $content = $content -replace '"ENABLE_V8_API=1"', '"ENABLE_V8_API=0"'
+              $content = $content -replace "'ENABLE_V8_API=1'", "'ENABLE_V8_API=0'"
+              Set-Content $gypiFile -Value $content
+              Write-Host "✅ LMDB V8 API disabled via binding.gypi"
+            } else {
+              Write-Host "❌ Neither binding.gyp nor binding.gypi found"
+            }
+          }
+
       - name: 🔧 Rebuild native modules for Electron (Windows x64)
         working-directory: app
         run: npx electron-rebuild -f -a x64 -w lmdb
