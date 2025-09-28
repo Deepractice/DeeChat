@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/conversation-storage",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "DeeChat 对话存储管理包 - 纯存储层实现，支持统一数据库文件的表管理模式",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -35,7 +35,7 @@ export class ConversationStorage {
     }
 
     this.tablePrefix = options.tablePrefix || '';
-    this.database = new InjectedDatabaseAdapter(options.database);
+    this.database = new InjectedDatabaseAdapter(options.database, this.tablePrefix);
   }
 
   /**

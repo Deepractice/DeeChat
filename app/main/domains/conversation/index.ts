@@ -114,7 +114,10 @@ export class ConversationDomain implements IDomain {
       await adapter.connect()
 
       // 3. 创建对话存储管理器实例
-      this.conversationStorage = new ConversationStorage({ database: adapter })
+      this.conversationStorage = new ConversationStorage({
+        database: adapter
+        // 让conversation-storage包自己决定表名，使用内部默认值
+      })
       await this.conversationStorage.initialize()
       console.log('✅ ConversationStorage 初始化完成')
 

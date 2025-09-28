@@ -7,8 +7,12 @@ import { DatabaseError } from '../types.js';
  */
 export class InjectedDatabaseAdapter {
   private _isConnected = false;
+  private tablePrefix: string;
 
-  constructor(private database: ExternalDatabaseAdapter) {}
+  constructor(private database: ExternalDatabaseAdapter, tablePrefix: string = '') {
+    // 如果没有提供tablePrefix，使用默认的'conversation_'前缀
+    this.tablePrefix = tablePrefix || 'conversation_';
+  }
 
   /**
    * 连接数据库
@@ -135,7 +139,7 @@ export class InjectedDatabaseAdapter {
     try {
       // 创建对话会话表
       this.database.exec(`
-        CREATE TABLE IF NOT EXISTS conversation_sessions (
+        CREATE TABLE IF NOT EXISTS ${this.tablePrefix}sessions (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           ai_config_name TEXT NOT NULL,
@@ -147,7 +151,7 @@ export class InjectedDatabaseAdapter {
 
       // 创建对话消息表
       this.database.exec(`
-        CREATE TABLE IF NOT EXISTS conversation_messages (
+        CREATE TABLE IF NOT EXISTS ${this.tablePrefix}messages (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
           role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
@@ -156,41 +160,41 @@ export class InjectedDatabaseAdapter {
           token_usage TEXT,
           tool_calls TEXT,
           tool_call_id TEXT,
-          FOREIGN KEY (session_id) REFERENCES conversation_sessions (id) ON DELETE CASCADE
+          FOREIGN KEY (session_id) REFERENCES ${this.tablePrefix}sessions (id) ON DELETE CASCADE
         )
       `);
 
       // 创建索引
       this.database.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_session_id
-        ON conversation_messages (session_id)
+        ON ${this.tablePrefix}messages (session_id)
       `);
 
       this.database.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_timestamp
-        ON conversation_messages (timestamp)
+        ON ${this.tablePrefix}messages (timestamp)
       `);
 
       this.database.exec(`
         CREATE INDEX IF NOT EXISTS idx_sessions_updated_at
-        ON conversation_sessions (updated_at)
+        ON ${this.tablePrefix}sessions (updated_at)
       `);
 
       // 创建触发器用于自动更新 updated_at 字段
       this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS conversation_sessions_update_timestamp
-        AFTER UPDATE ON conversation_sessions
+        CREATE TRIGGER IF NOT EXISTS ${this.tablePrefix}sessions_update_timestamp
+        AFTER UPDATE ON ${this.tablePrefix}sessions
         BEGIN
-          UPDATE conversation_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+          UPDATE ${this.tablePrefix}sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
         END
       `);
 
       // 创建触发器用于自动更新会话的消息计数
       this.database.exec(`
         CREATE TRIGGER IF NOT EXISTS update_session_message_count_insert
-        AFTER INSERT ON conversation_messages
+        AFTER INSERT ON ${this.tablePrefix}messages
         BEGIN
-          UPDATE conversation_sessions
+          UPDATE ${this.tablePrefix}sessions
           SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
           WHERE id = NEW.session_id;
         END
@@ -198,9 +202,9 @@ export class InjectedDatabaseAdapter {
 
       this.database.exec(`
         CREATE TRIGGER IF NOT EXISTS update_session_message_count_delete
-        AFTER DELETE ON conversation_messages
+        AFTER DELETE ON ${this.tablePrefix}messages
         BEGIN
-          UPDATE conversation_sessions
+          UPDATE ${this.tablePrefix}sessions
           SET message_count = message_count - 1, updated_at = CURRENT_TIMESTAMP
           WHERE id = OLD.session_id;
         END

@@ -38,20 +38,24 @@ import type {
 import { Role, RoleActivationResponse } from '../types/role'
 import { useMcp } from '../contexts/McpContext'
 
-const { Header, Content, Sider } = Layout
+// 移除了Layout组件的解构，现在使用统一布局
 
 interface ChatPageProps {
   onBackToConfig: () => void
   onBackToRoleSelector?: () => void
   selectedRole?: Role | null
   roleActivationResult?: RoleActivationResponse | null
+  sidebarVisible?: boolean
+  onSidebarVisibleChange?: (visible: boolean) => void
 }
 
 const ChatPage: React.FC<ChatPageProps> = ({
   onBackToConfig,
   onBackToRoleSelector,
   selectedRole,
-  roleActivationResult
+  roleActivationResult,
+  sidebarVisible = false,
+  onSidebarVisibleChange
 }) => {
   // 状态管理
   const [sessions, setSessions] = useState<ConversationSession[]>([])
@@ -59,7 +63,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const [messages, setMessages] = useState<(ConversationMessage | VirtualToolMessage | ToolExecutionInfo)[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [selectedConfig, setSelectedConfig] = useState<string>('')
-  const [sidebarVisible, setSidebarVisible] = useState(false)
+  // 移除本地的 sidebarVisible 状态，使用从props传入的状态
   const [loading, setLoading] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [isCallingTool, setIsCallingTool] = useState(false)
@@ -607,9 +611,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
       const result = await window.electronAPI.aiConfig.getAll()
       if (result.success && result.data) {
         setAiConfigs(result.data)
-        // 自动选择第一个配置
+        // 自动选择第一个配置，并立即加载其模型
         if (result.data.length > 0) {
-          setSelectedConfig(result.data[0].name)
+          const firstConfigName = result.data[0].name
+          setSelectedConfig(firstConfigName)
+          // 🔧 修复：主动触发第一个配置的模型加载
+          await loadModelsForConfig(firstConfigName)
         }
       }
     } catch (error) {
@@ -629,12 +636,15 @@ const ChatPage: React.FC<ChatPageProps> = ({
     }
   }
 
-  // 加载可用模型
-  const loadModels = async () => {
-    if (!selectedConfig) return
+  // 加载可用模型 - 支持指定配置名
+  const loadModelsForConfig = async (configName?: string) => {
+    const targetConfig = configName || selectedConfig
+    if (!targetConfig) return
+
     setLoadingModels(true)
     try {
-      const modelsResult = await window.electronAPI.aiConfig.getModels(selectedConfig)
+      console.log(`🔄 加载模型: ${targetConfig}`)
+      const modelsResult = await window.electronAPI.aiConfig.getModels(targetConfig)
       console.log('🔍 前端接收到的模型数据:', modelsResult)
       if (modelsResult.success && modelsResult.data) {
         console.log('📊 模型数据结构:', modelsResult.data)
@@ -648,14 +658,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setAvailableModels(models)
         console.log('✅ availableModels状态已更新，当前长度:', models.length)
         // 加载偏好
-        const prefResult = await window.electronAPI.aiConfig.getModelPreference(selectedConfig)
+        const prefResult = await window.electronAPI.aiConfig.getModelPreference(targetConfig)
         if (prefResult.success && prefResult.data) {
           setSelectedModel(prefResult.data)
         } else if (models.length > 0) {
           const firstModelId = models[0].id
           setSelectedModel(firstModelId)
           // 保存默认偏好
-          await window.electronAPI.aiConfig.setModelPreference(selectedConfig, firstModelId)
+          await window.electronAPI.aiConfig.setModelPreference(targetConfig, firstModelId)
         } else {
           setSelectedModel('gpt-3.5-turbo')
         }
@@ -670,6 +680,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setLoadingModels(false)
     }
   }
+
+  // 兼容性函数 - 使用当前选中的配置加载模型
+  const loadModels = () => loadModelsForConfig()
 
   // 创建新会话
   const createNewSession = async () => {
@@ -728,7 +741,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setSessions(prev => [newSession, ...prev])
         setCurrentSession(newSession)
         setMessages([])
-        setSidebarVisible(false)
+        onSidebarVisibleChange?.(false)
         message.success('创建会话成功')
         console.log('✅ 会话创建成功:', newSession)
       } else {
@@ -746,7 +759,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // 选择会话
   const selectSession = async (session: ConversationSession) => {
     setCurrentSession(session)
-    setSidebarVisible(false)
+    onSidebarVisibleChange?.(false)
     
     try {
       const result = await window.electronAPI.conversation.getMessageHistory(session.id)
@@ -923,19 +936,19 @@ const ChatPage: React.FC<ChatPageProps> = ({
   }
 
   return (
-    <Layout style={{ height: '100vh' }}>
+    <div style={{ height: '100%', position: 'relative' }}>
       {/* 侧边栏抽屉 */}
       <Drawer
         title="会话列表"
         placement="left"
-        onClose={() => setSidebarVisible(false)}
+        onClose={() => onSidebarVisibleChange?.(false)}
         open={sidebarVisible}
         width={320}
       >
         <div style={{ marginBottom: 16 }}>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
             onClick={createNewSession}
             loading={loading}
             block
@@ -952,148 +965,13 @@ const ChatPage: React.FC<ChatPageProps> = ({
         />
       </Drawer>
 
-      {/* 主布局 */}
-      <Layout>
-        {/* 顶部导航 */}
-        <Header style={{
-          background: '#fff',
-          padding: '0 24px',
-          borderBottom: '1px solid #f0f0f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Button
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setSidebarVisible(true)}
-            />
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
-              {currentSession ? currentSession.title : 'DeeChat'}
-            </h1>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* 当前激活角色显示 */}
-            {selectedRole && (
-              <Space style={{
-                background: '#f6f8fa',
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: '1px solid #e1e4e8'
-              }}>
-                <Avatar size="small" icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff' }} />
-                <span style={{ fontSize: '12px', color: '#586069' }}>
-                  当前角色: <strong>{selectedRole.name}</strong>
-                </span>
-                {onBackToRoleSelector && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<UserSwitchOutlined />}
-                    onClick={onBackToRoleSelector}
-                    style={{ fontSize: '10px', padding: '0 4px' }}
-                    title="切换角色"
-                  />
-                )}
-              </Space>
-            )}
-
-            <Select
-              value={selectedConfig}
-              onChange={setSelectedConfig}
-              placeholder="选择AI配置"
-              style={{ width: 200 }}
-              options={aiConfigs.map(config => ({
-                label: config.name,
-                value: config.name
-              }))}
-            />
-            <Button
-              icon={<RobotOutlined />}
-              onClick={openModelSelector}
-              disabled={!selectedConfig || loadingModels}
-              loading={loadingModels}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                minWidth: '150px',
-                maxWidth: '200px'
-              }}
-            >
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                marginRight: '4px'
-              }}>
-                {selectedModel || '选择模型'}
-              </span>
-              <DownOutlined style={{ fontSize: '10px' }} />
-            </Button>
-
-            {/* AI 参数控制 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 8 }}>
-              <Tooltip title="Temperature - 控制AI回复的创造性">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '12px', color: '#666', minWidth: '24px' }}>T:</span>
-                  <Slider
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={temperature}
-                    onChange={setTemperature}
-                    style={{ width: 80 }}
-                    tooltip={{
-                      formatter: (value) => `${value}`,
-                    }}
-                  />
-                  <InputNumber
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={temperature}
-                    onChange={(value) => setTemperature(value || 0.7)}
-                    style={{ width: 60 }}
-                    size="small"
-                  />
-                </div>
-              </Tooltip>
-
-              <Tooltip title="最大Token数 - 限制AI回复长度">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '12px', color: '#666', minWidth: '32px' }}>Max:</span>
-                  <InputNumber
-                    min={1}
-                    max={200000}
-                    step={1000}
-                    value={maxTokens}
-                    onChange={setMaxTokens}
-                    placeholder="无限制"
-                    style={{ width: 80 }}
-                    size="small"
-                    formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                    parser={(value) => value ? value.replace(/\$\s?|(,*)/g, '') : ''}
-                  />
-                </div>
-              </Tooltip>
-            </div>
-
-            <Button
-              type="text"
-              icon={<SettingOutlined />}
-              onClick={onBackToConfig}
-            />
-          </div>
-        </Header>
-
-        {/* 聊天内容区域 */}
-        <Content style={{ 
-          display: 'flex', 
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
+      {/* 聊天内容区域 - 移除了原有的Header，现在直接使用统一布局 */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden'
+      }}>
           {currentSession ? (
             <>
               {/* 消息列表 */}
@@ -1145,8 +1023,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
               </Button>
             </div>
           )}
-        </Content>
-      </Layout>
+      </div>
 
       {/* 模型选择弹窗 */}
       <ModelSelectorModal
@@ -1157,7 +1034,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         selectedModel={selectedModel}
         loading={loadingModels}
       />
-    </Layout>
+    </div>
   )
 }
 

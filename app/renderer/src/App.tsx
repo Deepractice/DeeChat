@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, Button } from 'antd'
+import { SettingOutlined, MessageOutlined, UserOutlined, ToolOutlined, PlusOutlined, UserSwitchOutlined, MenuOutlined } from '@ant-design/icons'
 import ConfigPage from './components/ConfigPage'
 import ChatPage from './components/ChatPage'
 import RoleSelector from './components/RoleSelector'
 import McpConfigPage from './components/McpConfigPage'
+import { AppLayout } from './components/layout'
 import { Role, RoleActivationResponse } from './types/role'
 import { McpProvider } from './contexts/McpContext'
 
@@ -14,6 +16,7 @@ const App: React.FC = () => {
   const [hasConfigs, setHasConfigs] = useState(false)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [roleActivationResult, setRoleActivationResult] = useState<RoleActivationResponse | null>(null)
+  const [chatSidebarVisible, setChatSidebarVisible] = useState(false)
 
   // 检查是否有AI配置
   useEffect(() => {
@@ -89,6 +92,7 @@ const App: React.FC = () => {
     setCurrentView('chat')
   }
 
+
   return (
     <McpProvider>
       <ConfigProvider
@@ -99,30 +103,44 @@ const App: React.FC = () => {
           }
         }}
       >
-        {currentView === 'config' ? (
-          <ConfigPage
-            onConfigChange={handleConfigChange}
-            onStartChat={switchToRoleSelector}
-            onMcpConfig={switchToMcpConfig}
-            hasConfigs={hasConfigs}
-          />
-        ) : currentView === 'mcp-config' ? (
-          <McpConfigPage
-            onBack={switchToConfig}
-          />
-        ) : currentView === 'role-selector' ? (
-          <RoleSelector
-            onRoleSelect={handleRoleSelect}
-            onBack={switchToConfig}
-          />
-        ) : (
-          <ChatPage
-            onBackToConfig={switchToConfig}
-            onBackToRoleSelector={switchToRoleSelector}
-            selectedRole={selectedRole}
-            roleActivationResult={roleActivationResult}
-          />
-        )}
+        <AppLayout
+          globalNavigation={{
+            currentPage: currentView,
+            onNavigateToConfig: switchToConfig,
+            onNavigateToRoleSelector: switchToRoleSelector,
+            onNavigateToChat: switchToChat,
+            onNavigateToMcpConfig: switchToMcpConfig,
+            hasConfigs,
+            selectedRoleName: selectedRole?.name
+          }}
+        >
+          {currentView === 'config' ? (
+            <ConfigPage
+              onConfigChange={handleConfigChange}
+              onStartChat={switchToRoleSelector}
+              onMcpConfig={switchToMcpConfig}
+              hasConfigs={hasConfigs}
+            />
+          ) : currentView === 'mcp-config' ? (
+            <McpConfigPage
+              onBack={switchToConfig}
+            />
+          ) : currentView === 'role-selector' ? (
+            <RoleSelector
+              onRoleSelect={handleRoleSelect}
+              onBack={switchToConfig}
+            />
+          ) : (
+            <ChatPage
+              onBackToConfig={switchToConfig}
+              onBackToRoleSelector={switchToRoleSelector}
+              selectedRole={selectedRole}
+              roleActivationResult={roleActivationResult}
+              sidebarVisible={chatSidebarVisible}
+              onSidebarVisibleChange={setChatSidebarVisible}
+            />
+          )}
+        </AppLayout>
       </ConfigProvider>
     </McpProvider>
   )
