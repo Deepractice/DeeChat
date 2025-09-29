@@ -67,6 +67,24 @@ export class ConversationRepository {
   }
 
   /**
+   * 更新会话
+   */
+  async updateSession(sessionId: string, input: { title?: string; aiModel?: string }): Promise<void> {
+    const storage = this.getStorage()
+
+    // 转换输入格式为storage层期望的格式
+    const updateInput: any = {}
+    if (input.title !== undefined) {
+      updateInput.title = input.title
+    }
+    if (input.aiModel !== undefined) {
+      updateInput.ai_config_name = input.aiModel
+    }
+
+    await storage.updateSession(sessionId, updateInput)
+  }
+
+  /**
    * 删除会话
    */
   async deleteSession(sessionId: string): Promise<void> {

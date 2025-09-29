@@ -9,19 +9,22 @@ import {
   Popconfirm,
   Space,
   Badge,
-  Typography
+  Typography,
+  Tabs
 } from 'antd'
-import { 
-  PlusOutlined, 
-  DeleteOutlined, 
+import {
+  PlusOutlined,
+  DeleteOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
   MessageOutlined,
   SettingOutlined,
   EditOutlined,
   EyeOutlined,
-  EyeInvisibleOutlined
+  EyeInvisibleOutlined,
+  ToolOutlined
 } from '@ant-design/icons'
+import McpConfigPage from './McpConfigPage'
 
 const { Title } = Typography
 
@@ -41,19 +44,22 @@ interface ConfigPageProps {
   onStartChat?: () => void
   onMcpConfig?: () => void
   hasConfigs?: boolean
+  currentPage?: 'config' | 'mcp-config'
 }
 
 const ConfigPage: React.FC<ConfigPageProps> = ({
   onConfigChange,
   onStartChat,
   onMcpConfig,
-  hasConfigs = false
+  hasConfigs = false,
+  currentPage = 'config'
 }) => {
   const [configs, setConfigs] = useState<AIConfig[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingConfig, setEditingConfig] = useState<AIConfig | null>(null)
   const [showRealApiKey, setShowRealApiKey] = useState(false)
+  const [activeTab, setActiveTab] = useState(currentPage === 'mcp-config' ? 'mcp-config' : 'ai-config')
   const [form] = Form.useForm()
 
   // 加载所有配置
@@ -312,58 +318,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({
     loadConfigs()
   }, [])
 
-  return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-      {/* 简化的顶部栏 */}
-      <div style={{ 
-        background: '#ffffff', 
-        padding: '16px 24px',
-        borderBottom: '1px solid #e8e8e8',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <SettingOutlined style={{ fontSize: '20px', color: '#666', marginRight: '12px' }} />
-          <Title level={4} style={{ margin: 0, color: '#2c3e50' }}>
-            AI 配置管理
-          </Title>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Button
-            icon={<SettingOutlined />}
-            onClick={onMcpConfig}
-            style={{
-              borderRadius: '6px'
-            }}
-          >
-            MCP配置
-          </Button>
-          {hasConfigs && (
-            <Button
-              type="primary"
-              icon={<MessageOutlined />}
-              onClick={onStartChat}
-              style={{
-                background: '#1890ff',
-                borderColor: '#1890ff',
-                borderRadius: '6px'
-              }}
-            >
-              开始对话
-            </Button>
-          )}
-        </div>
-      </div>
-      
-      {/* 主内容区域 */}
-      <div style={{ 
-        flex: 1,
-        padding: '24px',
-        overflow: 'auto'
-      }}>
-        <div style={{ 
+  // 根据currentPage同步activeTab
+  useEffect(() => {
+    if (currentPage === 'mcp-config') {
+      setActiveTab('mcp-config')
+    } else {
+      setActiveTab('ai-config')
+    }
+  }, [currentPage])
+
+  const tabItems = [
+    {
+      key: 'ai-config',
+      label: (
+        <span>
+          <SettingOutlined style={{ marginRight: 8 }} />
+          AI 配置
+        </span>
+      ),
+      children: (
+        <div style={{
           background: '#ffffff',
           borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
@@ -421,9 +395,45 @@ const ConfigPage: React.FC<ConfigPageProps> = ({
             style={{ border: 'none' }}
           />
         </div>
-      </div>
+        )
+      },
+      {
+        key: 'mcp-config',
+        label: (
+          <span>
+            <ToolOutlined style={{ marginRight: 8 }} />
+            MCP 工具
+          </span>
+        ),
+        children: (
+          <McpConfigPage onBack={() => {}} />
+        )
+      }
+    ]
 
-      {/* 配置Modal */}
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+        <div style={{
+          flex: 1,
+          padding: '24px',
+          overflow: 'auto'
+        }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            items={tabItems}
+            size="large"
+            style={{
+              background: '#fff',
+              borderRadius: '8px',
+              padding: '0 24px 0 24px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+              border: '1px solid #e8e8e8'
+            }}
+          />
+        </div>
+
+        {/* AI配置Modal */}
       <Modal
         title={editingConfig ? "编辑 AI 配置" : "新增 AI 配置"}
         open={modalVisible}

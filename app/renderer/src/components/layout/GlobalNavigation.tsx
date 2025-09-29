@@ -1,9 +1,8 @@
 import React from 'react'
-import { Layout, Button, Typography, Space } from 'antd'
-import { SettingOutlined, MessageOutlined, UserOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { Layout, Button, Space } from 'antd'
+import { SettingOutlined, MessageOutlined, HomeOutlined } from '@ant-design/icons'
 
 const { Header } = Layout
-const { Text } = Typography
 
 export interface GlobalNavigationProps {
   // 当前页面信息
@@ -24,129 +23,30 @@ const GlobalNavigation: React.FC<GlobalNavigationProps> = ({
   currentPage,
   onNavigateToConfig,
   onNavigateToRoleSelector,
-  onNavigateToChat,
-  onNavigateToMcpConfig,
-  hasConfigs = false,
-  selectedRoleName
+  hasConfigs = false
 }) => {
-  // 获取当前页面的标题和描述
-  const getPageInfo = () => {
-    switch (currentPage) {
-      case 'config':
-        return {
-          title: 'AI配置管理',
-          description: '配置AI服务商的API密钥和基础设置'
-        }
-      case 'mcp-config':
-        return {
-          title: 'MCP工具配置',
-          description: '管理AI工具和扩展功能'
-        }
-      case 'role-selector':
-        return {
-          title: '角色选择',
-          description: '选择适合当前任务的AI助手角色'
-        }
-      case 'chat':
-        return {
-          title: selectedRoleName ? `与 ${selectedRoleName} 对话` : '聊天会话',
-          description: '与AI助手进行对话交流'
-        }
-      default:
-        return {
-          title: 'DeeChat',
-          description: ''
-        }
+  // 判断当前页面是否为聊天相关页面（包括角色选择）
+  const isChatMode = currentPage === 'chat' || currentPage === 'role-selector'
+
+  // 判断当前页面是否为配置相关页面（包括MCP配置）
+  const isConfigMode = currentPage === 'config' || currentPage === 'mcp-config'
+
+  // 处理聊天导航点击
+  const handleChatNavigation = () => {
+    if (hasConfigs) {
+      // 如果已经在聊天模式，不做任何操作
+      if (currentPage === 'chat') return
+      // 如果在角色选择页面，也不做任何操作
+      if (currentPage === 'role-selector') return
+      // 否则进入角色选择
+      onNavigateToRoleSelector()
     }
   }
 
-  const pageInfo = getPageInfo()
-
-  // 获取导航按钮
-  const getNavigationButtons = () => {
-    const buttons: React.ReactNode[] = []
-
-    // 根据当前页面显示不同的导航选项
-    switch (currentPage) {
-      case 'config':
-        // 配置页面：显示MCP配置和开始聊天按钮
-        buttons.push(
-          <Button
-            key="mcp"
-            icon={<SettingOutlined />}
-            onClick={onNavigateToMcpConfig}
-            size="small"
-          >
-            MCP工具
-          </Button>
-        )
-        if (hasConfigs) {
-          buttons.push(
-            <Button
-              key="start"
-              type="primary"
-              icon={<MessageOutlined />}
-              onClick={onNavigateToRoleSelector}
-              size="small"
-            >
-              开始聊天
-            </Button>
-          )
-        }
-        break
-
-      case 'mcp-config':
-        // MCP配置页面：显示返回设置按钮
-        buttons.push(
-          <Button
-            key="back"
-            icon={<ArrowLeftOutlined />}
-            onClick={onNavigateToConfig}
-            size="small"
-          >
-            返回设置
-          </Button>
-        )
-        break
-
-      case 'role-selector':
-        // 角色选择页面：显示设置按钮
-        buttons.push(
-          <Button
-            key="config"
-            icon={<SettingOutlined />}
-            onClick={onNavigateToConfig}
-            size="small"
-          >
-            设置
-          </Button>
-        )
-        break
-
-      case 'chat':
-        // 聊天页面：显示切换角色和设置按钮
-        buttons.push(
-          <Button
-            key="role"
-            icon={<UserOutlined />}
-            onClick={onNavigateToRoleSelector}
-            size="small"
-          >
-            切换角色
-          </Button>,
-          <Button
-            key="config"
-            icon={<SettingOutlined />}
-            onClick={onNavigateToConfig}
-            size="small"
-          >
-            设置
-          </Button>
-        )
-        break
-    }
-
-    return buttons
+  // 处理配置导航点击
+  const handleConfigNavigation = () => {
+    // 统一导航到主配置页面（AI配置）
+    onNavigateToConfig()
   }
 
   return (
@@ -160,33 +60,47 @@ const GlobalNavigation: React.FC<GlobalNavigationProps> = ({
       justifyContent: 'space-between',
       boxShadow: '0 1px 4px rgba(0, 0, 0, 0.08)'
     }}>
-      {/* 左侧：标题和描述 */}
-      <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-        <div>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: 600,
-            color: '#1f2937',
-            lineHeight: 1.2
-          }}>
-            {pageInfo.title}
-          </div>
-          {pageInfo.description && (
-            <Text style={{
-              fontSize: '12px',
-              color: '#6b7280',
-              lineHeight: 1.2
-            }}>
-              {pageInfo.description}
-            </Text>
-          )}
+      {/* 左侧：品牌标识 */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <HomeOutlined style={{ fontSize: '20px', color: '#1890ff', marginRight: '12px' }} />
+        <div style={{
+          fontSize: '20px',
+          fontWeight: 600,
+          color: '#1f2937',
+          lineHeight: 1
+        }}>
+          DeeChat
         </div>
       </div>
 
-      {/* 右侧：导航按钮 */}
+      {/* 右侧：固定导航按钮 */}
       <div>
-        <Space size={8}>
-          {getNavigationButtons()}
+        <Space size={12}>
+          <Button
+            type={isChatMode ? 'primary' : 'default'}
+            icon={<MessageOutlined />}
+            onClick={handleChatNavigation}
+            disabled={!hasConfigs}
+            size="middle"
+            style={{
+              borderRadius: '6px',
+              fontWeight: isChatMode ? 600 : 400
+            }}
+          >
+            聊天
+          </Button>
+          <Button
+            type={isConfigMode ? 'primary' : 'default'}
+            icon={<SettingOutlined />}
+            onClick={handleConfigNavigation}
+            size="middle"
+            style={{
+              borderRadius: '6px',
+              fontWeight: isConfigMode ? 600 : 400
+            }}
+          >
+            配置
+          </Button>
         </Space>
       </div>
     </Header>

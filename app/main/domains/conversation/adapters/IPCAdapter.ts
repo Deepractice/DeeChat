@@ -31,6 +31,7 @@ export class IPCAdapter {
       'conversation:get-sessions': this.getSessions.bind(this),
       'conversation:get-session': this.getSession.bind(this),
       'conversation:delete-session': this.deleteSession.bind(this),
+      'conversation:update-session-title': this.updateSessionTitle.bind(this),
 
       // 消息处理
       'conversation:send-message': this.sendMessage.bind(this),
@@ -103,6 +104,21 @@ export class IPCAdapter {
       console.log('✅ IPC响应: conversation:delete-session')
     } catch (error) {
       console.error('❌ IPC错误: conversation:delete-session', error)
+      throw error
+    }
+  }
+
+  /**
+   * 更新会话标题
+   */
+  private async updateSessionTitle(sessionId: string, newTitle: string): Promise<void> {
+    console.log('📨 IPC请求: conversation:update-session-title', sessionId, newTitle)
+
+    try {
+      await this.sessionService.updateSessionTitle(sessionId, newTitle)
+      console.log('✅ IPC响应: conversation:update-session-title')
+    } catch (error) {
+      console.error('❌ IPC错误: conversation:update-session-title', error)
       throw error
     }
   }

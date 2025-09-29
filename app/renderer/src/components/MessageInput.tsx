@@ -67,29 +67,6 @@ const MessageInput: React.FC<MessageInputProps> = ({
             resize: 'none'
           }}
         />
-        <div style={{
-          marginTop: '4px',
-          fontSize: '12px',
-          color: '#999',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Space size="small">
-            {toolCount > 0 && (
-              <Space size={4}>
-                <Badge count={toolCount} size="small">
-                  <ToolOutlined style={{ color: '#1890ff' }} />
-                </Badge>
-                <span style={{ color: '#1890ff' }}>工具可用</span>
-              </Space>
-            )}
-            {isCallingTool && (
-              <span style={{ color: '#52c41a' }}>🔧 正在调用工具...</span>
-            )}
-          </Space>
-          <span>Enter 发送 • Shift+Enter 换行</span>
-        </div>
       </div>
       
       <Button

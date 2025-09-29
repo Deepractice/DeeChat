@@ -19,6 +19,7 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   LinkOutlined,
+  UploadOutlined,
   DisconnectOutlined,
   ToolOutlined,
   FileTextOutlined,
@@ -503,34 +504,7 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
   }, [])
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
-      {/* 顶部栏 */}
-      <div style={{
-        background: '#ffffff',
-        padding: '16px 24px',
-        borderBottom: '1px solid #e8e8e8',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          {onBack && (
-            <Button
-              type="text"
-              onClick={onBack}
-              style={{ marginRight: '12px' }}
-            >
-              ← 返回
-            </Button>
-          )}
-          <SettingOutlined style={{ fontSize: '20px', color: '#666', marginRight: '12px' }} />
-          <Title level={4} style={{ margin: 0, color: '#2c3e50' }}>
-            MCP 服务器管理
-          </Title>
-        </div>
-      </div>
-
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
       {/* 主内容区域 */}
       <div style={{
         flex: 1,
@@ -556,27 +530,19 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
             </div>
             <Space size="small">
               <Button
+                icon={<UploadOutlined />}
+                onClick={() => setModalVisible(true)}
+                style={{ borderRadius: '6px' }}
+              >
+                导入配置
+              </Button>
+              <Button
                 icon={<ReloadOutlined />}
                 onClick={loadServers}
                 loading={loading}
                 style={{ borderRadius: '6px' }}
               >
                 刷新
-              </Button>
-              <Button
-                type="primary"
-                icon={<ImportOutlined />}
-                onClick={() => {
-                  setJsonConfig('')
-                  setModalVisible(true)
-                }}
-                style={{
-                  background: '#1890ff',
-                  borderColor: '#1890ff',
-                  borderRadius: '6px'
-                }}
-              >
-                导入配置
               </Button>
             </Space>
           </div>
@@ -599,115 +565,6 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
           />
         </div>
 
-        {/* MCP工具和角色详细展示 */}
-        {(tools.length > 0 || roles.length > 0) && (
-          <div style={{
-            marginTop: '24px',
-            background: '#ffffff',
-            borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-            border: '1px solid #e8e8e8'
-          }}>
-            <div style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid #f0f0f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ color: '#6b7280', fontSize: '14px' }}>
-                MCP资源详情 ({tools.length} 工具, {roles.length} 角色)
-                {lastUpdated && (
-                  <span style={{ marginLeft: '12px', fontSize: '12px', color: '#999' }}>
-                    更新时间: {lastUpdated.toLocaleString()}
-                    {isDataStale && <Tag color="orange" style={{ marginLeft: '8px' }}>数据过期</Tag>}
-                  </span>
-                )}
-              </div>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => refreshMcpData()}
-                loading={mcpLoading}
-                size="small"
-              >
-                刷新数据
-              </Button>
-            </div>
-
-            <Collapse
-              defaultActiveKey={tools.length > 0 ? ['tools'] : []}
-              style={{ border: 'none' }}
-              items={[
-                ...(tools.length > 0 ? [{
-                  key: 'tools',
-                  label: (
-                    <span>
-                      <ToolOutlined style={{ marginRight: '8px' }} />
-                      可用工具 ({tools.length})
-                    </span>
-                  ),
-                  children: (
-                    <List
-                      dataSource={tools}
-                      renderItem={(tool) => (
-                        <List.Item>
-                          <List.Item.Meta
-                            avatar={<ToolOutlined style={{ color: '#1890ff' }} />}
-                            title={
-                              <Space>
-                                <code style={{ fontSize: '13px' }}>{tool.function.name}</code>
-                                <Tag size="small" color="blue">{tool._meta.serverName}</Tag>
-                              </Space>
-                            }
-                            description={tool.function.description}
-                          />
-                        </List.Item>
-                      )}
-                      pagination={{
-                        pageSize: 5,
-                        size: 'small',
-                        showSizeChanger: false
-                      }}
-                    />
-                  )
-                }] : []),
-                ...(roles.length > 0 ? [{
-                  key: 'roles',
-                  label: (
-                    <span>
-                      <RobotOutlined style={{ marginRight: '8px' }} />
-                      可用角色 ({roles.length})
-                    </span>
-                  ),
-                  children: (
-                    <List
-                      dataSource={roles}
-                      renderItem={(role) => (
-                        <List.Item>
-                          <List.Item.Meta
-                            avatar={<RobotOutlined style={{ color: '#52c41a' }} />}
-                            title={
-                              <Space>
-                                <strong>{role.name}</strong>
-                                <Tag size="small" color="green">{role.serverName}</Tag>
-                              </Space>
-                            }
-                            description={role.description || `来自 ${role.serverName} 的角色`}
-                          />
-                        </List.Item>
-                      )}
-                      pagination={{
-                        pageSize: 5,
-                        size: 'small',
-                        showSizeChanger: false
-                      }}
-                    />
-                  )
-                }] : [])
-              ]}
-            />
-          </div>
-        )}
       </div>
 
       {/* JSON导入Modal */}
@@ -729,33 +586,6 @@ const McpConfigPage: React.FC<McpConfigPageProps> = ({ onBack }) => {
             </Typography.Text>
           </div>
 
-          <Card
-            size="small"
-            style={{
-              marginBottom: '16px',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #e9ecef'
-            }}
-          >
-            <Typography.Text code style={{ fontSize: '12px' }}>
-{`{
-  "mcpServers": {
-    "promptx": {
-      "command": "npx",
-      "args": ["-y", "@promptx/mcp-server"]
-    },
-    "http-server": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp"
-    },
-    "websocket-server": {
-      "type": "websocket",
-      "url": "ws://localhost:8080/mcp"
-    }
-  }
-}`}
-            </Typography.Text>
-          </Card>
 
           <TextArea
             value={jsonConfig}

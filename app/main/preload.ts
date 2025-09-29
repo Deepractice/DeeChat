@@ -120,7 +120,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // 删除会话
     deleteSession: (sessionId: string) => ipcRenderer.invoke('conversation:delete-session', sessionId),
-    
+
+    // 更新会话标题
+    updateSessionTitle: (sessionId: string, newTitle: string) => ipcRenderer.invoke('conversation:update-session-title', sessionId, newTitle),
+
     // 清理缓存
     clearCache: () => ipcRenderer.invoke('conversation:clear-cache')
   },

@@ -8,17 +8,20 @@ import McpConfigPage from './components/McpConfigPage'
 import { AppLayout } from './components/layout'
 import { Role, RoleActivationResponse } from './types/role'
 import { McpProvider } from './contexts/McpContext'
+import { SessionProvider, useSession } from './contexts/SessionContext'
 
 type AppView = 'config' | 'role-selector' | 'chat' | 'mcp-config'
 
-const App: React.FC = () => {
+// 内部 App 组件，使用 SessionContext
+const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('chat') // 默认进入聊天页面
   const [hasConfigs, setHasConfigs] = useState(false)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [roleActivationResult, setRoleActivationResult] = useState<RoleActivationResponse | null>(null)
   const [chatSidebarVisible, setChatSidebarVisible] = useState(true)
-  const [currentSession, setCurrentSession] = useState<any>(null)
-  const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0)
+
+  // 使用 SessionContext
+  const { getCurrentSession, updateSessionTitle } = useSession()
 
   // 检查是否有AI配置
   useEffect(() => {
@@ -97,15 +100,27 @@ const App: React.FC = () => {
   }
 
   const handleUpdateSessionTitle = async (sessionId: string, newTitle: string) => {
-    // 简单的刷新逻辑 - 重新加载会话列表
-    console.log('🔄 会话标题已更新，刷新当前会话显示和会话列表')
-    if (currentSession && currentSession.id === sessionId) {
-      setCurrentSession(prev => prev ? { ...prev, title: newTitle } : null)
-    }
-    // 触发会话列表刷新
-    setSessionListRefreshTrigger(prev => prev + 1)
+    console.log('🔄 会话标题更新请求:', { sessionId, newTitle })
+    await updateSessionTitle(sessionId, newTitle)
+    // SessionContext 会自动处理状态更新，不需要手动刷新
   }
 
+
+  // 获取当前会话信息用于显示
+  const [currentSessionForDisplay, setCurrentSessionForDisplay] = useState<any>(null)
+
+  // 当需要显示当前会话时，从 SessionContext 获取
+  useEffect(() => {
+    const fetchCurrentSession = async () => {
+      const session = await getCurrentSession()
+      setCurrentSessionForDisplay(session)
+    }
+
+    // 只在聊天页面时获取
+    if (currentView === 'chat') {
+      fetchCurrentSession()
+    }
+  }, [currentView, getCurrentSession])
 
   return (
     <McpProvider>
@@ -137,7 +152,7 @@ const App: React.FC = () => {
             onSettingsClick: switchToConfig,
             onSessionListClick: () => setChatSidebarVisible(!chatSidebarVisible)
           }}
-          currentSession={currentSession}
+          currentSession={currentSessionForDisplay}
           sidebarVisible={chatSidebarVisible}
           onUpdateSessionTitle={handleUpdateSessionTitle}
         >
@@ -162,14 +177,22 @@ const App: React.FC = () => {
               roleActivationResult={roleActivationResult}
               sidebarVisible={chatSidebarVisible}
               onSidebarVisibleChange={setChatSidebarVisible}
-              onCurrentSessionChange={setCurrentSession}
+              onCurrentSessionChange={(session) => setCurrentSessionForDisplay(session)}
               onUpdateSessionTitle={handleUpdateSessionTitle}
-              sessionListRefreshTrigger={sessionListRefreshTrigger}
             />
           )}
         </AppLayout>
       </ConfigProvider>
     </McpProvider>
+  )
+}
+
+// 主 App 组件，提供 SessionContext
+const App: React.FC = () => {
+  return (
+    <SessionProvider>
+      <AppContent />
+    </SessionProvider>
   )
 }
 

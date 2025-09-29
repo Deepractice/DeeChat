@@ -42,9 +42,8 @@ export interface RoleActivationResponse {
   system_prompt?: string        // 角色系统提示词
 }
 
-// 角色选择器组件的 Props
+// 角色管理器组件的 Props （用于浏览角色信息）
 export interface RoleSelectorProps {
-  onRoleSelect: (role: Role, activationResult: RoleActivationResponse) => void
   onBack: () => void
   loading?: boolean
 }

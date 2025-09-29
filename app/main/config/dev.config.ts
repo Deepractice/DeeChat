@@ -47,6 +47,7 @@ export const getViteDevUrl = (): string => {
 
 // 🖼️ 辅助函数：获取窗口配置
 export const getWindowConfig = () => {
+  const { join } = require('path')
   return {
     title: 'DeeChat',
     width: DEV_CONFIG.ELECTRON.WINDOW.WIDTH,
@@ -54,6 +55,7 @@ export const getWindowConfig = () => {
     minWidth: DEV_CONFIG.ELECTRON.WINDOW.MIN_WIDTH,
     minHeight: DEV_CONFIG.ELECTRON.WINDOW.MIN_HEIGHT,
     titleBarStyle: DEV_CONFIG.ELECTRON.TITLE_BAR_STYLE,
+    icon: join(__dirname, '../../assets/icon.png'),
   }
 }
 

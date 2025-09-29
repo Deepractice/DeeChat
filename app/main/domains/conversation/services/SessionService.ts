@@ -139,8 +139,9 @@ export class SessionService {
       throw new Error(`会话不存在: ${sessionId}`)
     }
 
-    // 这里需要添加updateSession方法到Repository，目前暂时不实现
-    console.log(`⚠️ 会话标题更新功能待实现`)
+    // 调用Repository更新会话标题
+    await this.conversationRepository.updateSession(sessionId, { title: newTitle })
+    console.log(`✅ 会话标题更新成功: ${sessionId} -> "${newTitle}"`)
   }
 
   /**
@@ -172,7 +173,7 @@ export class SessionService {
    * 验证会话输入
    */
   private validateSessionInput(input: CreateSessionInput): void {
-    if (!input.aiModel?.trim()) {
+    if (!input.ai_config?.model?.trim()) {
       throw new Error('AI模型不能为空')
     }
 

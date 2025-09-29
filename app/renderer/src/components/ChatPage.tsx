@@ -3,6 +3,7 @@ import { Layout, Button, Drawer, Select, message, Spin, Space, Tag, Avatar, Slid
 import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined, UserSwitchOutlined, LeftOutlined, DeleteOutlined, ClearOutlined } from '@ant-design/icons'
 import MessageList from './MessageList'
 import { VirtualToolMessage } from './ToolMessage'
+import RoleDropdownSelector from './RoleDropdownSelector'
 
 // 扩展的工具执行信息接口，用于在AI消息中嵌入工具执行状态
 interface EmbeddedToolExecution {
@@ -36,6 +37,7 @@ import type {
   AIConfig
 } from '../../../main/preload'
 import { Role, RoleActivationResponse } from '../types/role'
+import { useSession } from '../contexts/SessionContext'
 import { useMcp } from '../contexts/McpContext'
 
 // 移除了Layout组件的解构，现在使用统一布局
@@ -63,13 +65,25 @@ const ChatPage: React.FC<ChatPageProps> = ({
   onUpdateSessionTitle: onUpdateSessionTitleProp,
   sessionListRefreshTrigger
 }) => {
-  // 状态管理
+  // 使用 SessionContext
+  const {
+    currentSessionId,
+    loading: sessionLoading,
+    createSession,
+    selectSession: selectSessionContext,
+    updateSessionTitle,
+    deleteSession: deleteSessionContext,
+    getSessions,
+    getCurrentSession,
+    getMessages
+  } = useSession()
+
+  // 本地状态管理 - 只保留UI相关状态
   const [sessions, setSessions] = useState<ConversationSession[]>([])
   const [currentSession, setCurrentSession] = useState<ConversationSession | null>(null)
   const [messages, setMessages] = useState<(ConversationMessage | VirtualToolMessage | ToolExecutionInfo)[]>([])
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
   const [selectedConfig, setSelectedConfig] = useState<string>('')
-  // 移除本地的 sidebarVisible 状态，使用从props传入的状态
   const [loading, setLoading] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [isCallingTool, setIsCallingTool] = useState(false)
@@ -81,6 +95,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // AI 参数配置
   const [temperature, setTemperature] = useState<number>(0.7)
   const [maxTokens, setMaxTokens] = useState<number | undefined>(undefined)
+
+  // 内部角色状态管理（用于角色下拉选择器）
+  const [internalSelectedRole, setInternalSelectedRole] = useState<Role | null>(selectedRole || null)
+  const [internalRoleActivationResult, setInternalRoleActivationResult] = useState<any>(roleActivationResult || null)
 
   // 使用MCP Context
   const { tools, loading: loadingMcpTools, refreshMcpData, isDataStale } = useMcp()
@@ -105,9 +123,20 @@ const ChatPage: React.FC<ChatPageProps> = ({
     }
   }, [sessionListRefreshTrigger])
 
+  // 同步外部传入的角色状态
+  useEffect(() => {
+    if (selectedRole !== internalSelectedRole) {
+      setInternalSelectedRole(selectedRole || null)
+    }
+    if (roleActivationResult !== internalRoleActivationResult) {
+      setInternalRoleActivationResult(roleActivationResult || null)
+    }
+  }, [selectedRole, roleActivationResult])
+
   // 流式响应状态
   const [currentAiMessage, setCurrentAiMessage] = useState<ConversationMessage | null>(null)
-  const [streamingContent, setStreamingContent] = useState<string>('')
+  // 使用 useRef 来维护流式内容，避免状态闭包陈旧问题
+  const streamingContentRef = useRef<string>('')
   // 当前消息的时间线内容（用于实现文本和工具的穿插显示）
   const [currentTimeline, setCurrentTimeline] = useState<TimelineItem[]>([])
   const currentTimelineRef = useRef<TimelineItem[]>([])
@@ -465,33 +494,30 @@ const ChatPage: React.FC<ChatPageProps> = ({
           // 第一次收到内容时，隐藏loading状态
           setSendingMessage(false)
 
-          // 先计算新的内容和时间线，避免嵌套状态更新
-          const newContent = streamingContent + chunkContent
+          // 使用 useRef 维护流式内容，避免状态闭包陈旧问题
+          streamingContentRef.current += chunkContent
+          const newContent = streamingContentRef.current
           const currentAiFromRef = currentAiMessageRef.current
 
-          // 计算新的时间线
+          // 简化timeline管理，只维护一个文本块
           const currentTimeline = currentTimelineRef.current
           const updatedTimeline = [...currentTimeline]
           const lastItem = updatedTimeline[updatedTimeline.length - 1]
 
           if (lastItem && lastItem.type === 'text') {
-            // 如果最后一项是文本，追加内容（避免重复）
-            const currentContent = lastItem.content || ''
-            if (!currentContent.endsWith(chunkContent)) {
-              lastItem.content = currentContent + chunkContent
-            }
+            // 直接更新最后一个文本项的内容
+            lastItem.content = newContent
           } else {
             // 创建新的文本时间线项
             updatedTimeline.push({
               id: `text_${Date.now()}`,
               type: 'text',
               timestamp: Date.now(),
-              content: chunkContent
+              content: newContent
             })
           }
 
-          // 批量更新状态 - 避免嵌套调用
-          setStreamingContent(newContent)
+          // 更新timeline状态
           setCurrentTimeline(updatedTimeline)
 
           if (!currentAiFromRef) {
@@ -550,7 +576,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         }
         // 重置流式状态和工具状态
         setCurrentAiMessage(null)
-        setStreamingContent('')
+        streamingContentRef.current = ''
         setIsCallingTool(false)
         setCurrentTimeline([])
         break
@@ -569,7 +595,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         })
         // 重置流式状态和工具状态
         setCurrentAiMessage(null)
-        setStreamingContent('')
+        streamingContentRef.current = ''
         setIsCallingTool(false)
         setCurrentTimeline([])
         break
@@ -754,6 +780,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         const newSession = result.data
         setSessions(prev => [newSession, ...prev])
         setCurrentSession(newSession)
+        onCurrentSessionChange?.(newSession) // 添加缺失的回调
         setMessages([])
         console.log('✅ 会话创建成功:', newSession)
       } else {
@@ -839,18 +866,22 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
       // 重置流式状态
       setCurrentAiMessage(null)
-      setStreamingContent('')
+      streamingContentRef.current = ''
 
       // 准备系统提示词（如果有选择的角色）
+      // 优先使用内部角色状态，如果没有则使用props传入的角色
+      const currentRole = internalSelectedRole || selectedRole
+      const currentActivationResult = internalRoleActivationResult || roleActivationResult
+
       let systemPrompt = undefined
-      if (selectedRole && roleActivationResult?.system_prompt) {
-        systemPrompt = roleActivationResult.system_prompt
-        console.log(`🎭 使用角色 "${selectedRole.name}" 的系统提示词:`, systemPrompt)
+      if (currentRole && currentActivationResult?.system_prompt) {
+        systemPrompt = currentActivationResult.system_prompt
+        console.log(`🎭 使用角色 "${currentRole.name}" 的系统提示词:`, systemPrompt)
       } else {
         console.log('⚠️ 没有角色系统提示词:', {
-          hasRole: !!selectedRole,
-          hasActivationResult: !!roleActivationResult,
-          hasSystemPrompt: !!(roleActivationResult?.system_prompt)
+          hasRole: !!currentRole,
+          hasActivationResult: !!currentActivationResult,
+          hasSystemPrompt: !!(currentActivationResult?.system_prompt)
         })
       }
 
@@ -945,6 +976,13 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // 打开模型选择弹窗
   const openModelSelector = () => {
     setModelSelectorVisible(true)
+  }
+
+  // 处理角色选择
+  const handleRoleSelect = (role: Role | null, activationResult?: any) => {
+    console.log('🎭 角色选择变化:', role?.name || '无角色', activationResult)
+    setInternalSelectedRole(role)
+    setInternalRoleActivationResult(activationResult)
   }
 
   return (
@@ -1122,25 +1160,22 @@ const ChatPage: React.FC<ChatPageProps> = ({
                   </div>
 
                   {/* AI角色选择 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                     <span style={{
                       fontSize: '14px',
                       color: '#666',
-                      minWidth: '40px'
+                      minWidth: '40px',
+                      flexShrink: 0
                     }}>
                       角色:
                     </span>
-                    <Button
-                      onClick={onBackToRoleSelector}
-                      style={{
-                        minWidth: '200px',
-                        flex: 1,
-                        textAlign: 'left'
-                      }}
-                      size="middle"
-                    >
-                      {selectedRole ? selectedRole.name : '选择AI角色'}
-                    </Button>
+                    <RoleDropdownSelector
+                      selectedRole={internalSelectedRole}
+                      onRoleSelect={handleRoleSelect}
+                      disabled={sendingMessage}
+                      style={{ flex: 1, minWidth: 0 }}
+                      placeholder="选择AI角色"
+                    />
                   </div>
                 </div>
 
