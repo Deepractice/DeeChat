@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Layout, Button, Drawer, Select, message, Spin, Space, Tag, Avatar, Slider, InputNumber, Tooltip } from 'antd'
-import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined, UserSwitchOutlined } from '@ant-design/icons'
+import { MenuOutlined, PlusOutlined, SettingOutlined, RobotOutlined, DownOutlined, UserSwitchOutlined, LeftOutlined, DeleteOutlined, ClearOutlined } from '@ant-design/icons'
 import MessageList from './MessageList'
 import { VirtualToolMessage } from './ToolMessage'
 
@@ -47,6 +47,9 @@ interface ChatPageProps {
   roleActivationResult?: RoleActivationResponse | null
   sidebarVisible?: boolean
   onSidebarVisibleChange?: (visible: boolean) => void
+  onCurrentSessionChange?: (session: ConversationSession | null) => void
+  onUpdateSessionTitle?: (sessionId: string, newTitle: string) => void
+  sessionListRefreshTrigger?: number
 }
 
 const ChatPage: React.FC<ChatPageProps> = ({
@@ -55,7 +58,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
   selectedRole,
   roleActivationResult,
   sidebarVisible = false,
-  onSidebarVisibleChange
+  onSidebarVisibleChange,
+  onCurrentSessionChange,
+  onUpdateSessionTitle: onUpdateSessionTitleProp,
+  sessionListRefreshTrigger
 }) => {
   // 状态管理
   const [sessions, setSessions] = useState<ConversationSession[]>([])
@@ -90,6 +96,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
       window.electronAPI.removeStreamListeners()
     }
   }, [])
+
+  // 监听会话列表刷新触发器
+  useEffect(() => {
+    if (sessionListRefreshTrigger && sessionListRefreshTrigger > 0) {
+      console.log('🔄 收到会话列表刷新信号，重新加载会话列表')
+      loadSessions()
+    }
+  }, [sessionListRefreshTrigger])
 
   // 流式响应状态
   const [currentAiMessage, setCurrentAiMessage] = useState<ConversationMessage | null>(null)
@@ -741,8 +755,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setSessions(prev => [newSession, ...prev])
         setCurrentSession(newSession)
         setMessages([])
-        onSidebarVisibleChange?.(false)
-        message.success('创建会话成功')
         console.log('✅ 会话创建成功:', newSession)
       } else {
         console.error('❌ 创建会话失败:', result.error)
@@ -759,8 +771,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
   // 选择会话
   const selectSession = async (session: ConversationSession) => {
     setCurrentSession(session)
-    onSidebarVisibleChange?.(false)
-    
+    onCurrentSessionChange?.(session)
+
     try {
       const result = await window.electronAPI.conversation.getMessageHistory(session.id)
       if (result.success && result.data) {
@@ -886,9 +898,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setSessions(prev => prev.filter(s => s.id !== sessionId))
         if (currentSession?.id === sessionId) {
           setCurrentSession(null)
+          onCurrentSessionChange?.(null)
           setMessages([])
         }
-        message.success('删除会话成功')
       } else {
         message.error(result.error || '删除会话失败')
       }
@@ -896,6 +908,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
       message.error('删除会话失败')
     }
   }
+
 
   // 删除所有会话
   const deleteAllSessions = async () => {
@@ -911,7 +924,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setSessions([])
         setCurrentSession(null)
         setMessages([])
-        message.success(`成功删除所有 ${sessions.length} 个会话`)
       } else {
         message.warning(`删除了 ${sessions.length - failedCount} 个会话，${failedCount} 个删除失败`)
         // 重新加载会话列表以获取最新状态
@@ -936,37 +948,88 @@ const ChatPage: React.FC<ChatPageProps> = ({
   }
 
   return (
-    <div style={{ height: '100%', position: 'relative' }}>
-      {/* 侧边栏抽屉 */}
-      <Drawer
-        title="会话列表"
-        placement="left"
-        onClose={() => onSidebarVisibleChange?.(false)}
-        open={sidebarVisible}
-        width={320}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={createNewSession}
-            loading={loading}
-            block
-          >
-            新建会话
-          </Button>
-        </div>
-        <SessionList
-          sessions={sessions}
-          currentSession={currentSession}
-          onSelectSession={selectSession}
-          onDeleteSession={deleteSession}
-          onDeleteAllSessions={deleteAllSessions}
-        />
-      </Drawer>
-
-      {/* 聊天内容区域 - 移除了原有的Header，现在直接使用统一布局 */}
+    <div style={{ height: '100%', display: 'flex' }}>
+      {/* 左侧会话列表 */}
       <div style={{
+        width: sidebarVisible ? '280px' : '0px',
+        minWidth: sidebarVisible ? '280px' : '0px',
+        backgroundColor: '#fafafa',
+        borderRight: sidebarVisible ? '1px solid #e8e8e8' : 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        transition: 'width 0.3s ease, min-width 0.3s ease'
+      }}>
+        {sidebarVisible && (
+          <>
+            {/* 会话列表头部 */}
+            <div style={{
+              padding: '16px',
+              borderBottom: '1px solid #e8e8e8',
+              backgroundColor: '#fff'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-start',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <Button
+                  type="text"
+                  icon={<PlusOutlined />}
+                  onClick={createNewSession}
+                  loading={loading}
+                  size="large"
+                  title="新建会话"
+                  style={{
+                    color: '#666',
+                    fontSize: '16px'
+                  }}
+                />
+                <Button
+                  type="text"
+                  icon={<ClearOutlined />}
+                  onClick={async () => {
+                    if (sessions.length === 0) return
+
+                    try {
+                      // 删除所有会话
+                      for (const session of sessions) {
+                        await deleteSession(session.id)
+                      }
+                    } catch (error) {
+                      console.error('清空会话失败:', error)
+                    }
+                  }}
+                  disabled={sessions.length === 0}
+                  size="large"
+                  title="清空所有会话"
+                  style={{
+                    color: sessions.length > 0 ? '#666' : '#d9d9d9',
+                    fontSize: '16px'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* 会话列表内容 */}
+            <div style={{ flex: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
+              <SessionList
+                sessions={sessions}
+                currentSession={currentSession}
+                onSelectSession={selectSession}
+                onDeleteSession={deleteSession}
+                onUpdateSessionTitle={onUpdateSessionTitleProp}
+                onDeleteAllSessions={deleteAllSessions}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 右侧聊天内容区域 */}
+      <div style={{
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -982,11 +1045,105 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 />
               </div>
               
-              {/* 消息输入 */}
-              <div style={{ 
+              {/* 消息输入区域 */}
+              <div style={{
                 borderTop: '1px solid #f0f0f0',
                 padding: '16px'
               }}>
+                {/* 配置和模型选择器 */}
+                <div style={{
+                  marginBottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  maxWidth: '800px',
+                  margin: '0 auto 12px auto',
+                  flexWrap: 'wrap'
+                }}>
+                  {/* AI配置选择 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#666',
+                      minWidth: '40px'
+                    }}>
+                      配置:
+                    </span>
+                    <Select
+                      value={selectedConfig}
+                      onChange={(value) => {
+                        setSelectedConfig(value)
+                        setSelectedModel('') // 清空模型选择，等待新配置的模型加载
+                      }}
+                      style={{
+                        minWidth: '120px'
+                      }}
+                      placeholder="选择配置"
+                      disabled={sendingMessage}
+                      size="middle"
+                      options={aiConfigs.map(config => ({
+                        value: config.name,
+                        label: config.name,
+                        title: `${config.name} - ${config.base_url}`
+                      }))}
+                    />
+                  </div>
+
+                  {/* AI模型选择 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#666',
+                      minWidth: '40px'
+                    }}>
+                      模型:
+                    </span>
+                    <Select
+                      value={selectedModel}
+                      onChange={handleModelSelect}
+                      style={{
+                        minWidth: '200px',
+                        flex: 1
+                      }}
+                      placeholder="选择AI模型"
+                      loading={loadingModels}
+                      disabled={sendingMessage || !selectedConfig}
+                      size="middle"
+                      showSearch
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      options={availableModels.map(model => ({
+                        value: model.id,
+                        label: model.name || model.id,
+                        title: model.description
+                      }))}
+                    />
+                  </div>
+
+                  {/* AI角色选择 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#666',
+                      minWidth: '40px'
+                    }}>
+                      角色:
+                    </span>
+                    <Button
+                      onClick={onBackToRoleSelector}
+                      style={{
+                        minWidth: '200px',
+                        flex: 1,
+                        textAlign: 'left'
+                      }}
+                      size="middle"
+                    >
+                      {selectedRole ? selectedRole.name : '选择AI角色'}
+                    </Button>
+                  </div>
+                </div>
+
                 <MessageInput
                   onSendMessage={sendMessage}
                   disabled={sendingMessage}

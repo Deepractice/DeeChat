@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ConfigProvider, Button } from 'antd'
+import { ConfigProvider, Button, message } from 'antd'
 import { SettingOutlined, MessageOutlined, UserOutlined, ToolOutlined, PlusOutlined, UserSwitchOutlined, MenuOutlined } from '@ant-design/icons'
 import ConfigPage from './components/ConfigPage'
 import ChatPage from './components/ChatPage'
@@ -12,15 +12,26 @@ import { McpProvider } from './contexts/McpContext'
 type AppView = 'config' | 'role-selector' | 'chat' | 'mcp-config'
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>('config') // 默认先显示配置页面
+  const [currentView, setCurrentView] = useState<AppView>('chat') // 默认进入聊天页面
   const [hasConfigs, setHasConfigs] = useState(false)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [roleActivationResult, setRoleActivationResult] = useState<RoleActivationResponse | null>(null)
-  const [chatSidebarVisible, setChatSidebarVisible] = useState(false)
+  const [chatSidebarVisible, setChatSidebarVisible] = useState(true)
+  const [currentSession, setCurrentSession] = useState<any>(null)
+  const [sessionListRefreshTrigger, setSessionListRefreshTrigger] = useState(0)
 
   // 检查是否有AI配置
   useEffect(() => {
     checkAIConfigs()
+
+    // 配置message全局位置为右侧边滑出
+    message.config({
+      top: 80, // 距离顶部的距离
+      duration: 3, // 显示时长
+      maxCount: 3, // 最大显示数量
+      placement: 'topRight', // 右上角位置
+      getContainer: () => document.body
+    })
 
     // 监听hash变化来处理路由
     const handleHashChange = () => {
@@ -43,19 +54,12 @@ const App: React.FC = () => {
       const result = await (window as any).electronAPI.aiConfig.getAll()
       if (result.success && result.data && result.data.length > 0) {
         setHasConfigs(true)
-        // 如果有配置且当前在配置页面，自动跳转到角色选择器
-        if (currentView === 'config') {
-          setCurrentView('role-selector')
-        }
       } else {
         setHasConfigs(false)
-        // 如果没有配置，确保停留在配置页面
-        setCurrentView('config')
       }
     } catch (error) {
       console.error('检查AI配置失败:', error)
       setHasConfigs(false)
-      setCurrentView('config')
     }
   }
 
@@ -92,6 +96,16 @@ const App: React.FC = () => {
     setCurrentView('chat')
   }
 
+  const handleUpdateSessionTitle = async (sessionId: string, newTitle: string) => {
+    // 简单的刷新逻辑 - 重新加载会话列表
+    console.log('🔄 会话标题已更新，刷新当前会话显示和会话列表')
+    if (currentSession && currentSession.id === sessionId) {
+      setCurrentSession(prev => prev ? { ...prev, title: newTitle } : null)
+    }
+    // 触发会话列表刷新
+    setSessionListRefreshTrigger(prev => prev + 1)
+  }
+
 
   return (
     <McpProvider>
@@ -104,31 +118,41 @@ const App: React.FC = () => {
         }}
       >
         <AppLayout
-          globalNavigation={{
-            currentPage: currentView,
-            onNavigateToConfig: switchToConfig,
-            onNavigateToRoleSelector: switchToRoleSelector,
-            onNavigateToChat: switchToChat,
-            onNavigateToMcpConfig: switchToMcpConfig,
-            hasConfigs,
-            selectedRoleName: selectedRole?.name
+          pageType={currentView === 'chat' ? 'chat' : 'other'}
+          backButton={{
+            show: currentView !== 'chat',
+            title: currentView === 'config' ? 'AI 配置' :
+                   currentView === 'mcp-config' ? 'MCP 工具' :
+                   currentView === 'role-selector' ? '选择角色' : '',
+            onBack: () => {
+              if (currentView === 'role-selector') {
+                switchToChat() // 角色选择页面返回聊天
+              } else {
+                switchToChat() // 其他页面都返回聊天
+              }
+            }
           }}
+          chatActions={{
+            onUserClick: switchToRoleSelector,
+            onSettingsClick: switchToConfig,
+            onSessionListClick: () => setChatSidebarVisible(!chatSidebarVisible)
+          }}
+          currentSession={currentSession}
+          sidebarVisible={chatSidebarVisible}
+          onUpdateSessionTitle={handleUpdateSessionTitle}
         >
-          {currentView === 'config' ? (
+          {currentView === 'config' || currentView === 'mcp-config' ? (
             <ConfigPage
               onConfigChange={handleConfigChange}
               onStartChat={switchToRoleSelector}
               onMcpConfig={switchToMcpConfig}
               hasConfigs={hasConfigs}
-            />
-          ) : currentView === 'mcp-config' ? (
-            <McpConfigPage
-              onBack={switchToConfig}
+              currentPage={currentView}
             />
           ) : currentView === 'role-selector' ? (
             <RoleSelector
               onRoleSelect={handleRoleSelect}
-              onBack={switchToConfig}
+              onBack={switchToChat}
             />
           ) : (
             <ChatPage
@@ -138,6 +162,9 @@ const App: React.FC = () => {
               roleActivationResult={roleActivationResult}
               sidebarVisible={chatSidebarVisible}
               onSidebarVisibleChange={setChatSidebarVisible}
+              onCurrentSessionChange={setCurrentSession}
+              onUpdateSessionTitle={handleUpdateSessionTitle}
+              sessionListRefreshTrigger={sessionListRefreshTrigger}
             />
           )}
         </AppLayout>

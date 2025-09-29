@@ -42,7 +42,18 @@ const MessageList: React.FC<MessageListProps> = ({
           color: '#999',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '32px', marginBottom: '16px' }}>🤖</div>
+          <div style={{ marginBottom: '16px' }}>
+            <img
+              src="/icon.png"
+              alt="DeeChat"
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '12px',
+                objectFit: 'cover'
+              }}
+            />
+          </div>
           <p>开始你的AI对话之旅吧！</p>
         </div>
       ) : (
