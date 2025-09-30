@@ -3,8 +3,8 @@ import { ConfigProvider, Button, message } from 'antd'
 import { SettingOutlined, MessageOutlined, UserOutlined, ToolOutlined, PlusOutlined, UserSwitchOutlined, MenuOutlined } from '@ant-design/icons'
 import ConfigPage from './components/ConfigPage'
 import ChatPage from './components/ChatPage'
-import RoleSelector from './components/RoleSelector'
-import McpConfigPage from './components/McpConfigPage'
+import { RoleManager } from './components/role'
+import { McpConfigPage } from './components/mcp'
 import { AppLayout } from './components/layout'
 import { Role, RoleActivationResponse } from './types/role'
 import { McpProvider } from './contexts/McpContext'
@@ -165,7 +165,7 @@ const AppContent: React.FC = () => {
               currentPage={currentView}
             />
           ) : currentView === 'role-selector' ? (
-            <RoleSelector
+            <RoleManager
               onRoleSelect={handleRoleSelect}
               onBack={switchToChat}
             />

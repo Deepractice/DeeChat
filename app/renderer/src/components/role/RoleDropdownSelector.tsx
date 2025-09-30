@@ -1,7 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Select, Button, message, Avatar, Tag, Tooltip } from 'antd'
+/**
+ * RoleDropdownSelector - 角色下拉选择器（重构版）
+ *
+ * 职责:
+ * 1. 提供下拉选择器UI
+ * 2. 复用 useRoleSelector Hook
+ * 3. 支持搜索和过滤
+ *
+ * 架构改进:
+ * - 业务逻辑迁移到 useRoleSelector Hook
+ * - UI 展示保持简洁清晰
+ * - 代码量从 259行 减少到 ~140行
+ */
+
+import React from 'react'
+import { Select, Button, Avatar, Tag, Tooltip } from 'antd'
 import { RobotOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
-import { Role, RoleActivationResponse } from '../types/role'
+import { Role, RoleActivationResponse } from '../../types/role'
+import { useRoleSelector } from '../../hooks/useRoleSelector'
 
 const { Option } = Select
 
@@ -18,107 +33,42 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
   onRoleSelect,
   disabled = false,
   style,
-  placeholder = "选择AI角色"
+  placeholder = '选择AI角色'
 }) => {
-  const [roles, setRoles] = useState<Role[]>([])
-  const [loading, setLoading] = useState(false)
-  const [activating, setActivating] = useState(false)
-  const hasLoadedRef = useRef(false)
+  // ==================== 使用业务逻辑Hook ====================
+  const { roles, loading, activating, refreshRoles, activateAndSelectRole, clearRoleSelection } =
+    useRoleSelector({
+      onRoleSelect
+    })
+
+  // ==================== 工具函数 ====================
 
   // 角色分类标签颜色
   const getCategoryTagColor = (category?: string) => {
     switch (category) {
-      case 'system': return 'blue'
-      case 'project': return 'green'
-      case 'user': return 'purple'
-      default: return 'default'
+      case 'system':
+        return 'blue'
+      case 'project':
+        return 'green'
+      case 'user':
+        return 'purple'
+      default:
+        return 'default'
     }
   }
 
-  // 加载角色列表
-  const loadRoles = async () => {
-    if (hasLoadedRef.current && roles.length > 0) return
-
-    try {
-      setLoading(true)
-      console.log('🔄 加载角色列表...')
-
-      const response = await (window as any).electronAPI.promptx.discover('roles')
-
-      if (response.success && response.data && response.data.data && response.data.data.roles) {
-        const roleList = response.data.data.roles
-        setRoles(roleList)
-        hasLoadedRef.current = true
-        console.log('✅ 角色列表加载成功:', roleList.length, '个角色')
-      } else {
-        throw new Error(response.error || '获取角色列表失败')
-      }
-    } catch (error: any) {
-      console.error('❌ 加载角色失败:', error)
-      message.error(`加载角色失败: ${error.message}`)
-      setRoles([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 刷新角色列表
-  const refreshRoles = async () => {
-    hasLoadedRef.current = false
-    await loadRoles()
-  }
-
-  // 组件挂载时加载角色
-  useEffect(() => {
-    loadRoles()
-  }, [])
+  // ==================== 事件处理 ====================
 
   // 处理角色选择
   const handleRoleChange = async (roleId: string | undefined) => {
-    try {
-      // 如果选择的是空值（清除角色）
-      if (!roleId) {
-        console.log('🚫 清除角色选择')
-        onRoleSelect(null)
-        return
-      }
-
-      // 查找选中的角色
-      const role = roles.find(r => r.id === roleId)
-      if (!role) {
-        message.error('角色不存在')
-        return
-      }
-
-      console.log('🎭 开始激活角色:', role.name, role.id)
-      setActivating(true)
-
-      // 激活角色
-      const response = await (window as any).electronAPI.promptx.action(role.id)
-      console.log('🎯 角色激活响应:', response)
-
-      if (response.success && response.data) {
-        console.log('✅ 角色激活成功')
-        onRoleSelect(role, response.data)
-        message.success(`已切换到角色: ${role.name}`)
-      } else {
-        console.log('❌ 角色激活失败:', response)
-        throw new Error(response.error || '角色激活失败')
-      }
-    } catch (error: any) {
-      console.error('💥 角色激活异常:', error)
-      message.error(`角色激活失败: ${error.message}`)
-    } finally {
-      setActivating(false)
+    if (!roleId) {
+      clearRoleSelection()
+    } else {
+      await activateAndSelectRole(roleId)
     }
   }
 
-  // 处理下拉框打开
-  const handleDropdownVisibleChange = (open: boolean) => {
-    if (open && roles.length === 0) {
-      loadRoles()
-    }
-  }
+  // ==================== UI 渲染 ====================
 
   // 渲染角色选项
   const renderRoleOption = (role: Role) => (
@@ -135,9 +85,7 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontWeight: 500, fontSize: '14px' }}>
-              {role.name}
-            </span>
+            <span style={{ fontWeight: 500, fontSize: '14px' }}>{role.name}</span>
             {role.category && (
               <Tag
                 color={getCategoryTagColor(role.category)}
@@ -153,14 +101,16 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
             )}
           </div>
           {role.description && (
-            <div style={{
-              fontSize: '12px',
-              color: '#666',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: '300px'
-            }}>
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#666',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '300px'
+              }}
+            >
               {role.description}
             </div>
           )}
@@ -174,7 +124,6 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
       <Select
         value={selectedRole?.id}
         onChange={handleRoleChange}
-        onDropdownVisibleChange={handleDropdownVisibleChange}
         placeholder={placeholder}
         loading={loading || activating}
         disabled={disabled}
@@ -182,7 +131,7 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
         showSearch
         optionFilterProp="children"
         filterOption={(input, option: any) => {
-          const role = roles.find(r => r.id === option.value)
+          const role = roles.find((r) => r.id === option.value)
           if (!role) return false
 
           const searchText = input.toLowerCase()
@@ -200,7 +149,6 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
         dropdownStyle={{
           maxHeight: '400px'
         }}
-        // 使用自定义的选中项显示，避免文本溢出
         optionLabelProp="label"
         notFoundContent={
           loading ? (
@@ -212,12 +160,7 @@ const RoleDropdownSelector: React.FC<RoleDropdownSelectorProps> = ({
             <div style={{ textAlign: 'center', padding: '20px' }}>
               <RobotOutlined style={{ fontSize: '24px', color: '#d9d9d9' }} />
               <div style={{ marginTop: '8px', color: '#666' }}>暂无可用角色</div>
-              <Button
-                size="small"
-                type="primary"
-                onClick={refreshRoles}
-                style={{ marginTop: '8px' }}
-              >
+              <Button size="small" type="primary" onClick={refreshRoles} style={{ marginTop: '8px' }}>
                 刷新角色
               </Button>
             </div>

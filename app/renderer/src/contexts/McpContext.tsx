@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { message } from 'antd'
+import type { McpServerWithStatus as McpServerWithStatusType } from '../types/preload'
+
+// 重导出类型，方便其他模块使用
+export type McpServerWithStatus = McpServerWithStatusType
 
 // MCP工具类型定义
 export interface McpTool {
@@ -41,7 +45,7 @@ export interface McpServerStatus {
 interface McpStorageData {
   tools: McpTool[]
   roles: McpRole[]
-  servers: McpServerStatus[]
+  servers: McpServerWithStatus[]
   lastUpdated: string
 }
 
@@ -50,7 +54,7 @@ interface McpContextType {
   // 数据状态
   tools: McpTool[]
   roles: McpRole[]
-  servers: McpServerStatus[]
+  servers: McpServerWithStatus[]
   loading: boolean
 
   // 操作方法
@@ -79,7 +83,7 @@ const CACHE_EXPIRE_TIME = 5 * 60 * 1000 // 5分钟过期
 export const McpProvider: React.FC<McpProviderProps> = ({ children }) => {
   const [tools, setTools] = useState<McpTool[]>([])
   const [roles, setRoles] = useState<McpRole[]>([])
-  const [servers, setServers] = useState<McpServerStatus[]>([])
+  const [servers, setServers] = useState<McpServerWithStatus[]>([])
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 

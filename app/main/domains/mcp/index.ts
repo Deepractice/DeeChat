@@ -26,7 +26,7 @@ import {
   McpClient,
   McpClientOptions
 } from '@deepracticex/mcp-client'
-import { McpClientAdapter } from '@deepracticex/ai-chat'
+import { McpClientAdapter } from '@deepracticex/ai-chat/dist/types/mcp.js'
 import { IDomain } from '../../ipc/ipc-registry.js'
 
 // 导入各个领域服务和组件

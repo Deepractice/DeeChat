@@ -76,7 +76,7 @@ export class ToolCallService {
       return {
         tool_call_id: call.id,
         result: result.content || result,
-        error: result.isError ? (result.content || 'Unknown error') : undefined
+        error: result.isError ? (Array.isArray(result.content) ? JSON.stringify(result.content) : result.content || 'Unknown error') : undefined
       }
 
     } catch (error) {

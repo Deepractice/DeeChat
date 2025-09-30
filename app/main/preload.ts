@@ -291,6 +291,11 @@ interface McpResourceInfo {
 declare global {
   interface Window {
     electronAPI: {
+      // 流式事件监听方法
+      onStreamEvent: (callback: (data: any) => void) => void
+      onStreamComplete: (callback: (data: any) => void) => void
+      onStreamError: (callback: (data: any) => void) => void
+      removeStreamListeners: () => void
       aiConfig: {
         create: (input: CreateAIConfigInput) => Promise<{ success: boolean; data?: AIConfig; error?: string }>
         getAll: () => Promise<{ success: boolean; data?: AIConfig[]; error?: string }>
@@ -311,6 +316,7 @@ declare global {
         getMessageHistory: (sessionId: string) => Promise<{ success: boolean; data?: ConversationMessage[]; error?: string }>
         deleteSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>
         clearCache: () => Promise<{ success: boolean; error?: string }>
+        updateSessionTitle: (sessionId: string, newTitle: string) => Promise<{ success: boolean; error?: string }>
       }
       promptx: {
         discover: (focus?: 'all' | 'roles' | 'tools') => Promise<any>
@@ -337,5 +343,17 @@ declare global {
   }
 }
 
-// 导出一个空对象以让TypeScript将此文件视为模块
-export {}
+// 导出类型定义供其他模块使用
+export type {
+  AIConfig,
+  CreateAIConfigInput,
+  ConversationSession,
+  ConversationMessage,
+  AIConfigInput,
+  CreateSessionInput,
+  SendMessageInput,
+  McpServerConfig,
+  McpServerWithStatus,
+  McpToolInfo,
+  McpResourceInfo
+}

@@ -10,7 +10,7 @@
 export interface ConversationSession {
   id: string                 // 会话唯一标识符
   title: string              // 会话标题，用于UI显示
-  ai_model: string           // 使用的AI模型名称
+  ai_config_name: string     // 使用的AI配置名称（与存储层一致）
   created_at: string         // 创建时间（ISO字符串）
   updated_at: string         // 最后更新时间（ISO字符串）
   message_count: number      // 消息总数
@@ -29,6 +29,15 @@ export interface ToolCall {
 }
 
 /**
+ * Token使用统计接口（与存储层一致）
+ */
+export interface TokenUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+/**
  * 对话消息接口
  * 表示对话中的单条消息，支持多种消息类型和角色
  */
@@ -37,12 +46,10 @@ export interface ConversationMessage {
   session_id: string         // 所属会话ID
   role: 'user' | 'assistant' | 'system' | 'tool'  // 消息发送者角色
   content: string            // 消息内容
-  ai_model?: string          // AI模型（仅assistant消息）
-  tool_calls?: ToolCall[]    // 工具调用（仅assistant消息）
+  timestamp: string          // 创建时间（ISO字符串，与存储层一致）
+  token_usage?: TokenUsage   // Token使用统计（与存储层一致）
+  tool_calls?: any[]         // 工具调用（与存储层一致）
   tool_call_id?: string      // 工具调用ID（仅tool消息）
-  created_at: string         // 创建时间（ISO字符串）
-  token_count?: number       // Token计数（可选）
-  metadata?: Record<string, any>  // 扩展元数据
 }
 
 /**

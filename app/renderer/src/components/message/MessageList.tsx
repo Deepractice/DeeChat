@@ -1,26 +1,51 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import { List, Spin, Avatar } from 'antd'
 import { UserOutlined, RobotOutlined } from '@ant-design/icons'
 import MessageBubble from './MessageBubble'
-import type { ConversationMessage } from '../../preload'
+import type { ConversationMessage } from '../../types/preload'
 
 interface MessageListProps {
   messages: ConversationMessage[]
   loading?: boolean
+  streamingMessage?: React.ReactNode  // 流式消息组件
 }
 
 const MessageList: React.FC<MessageListProps> = ({
   messages,
-  loading = false
+  loading = false,
+  streamingMessage
 }) => {
   const listRef = useRef<HTMLDivElement>(null)
 
-  // 自动滚动到底部
+  // 调试消息状态
+  useEffect(() => {
+    console.log('📋 MessageList接收到messages更新:', {
+      messageCount: messages.length,
+      messages: messages.map(m => ({ id: m.id, role: m.role, contentLength: m.content?.length || 0 }))
+    })
+  }, [messages])
+
+  // 优化的自动滚动到底部
   useEffect(() => {
     if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight
+      // 使用 RAF 确保在渲染完成后滚动
+      requestAnimationFrame(() => {
+        if (listRef.current) {
+          listRef.current.scrollTop = listRef.current.scrollHeight
+        }
+      })
     }
   }, [messages])
+
+  // 使用 useMemo 优化消息渲染 - 必须在顶层调用
+  const renderedMessages = useMemo(() =>
+    messages.map((message, index) => (
+      <MessageBubble
+        key={message.id}
+        message={message}
+      />
+    )), [messages]
+  )
 
   return (
     <div 
@@ -58,13 +83,11 @@ const MessageList: React.FC<MessageListProps> = ({
         </div>
       ) : (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          {messages.map((message, index) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-            />
-          ))}
+          {/* 渲染预优化的消息列表 */}
+          {renderedMessages}
 
+          {/* 流式消息 */}
+          {streamingMessage}
 
           {/* 加载状态 */}
           {loading && (

@@ -1,7 +1,7 @@
 import React from 'react'
 import { List, Button, Typography, Popconfirm } from 'antd'
 import { DeleteOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons'
-import type { ConversationSession } from '../../preload'
+import type { ConversationSession } from '../../types/preload'
 
 const { Paragraph } = Typography
 

@@ -97,7 +97,7 @@ export class ConversationRepository {
   /**
    * 添加消息
    */
-  async addMessage(message: Omit<ConversationMessage, 'id' | 'created_at'>): Promise<string> {
+  async addMessage(message: Omit<ConversationMessage, 'id' | 'timestamp'>): Promise<string> {
     const storage = this.getStorage()
 
     // 修复：调用正确的saveMessage方法，并且需要调整字段名

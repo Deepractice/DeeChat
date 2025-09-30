@@ -31,7 +31,7 @@ export class MessageService {
   /**
    * 发送消息并处理流式响应
    */
-  async *sendMessageStream(input: SendMessageInput): Promise<AsyncGenerator<any, void, unknown>> {
+  async *sendMessageStream(input: SendMessageInput): AsyncGenerator<any, void, unknown> {
     try {
       console.log(`💬 [MessageService] 开始发送消息`, {
         sessionId: input.session_id,
@@ -43,8 +43,7 @@ export class MessageService {
       const userMessageId = await this.conversationRepository.addMessage({
         session_id: input.session_id,
         role: 'user',
-        content: input.content,
-        token_count: 0
+        content: input.content
       })
 
       console.log(`📝 用户消息已保存: ${userMessageId}`)
@@ -115,8 +114,11 @@ export class MessageService {
             session_id: input.session_id,
             role: 'assistant',
             content: assistantContent,
-            ai_model: input.ai_config.model,
-            token_count: lastUsage?.total_tokens || 0
+            token_usage: lastUsage ? {
+              prompt_tokens: lastUsage.prompt_tokens || 0,
+              completion_tokens: lastUsage.completion_tokens || 0,
+              total_tokens: lastUsage.total_tokens || 0
+            } : undefined
           })
 
           console.log(`🤖 AI响应已保存: ${assistantMessageId}`, {
@@ -202,13 +204,22 @@ export class MessageService {
   private async getAvailableTools(): Promise<Tool[]> {
     try {
       // 检查McpDomain是否可用
-      if (!this.mcpDomain || !this.mcpDomain.serverService || !this.mcpDomain.functionService) {
+      if (!this.mcpDomain) {
         console.log('⚠️ [MessageService] MCP域服务不可用，跳过工具加载')
         return []
       }
 
+      let serverService, functionService
+      try {
+        serverService = this.mcpDomain.getServerService()
+        functionService = this.mcpDomain.getFunctionService()
+      } catch (error) {
+        console.log('⚠️ [MessageService] MCP服务未初始化，跳过工具加载')
+        return []
+      }
+
       // 获取所有连接的服务器
-      const connections = this.mcpDomain.serverService.listConnections()
+      const connections = serverService.listConnections()
       const connectedServers = connections.filter(conn => conn.status === 'connected')
 
       console.log(`📊 [MessageService] 找到 ${connectedServers.length} 个已连接的MCP服务器`)
@@ -222,7 +233,7 @@ export class MessageService {
       // 获取所有服务器的工具
       const toolsPromises = connectedServers.map(async (conn) => {
         try {
-          const tools = await this.mcpDomain.functionService.listTools(conn.serverId)
+          const tools = await functionService.listTools(conn.serverId)
           console.log(`🛠️ [MessageService] 服务器 ${conn.serverId}: ${tools.length} 个工具`)
 
           // 转换为AI Chat工具格式
