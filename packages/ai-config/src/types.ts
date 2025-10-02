@@ -140,16 +140,16 @@ export interface DatabaseOptions {
 
 export interface AIConfigManagerOptions {
   database: import('@deepracticex/database-adapter').DatabaseAdapter;  // 必需：注入的数据库适配器
-  tablePrefix?: string;            // 可选：表前缀
   autoMigrate?: boolean;           // 可选：自动迁移表结构
+  // 表名固定为 ai_configs 和 preferences，不再支持 tablePrefix
 }
 
 // 向后兼容的选项（已废弃）
 /** @deprecated 使用新的依赖注入方式替代 */
 export interface LegacyAIConfigManagerOptions {
   dbPath: string;                  // 必需：数据库文件路径
-  tablePrefix?: string;            // 可选：表前缀
   readonly?: boolean;              // 可选：只读模式
+  // 表名固定为 ai_configs 和 preferences，不再支持 tablePrefix
 }
 
 // === 向后兼容的类型别名 ===

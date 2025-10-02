@@ -69,7 +69,7 @@ const MessageList: React.FC<MessageListProps> = ({
         }}>
           <div style={{ marginBottom: '16px' }}>
             <img
-              src="/icon.png"
+              src="./icon.png"
               alt="DeeChat"
               style={{
                 width: '64px',

@@ -1,4 +1,5 @@
 import { InjectedDatabaseAdapter } from './database/injected-adapter.js';
+import { SQLMigrator } from './database/migrator.js';
 import { ConfigManager } from './configs/index.js';
 import { PreferenceManager } from './preferences/index.js';
 import { ConfigStats, DatabaseError, AIConfigManagerOptions, LegacyAIConfigManagerOptions } from './types.js';
@@ -14,7 +15,6 @@ export class AIConfigManager {
   private _configs: ConfigManager | null = null;
   private _preferences: PreferenceManager | null = null;
   private _initialized = false;
-  private tablePrefix: string;
 
   constructor(private options: AIConfigManagerOptions) {
     // 验证必需的数据库适配器
@@ -22,7 +22,7 @@ export class AIConfigManager {
       throw new DatabaseError('Database adapter is required');
     }
 
-    this.tablePrefix = options.tablePrefix || '';
+    // 表名固定，不使用 tablePrefix
     this.database = new InjectedDatabaseAdapter(options.database);
   }
 
@@ -36,14 +36,45 @@ export class AIConfigManager {
 
     try {
       await this.database.connect();
-      
-      // 初始化管理器实例
+
+      // 执行数据库迁移，创建表结构
+      await this.migrate();
+
+      // 初始化管理器实例（表名固定）
       this._configs = new ConfigManager(this.database);
       this._preferences = new PreferenceManager(this.database);
 
       this._initialized = true;
     } catch (error) {
       throw new DatabaseError(`Failed to initialize AI Config Manager: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * 执行数据库迁移
+   */
+  private async migrate(): Promise<void> {
+    try {
+      // 在ESM中获取当前文件路径
+      const { fileURLToPath } = await import('url');
+      const { dirname, join } = await import('path');
+
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+
+      // 迁移文件目录
+      const migrationsPath = join(__dirname, '../sql/migrations');
+
+      // 使用SQLMigrator执行迁移
+      const migrator = new SQLMigrator(
+        this.database,
+        '@deepracticex/ai-config',
+        migrationsPath
+      );
+
+      await migrator.migrate();
+    } catch (error) {
+      throw new DatabaseError(`Database migration failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -179,7 +210,6 @@ export async function initializeAIConfig(
 
     manager = new AIConfigManager({
       database: dbAdapter,
-      tablePrefix: legacyOptions?.tablePrefix,
       autoMigrate: true
     });
   } else {

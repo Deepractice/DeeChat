@@ -17,20 +17,17 @@ import {
  * 负责会话的CRUD操作
  */
 export class SessionManager {
-  constructor(
-    private db: InjectedDatabaseAdapter,
-    private tablePrefix: string = ''
-  ) {
+  constructor(private db: InjectedDatabaseAdapter) {
     if (!db.isConnected()) {
       throw new DatabaseError('Database adapter is not connected');
     }
   }
 
   /**
-   * 获取表名
+   * 获取表名（固定）
    */
   private get tableName(): string {
-    return `${this.tablePrefix}sessions`;
+    return 'sessions';
   }
 
   /**
@@ -213,9 +210,9 @@ export class SessionManager {
     }
 
     try {
-      const messagesTableName = `${this.tablePrefix}messages`;
+      const messagesTableName = 'messages';
       const result = this.db.run(`
-        UPDATE ${this.tableName} 
+        UPDATE ${this.tableName}
         SET message_count = (
           SELECT COUNT(*) FROM ${messagesTableName} WHERE session_id = ?
         ), updated_at = ?

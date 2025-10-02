@@ -85,13 +85,16 @@ export class DatabaseAdapter {
       // 在ESM中获取当前文件路径
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      
+
       // 读取 schema 文件 - 从源码目录的sql文件夹读取
       const schemaPath = join(__dirname, '../../sql/schema.sql');
       const schema = readFileSync(schemaPath, 'utf-8');
-      
-      // 执行 schema  
+
+      // 执行 schema
       this.db.exec(schema);
+
+      // 执行 schema 一致性检查
+      await this.ensureSchemaConsistency();
 
       // 注意：不再执行 seeds，保持数据库完全干净
       // 让消费者应用自己决定初始数据
@@ -99,6 +102,149 @@ export class DatabaseAdapter {
     } catch (error) {
       throw new DatabaseError(`Database migration failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * 确保数据库 schema 与 schema.sql 文件一致
+   */
+  private async ensureSchemaConsistency(): Promise<void> {
+    console.log('🔍 [ai-config] 开始检查数据库schema一致性...');
+
+    try {
+      // 从 schema.sql 文件解析期望的表结构
+      const expectedSchemas = await this.parseSchemaFromSQL();
+
+      // 检查每个表
+      for (const [tableName, expectedColumns] of Object.entries(expectedSchemas)) {
+        // 获取实际的列结构
+        interface ColumnInfo {
+          cid: number;
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: string | null;
+          pk: number;
+        }
+
+        const actualColumns = this.all<ColumnInfo>(`PRAGMA table_info(${tableName})`);
+
+        if (actualColumns.length === 0) {
+          console.warn(`⚠️  表 ${tableName} 不存在,跳过迁移`);
+          continue;
+        }
+
+        const actualColumnNames = new Set(actualColumns.map((col: ColumnInfo) => col.name));
+
+        console.log(`📋 检查表 ${tableName}:`, {
+          actual: Array.from(actualColumnNames),
+          expected: expectedColumns.map(c => c.name)
+        });
+
+        // 找出缺失的列
+        const missingColumns = expectedColumns.filter(
+          expectedCol => !actualColumnNames.has(expectedCol.name)
+        );
+
+        if (missingColumns.length > 0) {
+          console.log(`🔧 表 ${tableName} 缺少 ${missingColumns.length} 个列,准备添加:`,
+            missingColumns.map(c => c.name));
+
+          // 为每个缺失的列执行 ALTER TABLE
+          for (const column of missingColumns) {
+            const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.type}`.trim();
+
+            try {
+              this.exec(alterSQL);
+              console.log(`✅ 成功添加列: ${tableName}.${column.name}`);
+            } catch (error) {
+              console.error(`❌ 添加列失败: ${tableName}.${column.name}`, error);
+              throw error;
+            }
+          }
+        } else {
+          console.log(`✅ 表 ${tableName} schema一致`);
+        }
+      }
+
+      console.log('✅ [ai-config] Schema一致性检查完成');
+    } catch (error) {
+      console.error('❌ [ai-config] Schema一致性检查失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 从 schema.sql 文件解析期望的表结构
+   */
+  private async parseSchemaFromSQL(): Promise<Record<string, Array<{ name: string; type: string }>>> {
+    // 使用 ESM 动态导入
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const { dirname } = path;
+
+    // 获取当前文件目录路径
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+
+    // schema.sql 在 sql 目录
+    const schemaPath = path.join(__dirname, '../../sql/schema.sql');
+
+    if (!fs.existsSync(schemaPath)) {
+      throw new DatabaseError(`Schema file not found: ${schemaPath}`);
+    }
+
+    const schemaSQL = fs.readFileSync(schemaPath, 'utf-8');
+
+    // 解析 CREATE TABLE 语句
+    const schemas: Record<string, Array<{ name: string; type: string }>> = {};
+
+    // 匹配 CREATE TABLE 语句
+    const createTableRegex = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)\s*\(([\s\S]*?)\);/gi;
+    let match;
+
+    while ((match = createTableRegex.exec(schemaSQL)) !== null) {
+      const tableName = match[1]; // ai_configs 或 preferences
+      const columnsBlock = match[2];
+
+      // 解析列定义
+      const columns: Array<{ name: string; type: string }> = [];
+      const lines = columnsBlock.split('\n');
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        // 跳过注释、空行、约束和 UNIQUE
+        if (!trimmed ||
+            trimmed.startsWith('--') ||
+            trimmed.startsWith('FOREIGN KEY') ||
+            trimmed.startsWith('CHECK') ||
+            trimmed.startsWith('PRIMARY KEY') ||
+            trimmed.startsWith('UNIQUE')) {
+          continue;
+        }
+
+        // 解析列定义: column_name TYPE [constraints]
+        const columnMatch = trimmed.match(/^(\w+)\s+(TEXT|INTEGER|REAL|BLOB|DATETIME|NUMERIC|BOOLEAN)/i);
+        if (columnMatch) {
+          columns.push({
+            name: columnMatch[1],
+            type: columnMatch[2].toUpperCase()
+          });
+        }
+      }
+
+      if (columns.length > 0) {
+        schemas[tableName] = columns;
+        console.log(`📄 从schema.sql解析表 ${tableName}: ${columns.length} 列`);
+      }
+    }
+
+    if (Object.keys(schemas).length === 0) {
+      throw new DatabaseError('Failed to parse any table schemas from schema.sql');
+    }
+
+    return schemas;
   }
 
   /**

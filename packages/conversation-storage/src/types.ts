@@ -20,8 +20,12 @@ export interface ConversationMessage {
   content: string;
   timestamp: string;                   // ISO格式时间戳
   token_usage?: TokenUsage;            // 可选的token使用统计
-  tool_calls?: any[];                  // ✅ 支持工具调用
-  tool_call_id?: string;               // ✅ 支持工具调用ID
+  tool_calls?: any[];                  // ✅ 工具调用信息(OpenAI格式，用于AI上下文)
+  tool_call_id?: string;               // ✅ 工具调用ID（用于工具响应消息）
+  metadata?: {                         // ✅ 元数据(包含timeline等扩展信息)
+    timeline?: any[];                  // Timeline时序信息，用于前端渲染
+    [key: string]: any;                // 其他扩展字段
+  };
 }
 
 // Token使用统计
@@ -49,8 +53,9 @@ export interface ConversationMessageRow {
   content: string;
   timestamp: string;
   token_usage?: string;                // JSON 字符串
-  tool_calls?: string;                 // JSON 字符串
+  tool_calls?: string;                 // JSON 字符串（OpenAI格式）
   tool_call_id?: string;               // 工具调用ID
+  metadata?: string;                   // JSON 字符串（包含timeline）
 }
 
 // === 输入/输出 Schema ===
@@ -77,8 +82,9 @@ export const CreateMessageSchema = z.object({
     completion_tokens: z.number().min(0),
     total_tokens: z.number().min(0),
   }).optional(),
-  tool_calls: z.array(z.any()).optional(),  // ✅ 支持工具调用
-  tool_call_id: z.string().optional(),      // ✅ 支持工具调用ID
+  tool_calls: z.array(z.any()).optional(),  // ✅ 工具调用信息(OpenAI格式)
+  tool_call_id: z.string().optional(),      // ✅ 工具调用ID
+  metadata: z.any().optional(),             // ✅ 元数据(包含timeline)
 });
 
 export type CreateMessageInput = z.infer<typeof CreateMessageSchema>;

@@ -48,6 +48,26 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const toolExecution = message.metadata?.toolExecution as EmbeddedToolExecution | undefined
   const timeline = message.metadata?.timeline || []
 
+  // 调试日志
+  if (message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0) {
+    console.log('🔍 [MessageBubble] Assistant消息with tool_calls:', {
+      messageId: message.id,
+      hasMetadata: !!message.metadata,
+      hasTimeline: !!message.metadata?.timeline,
+      timelineLength: timeline.length,
+      timelineIsArray: Array.isArray(timeline),
+      toolCallsLength: message.tool_calls.length,
+      timeline: timeline,
+      timelineDetailed: timeline.map((item, index) => ({
+        index,
+        id: item.id,
+        type: item.type,
+        contentPreview: item.content?.substring(0, 50),
+        hasToolExecution: !!item.toolExecution
+      }))
+    })
+  }
+
   // ==================== 系统消息 ====================
   if (isSystem) {
     return <SystemMessage content={message.content} />

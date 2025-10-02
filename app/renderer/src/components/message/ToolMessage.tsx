@@ -102,8 +102,12 @@ const ToolMessage: React.FC<ToolMessageProps> = ({
           toolName: step.toolName,
           status: step.status,
           hasResult: hasResult,
-          resultLength: step.result?.length || 0,
-          result: step.result?.substring(0, 50) + '...'
+          resultType: typeof step.result,
+          result: step.result
+            ? (typeof step.result === 'string'
+                ? step.result.substring(0, 50) + '...'
+                : JSON.stringify(step.result).substring(0, 50) + '...')
+            : 'null'
         })
 
         return (

@@ -53,9 +53,13 @@ export class MessageManager {
         ? JSON.stringify(validatedInput.tool_calls)
         : null;
 
+      const metadataJson = validatedInput.metadata
+        ? JSON.stringify(validatedInput.metadata)
+        : null;
+
       const result = this.db.run(`
-        INSERT INTO ${this.tableName} (id, session_id, role, content, timestamp, token_usage, tool_calls, tool_call_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ${this.tableName} (id, session_id, role, content, timestamp, token_usage, tool_calls, tool_call_id, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         messageId,
         validatedInput.session_id,
@@ -64,7 +68,8 @@ export class MessageManager {
         timestamp,
         tokenUsageJson,
         toolCallsJson,
-        validatedInput.tool_call_id || null
+        validatedInput.tool_call_id || null,
+        metadataJson
       ]);
 
       if (result.changes === 0) {
@@ -236,22 +241,29 @@ export class MessageManager {
   private mapRowToMessage(row: ConversationMessageRow): ConversationMessage {
     let tokenUsage: TokenUsage | undefined;
     let toolCalls: any[] | undefined;
+    let metadata: any | undefined;
 
     if (row.token_usage) {
       try {
         tokenUsage = JSON.parse(row.token_usage);
       } catch (error) {
-        // 如果JSON解析失败，忽略token_usage
         console.warn('Failed to parse token_usage JSON:', error);
       }
     }
 
-    // 处理tool_calls字段（需要更新ConversationMessageRow类型）
-    if ((row as any).tool_calls) {
+    if (row.tool_calls) {
       try {
-        toolCalls = JSON.parse((row as any).tool_calls);
+        toolCalls = JSON.parse(row.tool_calls);
       } catch (error) {
         console.warn('Failed to parse tool_calls JSON:', error);
+      }
+    }
+
+    if (row.metadata) {
+      try {
+        metadata = JSON.parse(row.metadata);
+      } catch (error) {
+        console.warn('Failed to parse metadata JSON:', error);
       }
     }
 
@@ -263,7 +275,8 @@ export class MessageManager {
       timestamp: row.timestamp,
       token_usage: tokenUsage,
       tool_calls: toolCalls,
-      tool_call_id: (row as any).tool_call_id
+      tool_call_id: row.tool_call_id,
+      metadata: metadata
     };
   }
 }

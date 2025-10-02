@@ -1,4 +1,5 @@
 import { InjectedDatabaseAdapter } from './database/injected-adapter.js';
+import { SQLMigrator } from './database/migrator.js';
 import { SessionManager } from './session/manager.js';
 import { MessageManager } from './message/manager.js';
 import {
@@ -26,7 +27,6 @@ export class ConversationStorage {
   private _sessions: SessionManager | null = null;
   private _messages: MessageManager | null = null;
   private _initialized = false;
-  private tablePrefix: string;
 
   constructor(private options: ConversationStorageOptions) {
     // 验证必需的数据库适配器
@@ -34,8 +34,8 @@ export class ConversationStorage {
       throw new DatabaseError('Database adapter is required');
     }
 
-    this.tablePrefix = options.tablePrefix || '';
-    this.database = new InjectedDatabaseAdapter(options.database, this.tablePrefix);
+    // 表名固定，不使用 tablePrefix
+    this.database = new InjectedDatabaseAdapter(options.database);
   }
 
   /**
@@ -52,9 +52,9 @@ export class ConversationStorage {
       // 执行数据库迁移，创建表结构
       await this.migrate();
       
-      // 初始化管理器实例
-      this._sessions = new SessionManager(this.database, this.tablePrefix);
-      this._messages = new MessageManager(this.database, this.tablePrefix);
+      // 初始化管理器实例（表名固定）
+      this._sessions = new SessionManager(this.database);
+      this._messages = new MessageManager(this.database);
 
       this._initialized = true;
     } catch (error) {
@@ -70,17 +70,21 @@ export class ConversationStorage {
       // 在ESM中获取当前文件路径
       const { fileURLToPath } = await import('url');
       const { dirname, join } = await import('path');
-      const { readFileSync } = await import('fs');
-      
+
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      
-      // 读取 schema 文件
-      const schemaPath = join(__dirname, '../sql/schema.sql');
-      const schema = readFileSync(schemaPath, 'utf-8');
-      
-      // 执行 schema  
-      this.database.exec(schema);
+
+      // 迁移文件目录
+      const migrationsPath = join(__dirname, '../sql/migrations');
+
+      // 使用SQLMigrator执行迁移
+      const migrator = new SQLMigrator(
+        this.database,
+        '@deepracticex/conversation-storage',
+        migrationsPath
+      );
+
+      await migrator.migrate();
     } catch (error) {
       throw new DatabaseError(`Database migration failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -166,13 +170,13 @@ export class ConversationStorage {
     try {
       // 获取会话总数
       const sessionResult = this.database.get<{ count: number }>(`
-        SELECT COUNT(*) as count FROM ${this.tablePrefix}sessions
+        SELECT COUNT(*) as count FROM sessions
       `);
       const totalSessions = sessionResult?.count || 0;
 
       // 获取消息总数
       const messageResult = this.database.get<{ count: number }>(`
-        SELECT COUNT(*) as count FROM ${this.tablePrefix}messages
+        SELECT COUNT(*) as count FROM messages
       `);
       const totalMessages = messageResult?.count || 0;
 
@@ -210,8 +214,7 @@ export class ConversationStorage {
       status: dbHealth.status,
       details: {
         ...dbHealth.details,
-        tables_managed: ['sessions', 'messages'],
-        table_prefix: this.tablePrefix
+        tables_managed: ['sessions', 'messages']
       }
     };
   }
@@ -271,7 +274,6 @@ export async function initializeConversationStorage(
 
     storage = new ConversationStorage({
       database: dbAdapter,
-      tablePrefix: legacyOptions?.tablePrefix,
       autoMigrate: true
     });
   } else {

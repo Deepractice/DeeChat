@@ -107,7 +107,18 @@ export class ConversationRepository {
       content: message.content,
       token_usage: message.token_usage,
       tool_calls: message.tool_calls,
-      tool_call_id: message.tool_call_id
+      tool_call_id: message.tool_call_id,
+      metadata: message.metadata  // 添加 metadata 字段
+    }
+
+    // 调试：检查metadata.timeline结构
+    if (messageInput.metadata?.timeline) {
+      console.log(`🔍 [ConversationRepository] 接收到metadata:`, {
+        timelineIsArray: Array.isArray(messageInput.metadata.timeline),
+        timelineLength: messageInput.metadata.timeline.length,
+        timelineType: typeof messageInput.metadata.timeline,
+        timeline: JSON.stringify(messageInput.metadata.timeline, null, 2)
+      })
     }
 
     const savedMessage = storage.saveMessage(messageInput)

@@ -17,10 +17,11 @@
     "publish": "npm run build && electron-builder --publish=always"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
     "@deepracticex/ai-chat": "^0.5.0",
-    "@deepracticex/ai-config": "^0.4.1",
+    "@deepracticex/ai-config": "^0.5.0",
     "@deepracticex/context-manager": "^1.0.1",
-    "@deepracticex/conversation-storage": "^0.4.6",
+    "@deepracticex/conversation-storage": "file:../packages/conversation-storage",
     "@deepracticex/database-adapter": "^2.0.1",
     "@deepracticex/mcp-client": "^1.0.8",
     "@deepracticex/token-calculator": "^0.2.1",

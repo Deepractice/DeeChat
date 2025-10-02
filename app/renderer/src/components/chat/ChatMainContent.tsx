@@ -30,6 +30,7 @@ interface ChatMainContentProps {
 
   // 流式消息
   streamingMessageId: string | null
+  streamingTimeline: any[]  // 新增：timeline数据
   streamingMessageRef: React.RefObject<StreamingMessageRef>
   messageListRef: React.RefObject<HTMLDivElement>
 
@@ -65,6 +66,7 @@ const ChatMainContent: React.FC<ChatMainContentProps> = ({
   loading,
   isCallingTool,
   streamingMessageId,
+  streamingTimeline,
   streamingMessageRef,
   messageListRef,
   toolCount,
@@ -100,6 +102,7 @@ const ChatMainContent: React.FC<ChatMainContentProps> = ({
                   <StreamingMessage
                     ref={streamingMessageRef}
                     messageId={streamingMessageId}
+                    timeline={streamingTimeline}
                     scrollContainer={messageListRef}
                     onStreamStart={onStreamStart}
                     onStreamComplete={onStreamComplete}

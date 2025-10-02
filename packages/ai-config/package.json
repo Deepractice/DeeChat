@@ -1,6 +1,6 @@
 {
   "name": "@deepracticex/ai-config",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "An minimalist AI configuration management library focused on configuration storage and preference management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

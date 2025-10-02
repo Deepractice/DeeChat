@@ -55,6 +55,7 @@ export const useChatPageLogic = (props: {
 
   // 流式响应状态
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+  const [streamingTimeline, setStreamingTimeline] = useState<any[]>([])
 
   // Refs
   const currentSessionRef = useRef<ConversationSession | null>(null)
@@ -513,6 +514,7 @@ export const useChatPageLogic = (props: {
     internalSelectedRole,
     internalRoleActivationResult,
     streamingMessageId,
+    streamingTimeline,
     tools,
     loadingMcpTools,
 
@@ -522,6 +524,7 @@ export const useChatPageLogic = (props: {
     setMaxTokens,
     setModelSelectorVisible,
     setStreamingMessageId,
+    setStreamingTimeline,
     setIsCallingTool,
     setSendingMessage,
     loadMessages,

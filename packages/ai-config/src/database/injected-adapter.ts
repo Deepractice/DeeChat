@@ -17,7 +17,7 @@ export class InjectedDatabaseAdapter {
     if (!this._isConnected) {
       await this.database.connect();
       this._isConnected = true;
-      this.setupTables();
+      // ✅ 表创建由 AIConfigStorage.migrate() 统一管理
     }
   }
 
@@ -128,56 +128,7 @@ export class InjectedDatabaseAdapter {
     }
   }
 
-  /**
-   * 设置数据库表
-   */
-  private setupTables(): void {
-    try {
-      // 创建 AI 配置表
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS ai_configs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          api_key TEXT NOT NULL,
-          base_url TEXT NOT NULL,
-          is_default BOOLEAN NOT NULL DEFAULT 0,
-          is_active BOOLEAN NOT NULL DEFAULT 1,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-
-      // 创建偏好设置表
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS preferences (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          category TEXT,
-          description TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-
-      // 创建触发器用于自动更新 updated_at 字段
-      this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS ai_configs_update_timestamp
-        AFTER UPDATE ON ai_configs
-        BEGIN
-          UPDATE ai_configs SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END
-      `);
-
-      this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS preferences_update_timestamp
-        AFTER UPDATE ON preferences
-        BEGIN
-          UPDATE preferences SET updated_at = CURRENT_TIMESTAMP WHERE key = NEW.key;
-        END
-      `);
-
-    } catch (error) {
-      throw new DatabaseError(`Failed to setup database tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
+  // ✅ setupTables() 已删除
+  // 表创建统一由 AIConfigStorage.migrate() 执行 schema.sql 管理
+  // 遵循单一来源原则：schema.sql 是唯一的表定义来源
 }

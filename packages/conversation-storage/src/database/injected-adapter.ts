@@ -7,11 +7,9 @@ import { DatabaseError } from '../types.js';
  */
 export class InjectedDatabaseAdapter {
   private _isConnected = false;
-  private tablePrefix: string;
 
-  constructor(private database: ExternalDatabaseAdapter, tablePrefix: string = '') {
-    // 如果没有提供tablePrefix，使用默认的'conversation_'前缀
-    this.tablePrefix = tablePrefix || 'conversation_';
+  constructor(private database: ExternalDatabaseAdapter) {
+    // 表名固定，不使用前缀
   }
 
   /**
@@ -21,7 +19,7 @@ export class InjectedDatabaseAdapter {
     if (!this._isConnected) {
       await this.database.connect();
       this._isConnected = true;
-      this.setupTables();
+      // 表创建由 ConversationStorage.migrate() 统一管理
     }
   }
 
@@ -132,88 +130,7 @@ export class InjectedDatabaseAdapter {
     }
   }
 
-  /**
-   * 设置数据库表
-   */
-  private setupTables(): void {
-    try {
-      // 创建对话会话表
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS ${this.tablePrefix}sessions (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          ai_config_name TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          message_count INTEGER DEFAULT 0
-        )
-      `);
-
-      // 创建对话消息表
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS ${this.tablePrefix}messages (
-          id TEXT PRIMARY KEY,
-          session_id TEXT NOT NULL,
-          role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
-          content TEXT,
-          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-          token_usage TEXT,
-          tool_calls TEXT,
-          tool_call_id TEXT,
-          FOREIGN KEY (session_id) REFERENCES ${this.tablePrefix}sessions (id) ON DELETE CASCADE
-        )
-      `);
-
-      // 创建索引
-      this.database.exec(`
-        CREATE INDEX IF NOT EXISTS idx_messages_session_id
-        ON ${this.tablePrefix}messages (session_id)
-      `);
-
-      this.database.exec(`
-        CREATE INDEX IF NOT EXISTS idx_messages_timestamp
-        ON ${this.tablePrefix}messages (timestamp)
-      `);
-
-      this.database.exec(`
-        CREATE INDEX IF NOT EXISTS idx_sessions_updated_at
-        ON ${this.tablePrefix}sessions (updated_at)
-      `);
-
-      // 创建触发器用于自动更新 updated_at 字段
-      this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS ${this.tablePrefix}sessions_update_timestamp
-        AFTER UPDATE ON ${this.tablePrefix}sessions
-        BEGIN
-          UPDATE ${this.tablePrefix}sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END
-      `);
-
-      // 创建触发器用于自动更新会话的消息计数
-      this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS update_session_message_count_insert
-        AFTER INSERT ON ${this.tablePrefix}messages
-        BEGIN
-          UPDATE ${this.tablePrefix}sessions
-          SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = NEW.session_id;
-        END
-      `);
-
-      this.database.exec(`
-        CREATE TRIGGER IF NOT EXISTS update_session_message_count_delete
-        AFTER DELETE ON ${this.tablePrefix}messages
-        BEGIN
-          UPDATE ${this.tablePrefix}sessions
-          SET message_count = message_count - 1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = OLD.session_id;
-        END
-      `);
-
-
-    } catch (error) {
-      throw new DatabaseError(`Failed to setup database tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
+  // ✅ setupTables, ensureSchemaConsistency, parseSchemaFromSQL 已删除
+  // 表创建统一由 ConversationStorage.migrate() 执行 schema.sql 管理
 
 }

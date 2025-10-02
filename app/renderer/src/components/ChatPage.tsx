@@ -72,14 +72,69 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
     console.log('🌊 流式事件:', event.type, { content: event.data?.content })
 
-    // 工具调用处理
-    if (event.data?.toolExecuting || event.data?.toolCalls) {
+    // 工具调用处理 - 添加到timeline而不是直接return
+    if (event.data?.toolExecuting) {
+      console.log('🔧 工具执行中:', event.data.toolExecuting)
       logic.setIsCallingTool(true)
+
+      // 添加工具执行项到timeline
+      const toolItem = {
+        id: event.data.toolExecuting.id,
+        type: 'tool',
+        toolExecution: {
+          id: event.data.toolExecuting.id,
+          toolName: event.data.toolExecuting.name,
+          serverId: 'mcp', // 从工具名称推断或使用默认值
+          arguments: event.data.toolExecuting.arguments,
+          status: 'executing',
+          startTime: event.data.toolExecuting.startTime
+        }
+      }
+
+      logic.setStreamingTimeline(prev => [...prev, toolItem])
       return
     }
 
-    if (event.data?.toolResults) {
+    if (event.data?.toolResults && event.data.toolResults.length > 0) {
+      console.log('✅ 工具执行结果:', event.data.toolResults)
       logic.setIsCallingTool(false)
+
+      // 更新timeline中的工具执行结果
+      logic.setStreamingTimeline(prev => {
+        const newTimeline = [...prev]
+        event.data.toolResults.forEach((result: any) => {
+          const toolIndex = newTimeline.findIndex(
+            item => item.type === 'tool' && item.toolExecution?.id === result.tool_call_id
+          )
+          if (toolIndex >= 0 && newTimeline[toolIndex].toolExecution) {
+            newTimeline[toolIndex].toolExecution.status = result.error ? 'error' : 'completed'
+            newTimeline[toolIndex].toolExecution.result = result.result
+            newTimeline[toolIndex].toolExecution.error = result.error
+            newTimeline[toolIndex].toolExecution.endTime = Date.now()
+          }
+        })
+        return newTimeline
+      })
+      return
+    }
+
+    if (event.data?.toolError) {
+      console.error('❌ 工具执行错误:', event.data.toolError)
+      logic.setIsCallingTool(false)
+
+      // 更新timeline中的工具错误状态
+      logic.setStreamingTimeline(prev => {
+        const newTimeline = [...prev]
+        const toolIndex = newTimeline.findIndex(
+          item => item.type === 'tool' && item.toolExecution?.id === event.data.toolError.tool_call_id
+        )
+        if (toolIndex >= 0 && newTimeline[toolIndex].toolExecution) {
+          newTimeline[toolIndex].toolExecution.status = 'error'
+          newTimeline[toolIndex].toolExecution.error = event.data.toolError.error
+          newTimeline[toolIndex].toolExecution.endTime = Date.now()
+        }
+        return newTimeline
+      })
       return
     }
 
@@ -100,6 +155,13 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
             // 设置流式消息ID,会触发useEffect自动调用startStreaming
             logic.setStreamingMessageId(messageId)
+
+            // 初始化timeline，添加第一个文本项
+            logic.setStreamingTimeline([{
+              id: `text_${Date.now()}`,
+              type: 'text',
+              content: event.data.content
+            }])
             return
           }
 
@@ -112,11 +174,33 @@ const ChatPage: React.FC<ChatPageProps> = ({
             // 如果ref还没准备好,也缓存起来
             firstChunkCacheRef.current.push(event.data.content)
           }
+
+          // 更新timeline中的最后一个文本项，或添加新的文本项
+          logic.setStreamingTimeline(prev => {
+            const lastItem = prev[prev.length - 1]
+            if (lastItem && lastItem.type === 'text') {
+              // 合并到最后一个文本项
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...lastItem,
+                content: (lastItem.content || '') + event.data.content
+              }
+              return updated
+            } else {
+              // 添加新的文本项
+              return [...prev, {
+                id: `text_${Date.now()}`,
+                type: 'text',
+                content: event.data.content
+              }]
+            }
+          })
         }
 
         // 检查是否完成(后端发送 done: true 标志)
         if (event.data.done) {
           console.log('✅ AI响应完成 (通过done标志)')
+          console.log('📋 Timeline数据:', logic.streamingTimeline)
 
           // 完成流式输出
           if (streamingMessageRef.current && logic.streamingMessageId) {
@@ -128,16 +212,18 @@ const ChatPage: React.FC<ChatPageProps> = ({
           logic.setSendingMessage(false)
           firstChunkCacheRef.current = []
 
-          // 延迟刷新消息列表
+          // 延迟刷新消息列表，并清空timeline
           setTimeout(() => {
             logic.loadMessages()
             logic.setStreamingMessageId(null)
+            logic.setStreamingTimeline([])  // 清空timeline
           }, 500)
         }
         break
 
       case 'ai_complete':
         console.log('✅ AI响应完成')
+        console.log('📋 Timeline数据:', logic.streamingTimeline)
 
         // 完成流式输出
         if (streamingMessageRef.current && logic.streamingMessageId) {
@@ -149,10 +235,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
         logic.setSendingMessage(false)
         firstChunkCacheRef.current = []
 
-        // 延迟刷新消息列表
+        // 延迟刷新消息列表，并清空timeline
         setTimeout(() => {
           logic.loadMessages()
           logic.setStreamingMessageId(null)
+          logic.setStreamingTimeline([])  // 清空timeline
         }, 500)
         break
 
@@ -174,6 +261,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         // 延迟清理
         setTimeout(() => {
           logic.setStreamingMessageId(null)
+          logic.setStreamingTimeline([])  // 清空timeline
         }, 2000)
         break
 
@@ -338,6 +426,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         loading={logic.loading}
         isCallingTool={logic.isCallingTool}
         streamingMessageId={logic.streamingMessageId}
+        streamingTimeline={logic.streamingTimeline}
         streamingMessageRef={streamingMessageRef}
         messageListRef={messageListRef}
         toolCount={logic.tools.length}
